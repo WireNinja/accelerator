@@ -49,7 +49,7 @@ final class PanelPreset
             ->path($id)
             ->viteTheme([
                 self::viteTheme($id),
-                'packages/wireninja/accelerator/resources/css/accelerator.css',
+                'vendor/wireninja/accelerator/resources/css/accelerator.css',
             ])
             ->login(Login::class)
             ->registration()
