@@ -1,0 +1,59 @@
+{
+    "$schema": "https://getcomposer.org/schema.json",
+    "name": "wireninja/accelerator",
+    "description": "Reusable Filament panel presets for Wireninja applications.",
+    "type": "composer-plugin",
+    "autoload": {
+        "psr-4": {
+            "WireNinja\\Accelerator\\": "src/"
+        },
+        "files": [
+            "src/Support/helpers.php",
+            "src/Helper/iconify.php"
+        ]
+    },
+    "require": {
+        "php": "^8.5",
+        "composer-plugin-api": "^2.0",
+        "bezhansalleh/filament-shield": "^4.2",
+        "blade-ui-kit/blade-icons": "^1.9",
+        "mallardduck/blade-lucide-icons": "^1.26",
+        "filament/filament": "^5.4",
+        "http-interop/http-factory-guzzle": "^1.2",
+        "jcupitt/vips": "^2.6",
+        "laravel-lang/common": "^6.8",
+        "laravel-notification-channels/webpush": "^10.5",
+        "laravel/horizon": "^5.45",
+        "laravel/octane": "^2.17",
+        "laravel/pennant": "^1.22",
+        "laravel/reverb": "^1.9",
+        "laravel/scout": "^11.1",
+        "laravel/socialite": "^5.26",
+        "meilisearch/meilisearch-php": "^1.16",
+        "spatie/php-structure-discoverer": "^2.4",
+        "spatie/image": "^3.9",
+        "spatie/laravel-activitylog": "^5.0.0",
+        "spatie/laravel-backup": "^10.2",
+        "spatie/laravel-pdf": "^2.4",
+        "spatie/laravel-query-builder": "^7.0",
+        "stechstudio/filament-impersonate": "^5.1",
+        "laravel/nightwatch": "^1.24",
+        "filament/spatie-laravel-settings-plugin": "^5.0",
+        "filament/spatie-laravel-media-library-plugin": "^5.0",
+        "laravel/mcp": "^0.6.7",
+        "laravel-notification-channels/telegram": "^7.0"
+    },
+    "extra": {
+        "class": "WireNinja\\Accelerator\\Composer\\Plugin",
+        "laravel": {
+            "providers": [
+                "WireNinja\\Accelerator\\AcceleratorServiceProvider"
+            ]
+        }
+    },
+    "config": {
+        "allow-plugins": {
+            "php-http/discovery": true
+        }
+    }
+}
