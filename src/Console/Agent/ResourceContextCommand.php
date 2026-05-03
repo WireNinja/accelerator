@@ -1,6 +1,6 @@
 <?php
 
-namespace WireNinja\Accelerator\Console;
+namespace WireNinja\Accelerator\Console\Agent;
 
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
@@ -11,7 +11,7 @@ use JsonException;
 use Throwable;
 use WireNinja\Accelerator\Support\Filament\ResourceContextScanner;
 
-#[Signature('accelerator:resource-context
+#[Signature('agent:resource-context
     {resource? : Optional resource key/class or linked page, form, table, or relation manager class}
     {--list : List discovered resource registry only}
     {--registry : Include registry data together with the resource payload}

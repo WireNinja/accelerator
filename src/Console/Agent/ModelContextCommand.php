@@ -1,6 +1,6 @@
 <?php
 
-namespace WireNinja\Accelerator\Console;
+namespace WireNinja\Accelerator\Console\Agent;
 
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
@@ -11,7 +11,7 @@ use JsonException;
 use Throwable;
 use WireNinja\Accelerator\Support\ModelContextScanner;
 
-#[Signature('accelerator:model-context
+#[Signature('agent:model-context
     {model? : Optional model class name. Omit to scan every model in app/Models}
     {--database= : Database connection override for the scan}
     {--write= : Write the JSON payload to the given path instead of stdout}
