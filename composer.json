@@ -42,7 +42,7 @@
         "filament/spatie-laravel-media-library-plugin": "^5.0",
         "laravel/mcp": "^0.6.7",
         "laravel-notification-channels/telegram": "^7.0",
-        "codewithdennis/filament-advanced-choice": "^1.1"
+        "codewithdennis/filament-advanced-choice": "^2.0"
     },
     "extra": {
         "class": "WireNinja\\Accelerator\\Composer\\Plugin",
