@@ -3,7 +3,7 @@
 @endphp
 
 @if(filled($notice))
-<div class="px-2">
+<div>
     <x-filament::callout
         icon="lucide-megaphone"
         color="warning"

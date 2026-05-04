@@ -100,15 +100,15 @@ final class PanelPreset
                 TrackOnlineStatus::class,
             ])
             ->databaseNotifications()
-            ->broadcasting(fn () => config('broadcasting.default') === 'reverb')
+            ->broadcasting(fn() => config('broadcasting.default') === 'reverb')
             ->spa()
             ->topbar(false)
             ->globalSearch(false)
             ->collapsibleNavigationGroups()
             ->sidebarFullyCollapsibleOnDesktop()
             ->databaseTransactions()
-            ->unsavedChangesAlerts(fn () => resolve('app')->isProduction())
-            ->strictAuthorization(fn () => resolve('app')->isLocal())
+            ->unsavedChangesAlerts(fn() => resolve('app')->isProduction())
+            ->strictAuthorization(fn() => resolve('app')->isLocal())
             ->profile(ManageProfile::class, isSimple: false)
             ->revealablePasswords()
             ->defaultThemeMode(ThemeMode::Light)
@@ -119,23 +119,27 @@ final class PanelPreset
             ->lazyLoadedDatabaseNotifications()
             ->renderHook(
                 PanelsRenderHook::AUTH_LOGIN_FORM_AFTER,
-                fn () => config('services.google.client_id') ? view('accelerator::filament.auth.google-login') : ''
-            )
-            ->renderHook(
-                PanelsRenderHook::SIDEBAR_NAV_END,
-                fn () => view('accelerator::filament.sidebar.support')
-            )
-            ->renderHook(
-                PanelsRenderHook::HEAD_END,
-                fn () => view('accelerator::partials.pwa.head')
-            )
-            ->renderHook(
-                PanelsRenderHook::BODY_END,
-                fn () => view('accelerator::filament.business-exception-handler', BuiltinExceptions::getFilamentBusinessExceptionViewData())
+                fn() => config('services.google.client_id') ? view('accelerator::filament.auth.google-login') : ''
             )
             ->renderHook(
                 PanelsRenderHook::SIDEBAR_NAV_START,
-                fn () => view('accelerator::partials.pwa.notice')
+                fn() => view('accelerator::partials.pwa.notice')
+            )
+            ->renderHook(
+                PanelsRenderHook::SIDEBAR_NAV_END,
+                fn() => view('accelerator::filament.sidebar.support')
+            )
+            ->renderHook(
+                PanelsRenderHook::PAGE_START,
+                fn() => view('accelerator::filament.sidebar.toggle')
+            )
+            ->renderHook(
+                PanelsRenderHook::HEAD_END,
+                fn() => view('accelerator::partials.pwa.head')
+            )
+            ->renderHook(
+                PanelsRenderHook::BODY_END,
+                fn() => view('accelerator::filament.business-exception-handler', BuiltinExceptions::getFilamentBusinessExceptionViewData())
             )
             ->bootUsing(function (Panel $panel) {
                 rescue(function () use ($panel) {

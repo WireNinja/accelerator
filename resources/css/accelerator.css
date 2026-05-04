@@ -1,3 +1,19 @@
-@import "../../../../../vendor/filament/filament/resources/css/theme.css";
+@import "tailwindcss";
+@import "../../../../../vendor/filament/filament/resources/css/theme.css" reference;
 
 @source "../views/**/*.blade.php";
+
+/* base background color for entire app */
+.fi-layout {
+    background-color: rgb(238, 238, 238) !important;
+}
+
+/* widen the content by reducing padding x */
+.fi-main {
+    @apply !px-5;
+}
+
+/* hide topbar when sidebar is hidden. sidebar toggler replaced with other methods */
+.fi-layout-sidebar-toggle-btn-ctn {
+    display: none !important;
+}
