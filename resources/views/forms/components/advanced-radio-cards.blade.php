@@ -107,10 +107,7 @@
                         <div class="flex items-center w-full gap-x-4">
                             @if ($icon)
                                 <div class="shrink-0 flex items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-800 p-2 group-has-checked:bg-custom-50 dark:group-has-checked:bg-custom-400/10 transition duration-75">
-                                    <x-filament::icon
-                                        :icon="$icon"
-                                        class="size-6 text-gray-500 dark:text-gray-400 group-has-checked:text-custom-600 dark:group-has-checked:text-custom-500"
-                                    />
+                                    @svg($icon, 'size-6 text-gray-500 dark:text-gray-400 group-has-checked:text-custom-600 dark:group-has-checked:text-custom-500')
                                 </div>
                             @endif
 
@@ -147,8 +144,9 @@
                         </div>
 
                         @if($hiddenInputs)
-                            <x-filament::icon :icon="$getHiddenInputIcon()"
-                                class="invisible size-5 text-custom-600 dark:text-custom-500 group-has-checked:visible absolute top-2 right-2" />
+                            <div class="invisible group-has-checked:visible absolute top-2 right-2 text-custom-600 dark:text-custom-500">
+                                @svg($getHiddenInputIcon() ?? 'heroicon-m-check-circle', 'size-5')
+                            </div>
                         @endif
                     </label>
                 </div>

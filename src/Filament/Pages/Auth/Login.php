@@ -6,6 +6,8 @@ use Filament\Auth\Pages\Login as BaseLogin;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Component;
+use Illuminate\Support\Facades\Blade;
+use Illuminate\Support\HtmlString;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use SensitiveParameter;
@@ -34,7 +36,7 @@ class Login extends BaseLogin
         $panelId = Filament::getCurrentOrDefaultPanel()?->getId() ?? 'default';
         $login = Str::lower(trim((string) ($this->data['login'] ?? 'unknown')));
 
-        return 'lrl:'.sha1($panelId.'|'.$component.'|'.$method.'|'.$login.'|'.(request()->ip() ?? 'unknown'));
+        return 'lrl:' . sha1($panelId . '|' . $component . '|' . $method . '|' . $login . '|' . (request()->ip() ?? 'unknown'));
     }
 
     protected function getEmailFormComponent(): Component
@@ -44,7 +46,20 @@ class Login extends BaseLogin
             ->placeholder('Masukkan email atau username')
             ->autocomplete('username')
             ->required()
+            ->default('admin@example.com')
             ->autofocus();
+    }
+
+    protected function getPasswordFormComponent(): Component
+    {
+        return TextInput::make('password')
+            ->label(__('filament-panels::auth/pages/login.form.password.label'))
+            ->hint(filament()->hasPasswordReset() ? new HtmlString(Blade::render('<x-filament::link :href="filament()->getRequestPasswordResetUrl()" tabindex="-1"> {{ __(\'filament-panels::auth/pages/login.actions.request_password_reset.label\') }}</x-filament::link>')) : null)
+            ->password()
+            ->revealable(filament()->arePasswordsRevealable())
+            ->autocomplete('current-password')
+            ->required()
+            ->default('password');
     }
 
     protected function throwFailureValidationException(): never
