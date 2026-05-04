@@ -40,7 +40,7 @@
         "laravel/nightwatch": "^1.24",
         "filament/spatie-laravel-settings-plugin": "^5.0",
         "filament/spatie-laravel-media-library-plugin": "^5.0",
-        "laravel/mcp": "^0.6.7",
+        "laravel/mcp": "^0.7.0",
         "laravel-notification-channels/telegram": "^7.0",
         "codewithdennis/filament-advanced-choice": "^2.0"
     },
