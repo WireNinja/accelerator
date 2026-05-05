@@ -1,0 +1,9 @@
+parameters:
+    level: 0
+    # paths:
+    #     - src
+    # scanDirectories:
+    #     - ../wss/app
+    # reportUnmatchedIgnoredErrors: false
+    # ignoreErrors:
+    #     - '#Property .* does not accept .*#'

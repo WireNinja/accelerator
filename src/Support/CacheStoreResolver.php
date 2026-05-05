@@ -6,13 +6,9 @@ class CacheStoreResolver
 {
     public static function withOctaneFirst(): string
     {
-        return self::isOctaneRuntime() && config('accelerator.cache.allow_swoole')
+        return is_octane_runtime() && config('accelerator.cache.allow_swoole')
             ? 'octane'
-            : (config('accelerator.cache.allow_redis')
-                ? 'redis'
-                : (config('accelerator.cache.allow_database')
-                    ? 'database'
-                    : 'file'));
+            : (self::withRedisFirst());
     }
 
     /**
@@ -27,10 +23,5 @@ class CacheStoreResolver
             : (config('accelerator.cache.allow_database')
                 ? 'database'
                 : 'file');
-    }
-
-    private static function isOctaneRuntime(): bool
-    {
-        return config('accelerator.runtime') === 'swoole';
     }
 }

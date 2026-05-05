@@ -2,7 +2,7 @@
 
 namespace WireNinja\Accelerator\Constant;
 
-final class Profile
+final readonly class Profile
 {
     public const DEVELOPER_NAME = 'Yohanes Eka Adhi Setiawan';
 

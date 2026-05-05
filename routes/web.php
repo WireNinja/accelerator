@@ -13,6 +13,13 @@ Route::middleware(['web'])->group(function () {
         Route::post('/session', [InsiderDashboardController::class, 'storeSession'])->name('session.store');
         Route::post('/regenerate', [InsiderDashboardController::class, 'regenerate'])->name('regenerate');
 
+        Route::get('/debug-opcache', function () {
+            return response()->json([
+                'opcache' => opcache_get_status(false),
+                'configuration' => opcache_get_configuration(),
+            ]);
+        });
+
         Route::get('/stats', function () {
             $opcacheStatus = function_exists('opcache_get_status') ? @opcache_get_status(false) : false;
             $isOpcacheStatusAvailable = is_array($opcacheStatus);
@@ -74,7 +81,7 @@ Route::middleware(['web'])->group(function () {
     if (app()->isLocal() || app()->hasDebugModeEnabled()) {
         // This route must be registered manually in reverse proxy like nginx or Caddy, to optimize response time.
         // This route only available in local environment to enhance DX, and should not be used in production environment for security hardening.
-        Route::get('/build/sw.js', fn () => response(headers: [
+        Route::get('/build/sw.js', fn() => response(headers: [
             'Cache-Control' => 'no-cache, no-store, must-revalidate',
             'Pragma' => 'no-cache',
             'Expires' => '0',

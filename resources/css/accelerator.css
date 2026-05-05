@@ -17,3 +17,26 @@
 .fi-layout-sidebar-toggle-btn-ctn {
     display: none !important;
 }
+
+/* dense table row */
+.fi-ta-cell,
+.fi-ta-text-item,
+.fi-ta-icon,
+.fi-ta-image,
+.fi-ta-text-has-descriptions,
+.fi-ta-text {
+    @apply py-1.5;
+}
+
+/* .fi-section.fi-section-has-header .fi-section-content-ctn {
+    @apply rounded-t-xl;
+} */
+
+/* .fi-section.fi-section-has-header .fi-section-header {
+    @apply bg-gray-100;
+} */
+
+/* give transparent background ring vibe to section */
+/* .fi-sc-section {
+    @apply p-1.5 bg-white/50 rounded-xl;
+} */
