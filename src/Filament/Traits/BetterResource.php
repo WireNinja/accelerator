@@ -14,12 +14,8 @@ trait BetterResource
         $class = static::class;
 
         if (array_key_exists($class, $memo)) {
-            \Illuminate\Support\Facades\Log::debug("BetterResource Cache Hit: {$class}");
-
             return $memo[$class];
         }
-
-        \Illuminate\Support\Facades\Log::debug("BetterResource Cache Miss: {$class}");
 
         $enumClass = config('accelerator.enums.resource');
 
