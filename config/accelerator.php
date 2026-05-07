@@ -3,6 +3,7 @@
 use App\Enums\System\PanelEnum;
 use App\Enums\System\ResourceEnum;
 use App\Enums\System\RoleEnum;
+use App\Enums\System\LauncherEnum;
 
 return [
     'runtime' => env('SERVER_RUNTIME', 'fpm'), // 'swoole' or 'frankenphp' or 'fpm'
@@ -15,7 +16,7 @@ return [
         'role' => RoleEnum::class,
         'resource' => ResourceEnum::class,
         'panel' => PanelEnum::class,
-        'launcher' => \App\Enums\System\LauncherEnum::class,
+        'launcher' => LauncherEnum::class,
     ],
 
     'cache' => [
