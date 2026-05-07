@@ -2,12 +2,16 @@
 
 namespace WireNinja\Accelerator\Support;
 
+use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Support\ViewErrorBag;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\ViewException;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Throwable;
 use WireNinja\Accelerator\Exceptions\BusinessException;
 
@@ -67,7 +71,14 @@ final class BuiltinExceptions
                 return null;
             }
 
-            if ($exception instanceof ViewException || $exception instanceof BusinessException) {
+            if (
+                $exception instanceof ViewException ||
+                $exception instanceof BusinessException ||
+                $exception instanceof AuthenticationException ||
+                $exception instanceof ValidationException ||
+                $exception instanceof AuthorizationException ||
+                $exception instanceof HttpExceptionInterface
+            ) {
                 return null;
             }
 
