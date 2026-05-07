@@ -2,8 +2,8 @@
 
 namespace WireNinja\Accelerator\Filament\Tables\Actions;
 
+use Filament\Actions\ActionGroup;
 use Filament\Support\Enums\Size;
-use Filament\Tables\Actions\ActionGroup;
 
 class BetterActionGroup extends ActionGroup
 {
