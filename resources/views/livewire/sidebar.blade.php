@@ -21,11 +21,11 @@
         x-bind:class="{ 'fi-sidebar-open': $store.sidebar.isOpen }"
         @class([
             'fi-sidebar fi-main-sidebar',
-            'flex flex-col h-screen overflow-hidden bg-transparent border-none shadow-none rounded-2xl transition-all duration-300 p-0',
+            'flex flex-col h-screen h-[100dvh] overflow-hidden bg-transparent border-none shadow-none rounded-2xl transition-all duration-300 p-0',
         ])
         x-bind:style="$store.sidebar.isOpen ? 'width: {{ filament()->getSidebarWidth() }}' : 'width: {{ filament()->getCollapsedSidebarWidth() }}'"
     >
-        <div class="flex-1 mx-2.5 my-2 flex flex-col bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl shadow-2xl shadow-gray-200/50 dark:shadow-none rounded-2xl border border-gray-200/50 dark:border-white/10 transition-all duration-300 overflow-hidden">
+        <div class="flex-1 mx-2.5 mt-2 mb-[calc(0.5rem+env(safe-area-inset-bottom))] lg:mb-2 flex flex-col bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl shadow-2xl shadow-gray-200/50 dark:shadow-none rounded-2xl border border-gray-200/50 dark:border-white/10 transition-all duration-300 overflow-hidden">
             {{ \Filament\Support\Facades\FilamentView::renderHook(\Filament\View\PanelsRenderHook::SIDEBAR_START) }}
 
             <div class="fi-sidebar-header-ctn shrink-0 border-b border-gray-100 dark:border-white/5">
@@ -244,7 +244,7 @@
             @endphp
 
             @if ($shouldRenderFooter)
-                <div class="fi-sidebar-footer shrink-0 px-2 pt-3 pb-2 border-t border-gray-100 dark:border-white/5">
+                <div class="fi-sidebar-footer shrink-0 px-2 pt-3 pb-3 lg:pb-2 border-t border-gray-100 dark:border-white/5">
                     <div class="flex flex-col gap-y-1">
                         @if ($hasDatabaseNotificationsInSidebar)
                             <div class="fi-sidebar-notifications-ctn w-full overflow-hidden">
