@@ -118,7 +118,7 @@
                 <div
                     x-show="$store.sidebar.isOpen"
                     @class([
-                        'fi-sidebar-parent flex h-full w-[66px] shrink-0 flex-col py-2',
+                        'fi-sidebar-parent flex h-full w-[66px] shrink-0 flex-col py-2 justify-between',
                         'border-r border-gray-100 dark:border-white/5' => !$isRtl,
                         'border-l border-gray-100 dark:border-white/5' => $isRtl,
                     ])
@@ -165,6 +165,16 @@
                             </a>
                         @endforeach
                     </div>
+
+                    @if ($hasDatabaseNotificationsInSidebar)
+                        <div class="flex flex-col items-center pb-2">
+                            <div class="fi-sidebar-parent-notifications">
+                                @livewire(filament()->getDatabaseNotificationsLivewireComponent(), [
+                                    'lazy' => filament()->hasLazyLoadedDatabaseNotifications(),
+                                ])
+                            </div>
+                        </div>
+                    @endif
                 </div>
 
                 <!-- Main Navigation Column -->
@@ -240,19 +250,12 @@
                 $isAuthenticated = filament()->auth()->check();
                 $hasDatabaseNotificationsInSidebar = filament()->hasDatabaseNotifications() && filament()->getDatabaseNotificationsPosition() === \Filament\Enums\DatabaseNotificationsPosition::Sidebar;
                 $hasUserMenuInSidebar = filament()->hasUserMenu() && filament()->getUserMenuPosition() === \Filament\Enums\UserMenuPosition::Sidebar;
-                $shouldRenderFooter = $isAuthenticated && ($hasDatabaseNotificationsInSidebar || $hasUserMenuInSidebar);
+                $shouldRenderFooter = $isAuthenticated && $hasUserMenuInSidebar;
             @endphp
 
             @if ($shouldRenderFooter)
                 <div class="fi-sidebar-footer shrink-0 px-2 pt-3 pb-3 lg:pb-2 border-t border-gray-100 dark:border-white/5">
                     <div class="flex flex-col gap-y-1">
-                        @if ($hasDatabaseNotificationsInSidebar)
-                            <div class="fi-sidebar-notifications-ctn w-full overflow-hidden">
-                                @livewire(filament()->getDatabaseNotificationsLivewireComponent(), [
-                                    'lazy' => filament()->hasLazyLoadedDatabaseNotifications(),
-                                ])
-                            </div>
-                        @endif
 
                         @if ($hasUserMenuInSidebar)
                             <div class="w-full">
@@ -305,6 +308,49 @@
             justify-content: flex-start !important;
             gap: 0.5rem !important;
             width: 100% !important;
+        }
+
+        .fi-sidebar-parent-notifications button {
+            width: 36px !important;
+            height: 36px !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            border-radius: 0.75rem !important;
+            transition: all 0.3s !important;
+            position: relative !important;
+            background-color: transparent !important;
+            color: var(--gray-500) !important;
+        }
+        .fi-sidebar-parent-notifications button:hover {
+            background-color: rgba(0, 0, 0, 0.05) !important;
+            color: var(--gray-900) !important;
+        }
+        .dark .fi-sidebar-parent-notifications button:hover {
+            background-color: rgba(255, 255, 255, 0.1) !important;
+            color: white !important;
+        }
+        .fi-sidebar-parent-notifications .fi-sidebar-database-notifications-btn-label {
+            display: none !important;
+        }
+        .fi-sidebar-parent-notifications .fi-sidebar-database-notifications-btn-badge-ctn {
+            position: absolute !important;
+            top: -2px !important;
+            right: -2px !important;
+            z-index: 10 !important;
+        }
+        .fi-sidebar-parent-notifications .fi-sidebar-database-notifications-btn-badge-ctn .fi-badge {
+            padding: 0 !important;
+            min-width: 16px !important;
+            height: 16px !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            font-size: 10px !important;
+            border: 2px solid white !important;
+        }
+        .dark .fi-sidebar-parent-notifications .fi-sidebar-database-notifications-btn-badge-ctn .fi-badge {
+            border-color: #111827 !important;
         }
     </style>
 </div>
