@@ -82,7 +82,7 @@ final class PanelPreset
             ->widgets([
                 // AccountWidget::class,
                 // FilamentInfoWidget::class,
-                SystemInfoWidget::class,
+                // SystemInfoWidget::class,
             ])
             ->middleware([
                 EncryptCookies::class,
