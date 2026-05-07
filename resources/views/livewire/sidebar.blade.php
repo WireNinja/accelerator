@@ -8,6 +8,10 @@
         $hasTopbar = filament()->hasTopbar();
         $currentPanel = $this->getCurrentPanelId();
         $panels = $this->getPanels();
+
+        $isAuthenticated = filament()->auth()->check();
+        $hasDatabaseNotificationsInSidebar = filament()->hasDatabaseNotifications() && filament()->getDatabaseNotificationsPosition() === \Filament\Enums\DatabaseNotificationsPosition::Sidebar;
+        $hasUserMenuInSidebar = filament()->hasUserMenu() && filament()->getUserMenuPosition() === \Filament\Enums\UserMenuPosition::Sidebar;
     @endphp
 
     {{-- format-ignore-start --}}
@@ -247,9 +251,6 @@
             </div>
 
             @php
-                $isAuthenticated = filament()->auth()->check();
-                $hasDatabaseNotificationsInSidebar = filament()->hasDatabaseNotifications() && filament()->getDatabaseNotificationsPosition() === \Filament\Enums\DatabaseNotificationsPosition::Sidebar;
-                $hasUserMenuInSidebar = filament()->hasUserMenu() && filament()->getUserMenuPosition() === \Filament\Enums\UserMenuPosition::Sidebar;
                 $shouldRenderFooter = $isAuthenticated && $hasUserMenuInSidebar;
             @endphp
 
