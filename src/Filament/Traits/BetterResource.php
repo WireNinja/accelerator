@@ -10,14 +10,21 @@ trait BetterResource
 {
     private static function getResourceEnum(): ?MustBeResourceEnum
     {
+        static $memo = [];
+        $class = static::class;
+
+        if (array_key_exists($class, $memo)) {
+            return $memo[$class];
+        }
+
         $enumClass = config('accelerator.enums.resource');
 
         if (! $enumClass || ! enum_exists($enumClass) || (! is_subclass_of($enumClass, MustBeResourceEnum::class))) {
-            return null;
+            return $memo[$class] = null;
         }
 
         /** @var class-string<MustBeResourceEnum> $enumClass */
-        return $enumClass::fromResource(static::class);
+        return $memo[$class] = $enumClass::fromResource($class);
     }
 
     public static function getNavigationIcon(): string|BackedEnum|null
