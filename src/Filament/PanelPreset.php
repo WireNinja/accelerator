@@ -80,8 +80,8 @@ final class PanelPreset
             ])
             ->discoverWidgets(in: self::discoverWidgetsIn($id), for: self::discoverWidgetsFor($id))
             ->widgets([
-                AccountWidget::class,
-                FilamentInfoWidget::class,
+                // AccountWidget::class,
+                // FilamentInfoWidget::class,
                 SystemInfoWidget::class,
             ])
             ->middleware([
@@ -97,7 +97,7 @@ final class PanelPreset
             ])
             ->authMiddleware([
                 Authenticate::class,
-                TrackOnlineStatus::class,
+                // TrackOnlineStatus::class,
             ])
             ->databaseNotifications()
             ->broadcasting(fn() => config('broadcasting.default') === 'reverb')
