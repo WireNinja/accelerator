@@ -31,7 +31,7 @@
         'subheading' => null,
     ])
 
-    <div class="min-h-screen w-full flex items-center justify-center p-4 lg:p-8 bg-gray-100 dark:bg-gray-950">
+    <div class="min-h-screen min-h-[100dvh] w-full flex items-center justify-center p-4 lg:p-8 bg-gray-100 dark:bg-gray-950">
         {{ \Filament\Support\Facades\FilamentView::renderHook(\Filament\View\PanelsRenderHook::SIMPLE_LAYOUT_START, scopes: $renderHookScopes) }}
 
         <!-- Main Container -->
