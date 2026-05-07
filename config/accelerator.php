@@ -15,6 +15,7 @@ return [
         'role' => RoleEnum::class,
         'resource' => ResourceEnum::class,
         'panel' => PanelEnum::class,
+        'launcher' => \App\Enums\System\LauncherEnum::class,
     ],
 
     'cache' => [

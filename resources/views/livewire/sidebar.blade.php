@@ -168,6 +168,35 @@
                                 </div>
                             </a>
                         @endforeach
+
+                        @php
+                            $launchers = $this->getLaunchers();
+                        @endphp
+
+                        @if (count($launchers) > 0)
+                            <div class="h-px w-10 bg-gray-200 dark:bg-white/10 my-2"></div>
+
+                            @foreach ($launchers as $launcher)
+                                <a
+                                    href="{{ $launcher->getUrl() }}"
+                                    target="_blank"
+                                    class="group relative flex h-9 w-9 items-center justify-center rounded-xl transition-all duration-300 transform-gpu hover:scale-110 active:scale-95"
+                                    x-data="{}"
+                                    x-tooltip.content="'{{ $launcher->getLabel() }}'"
+                                >
+                                    <!-- Icon Background Layer -->
+                                    <div class="absolute inset-0 rounded-xl transition-all duration-300 bg-transparent group-hover:bg-gray-200 dark:group-hover:bg-white/10"></div>
+
+                                    <!-- Icon -->
+                                    <div class="relative z-10 transition-colors duration-300 text-gray-500 group-hover:text-gray-900 dark:text-gray-400 dark:group-hover:text-white">
+                                        <x-filament::icon
+                                            :icon="$launcher->getIcon()"
+                                            class="h-4.5 w-4.5"
+                                        />
+                                    </div>
+                                </a>
+                            @endforeach
+                        @endif
                     </div>
 
                     @if ($hasDatabaseNotificationsInSidebar)

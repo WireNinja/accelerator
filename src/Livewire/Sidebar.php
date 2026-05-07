@@ -43,6 +43,22 @@ class Sidebar extends Component implements HasActions, HasSchemas
         return filament()->getCurrentPanel()?->getId() ?? '';
     }
 
+    /**
+     * @return array<mixed>
+     */
+    public function getLaunchers(): array
+    {
+        $launcherEnum = config('accelerator.enums.launcher');
+        if (! is_string($launcherEnum) || ! enum_exists($launcherEnum)) {
+            return [];
+        }
+
+        /** @var array<mixed> $cases */
+        $cases = $launcherEnum::cases();
+
+        return $cases;
+    }
+
     public function render(): View
     {
         return view('accelerator::livewire.sidebar');
