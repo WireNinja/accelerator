@@ -7,7 +7,7 @@ use Filament\Support\Enums\Size;
 
 class BetterActionGroup extends ActionGroup
 {
-    public static function make(array $actions): static
+    public static function make(array $actions = []): static
     {
         return parent::make($actions)
             ->button()
