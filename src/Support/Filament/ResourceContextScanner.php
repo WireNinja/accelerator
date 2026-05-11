@@ -820,6 +820,7 @@ class ResourceContextScanner
                 'label' => $this->normalizeValue($this->callPublicMethod($action, 'getLabel')),
                 'icon' => $this->normalizeValue($this->callPublicMethod($action, 'getIcon')),
                 'authorization' => $this->summarizeActionAuthorization($action, $policyClass),
+                'abilities' => $this->summarizeActionAuthorization($action, $policyClass)['policy_abilities'] ?? [],
                 'actions' => array_values(array_map(fn (object $childAction): array => $this->summarizeAction($childAction, $policyClass), $action->getActions())),
             ]);
         }
@@ -831,6 +832,7 @@ class ResourceContextScanner
             'label' => $this->normalizeValue($this->callPublicMethod($action, 'getLabel')),
             'icon' => $this->normalizeValue($this->callPublicMethod($action, 'getIcon')),
             'color' => $this->normalizeValue($this->callPublicMethod($action, 'getColor')),
+            'abilities' => $this->summarizeActionAuthorization($action, $policyClass)['policy_abilities'] ?? [],
             'authorization' => $this->summarizeActionAuthorization($action, $policyClass),
         ]);
     }
