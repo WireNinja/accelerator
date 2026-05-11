@@ -42,7 +42,6 @@ use WireNinja\Accelerator\Attributes\DiscoverAsRelationManager;
 use WireNinja\Accelerator\Attributes\DiscoverAsResource;
 use WireNinja\Accelerator\Attributes\DiscoverAsTable;
 use WireNinja\Accelerator\Attributes\DiscoverAsWidget;
-use WireNinja\Accelerator\Attributes\DiscoverShouldMinify;
 
 class ResourceContextScanner
 {
@@ -67,7 +66,7 @@ class ResourceContextScanner
     /**
      * @return array<string, mixed>
      */
-    public function scan(?string $resource = null, bool $includeRegistry = false, bool $expandMinified = false): array
+    public function scan(?string $resource = null, bool $includeRegistry = false): array
     {
         $catalog = $this->catalog();
         $payload = [
@@ -78,18 +77,17 @@ class ResourceContextScanner
                 'tables_discovered' => count($catalog['tables']),
                 'widgets_discovered' => count($catalog['widgets']),
                 'registry_diagnostics' => count($catalog['diagnostics']),
-                'expand_minified' => $expandMinified,
             ],
         ];
 
         if ($resource === null || $resource === '') {
-            $payload['registry'] = $this->describeRegistry($catalog, $expandMinified);
+            $payload['registry'] = $this->describeRegistry($catalog);
 
             return $payload;
         }
 
         $resourceClass = $this->resolveResourceClass($resource, $catalog);
-        $resourcePayload = $this->describeResource($resourceClass, $catalog, $expandMinified, false);
+        $resourcePayload = $this->describeResource($resourceClass, $catalog, false);
 
         $payload['resource'] = $resourcePayload;
         $payload['summary']['requested_resource'] = $resource;
@@ -97,7 +95,7 @@ class ResourceContextScanner
         $payload['summary']['complexity_score'] = $resourcePayload['complexity']['score'];
 
         if ($includeRegistry) {
-            $payload['registry'] = $this->describeRegistry($catalog, $expandMinified);
+            $payload['registry'] = $this->describeRegistry($catalog);
         }
 
         return $payload;
@@ -139,8 +137,6 @@ class ResourceContextScanner
                 'form' => $attribute?->form,
                 'table' => $attribute?->table,
                 'model' => $this->callPublicMethod($resourceClass, 'getModel', true),
-                'minified' => $this->hasAttribute($resourceClass, DiscoverShouldMinify::class),
-                'minify_reason' => $this->getMinifyReason($resourceClass),
                 'source' => $this->describeClassSource($resourceClass),
             ];
         }
@@ -152,8 +148,6 @@ class ResourceContextScanner
             $forms[$formClass] = [
                 'class' => $formClass,
                 'resource' => $attribute?->resource,
-                'minified' => $this->hasAttribute($formClass, DiscoverShouldMinify::class),
-                'minify_reason' => $this->getMinifyReason($formClass),
                 'source' => $this->describeClassSource($formClass),
             ];
         }
@@ -165,8 +159,6 @@ class ResourceContextScanner
             $tables[$tableClass] = [
                 'class' => $tableClass,
                 'resource' => $attribute?->resource,
-                'minified' => $this->hasAttribute($tableClass, DiscoverShouldMinify::class),
-                'minify_reason' => $this->getMinifyReason($tableClass),
                 'source' => $this->describeClassSource($tableClass),
             ];
         }
@@ -179,8 +171,6 @@ class ResourceContextScanner
                 'class' => $relationManagerClass,
                 'resource' => $attribute?->resource,
                 'relationship' => $attribute?->relationship,
-                'minified' => $this->hasAttribute($relationManagerClass, DiscoverShouldMinify::class),
-                'minify_reason' => $this->getMinifyReason($relationManagerClass),
                 'source' => $this->describeClassSource($relationManagerClass),
             ];
         }
@@ -205,8 +195,6 @@ class ResourceContextScanner
                 'class' => $widgetClass,
                 'resource' => $attribute?->resource,
                 'key' => $attribute?->key,
-                'minified' => $this->hasAttribute($widgetClass, DiscoverShouldMinify::class),
-                'minify_reason' => $this->getMinifyReason($widgetClass),
                 'source' => $this->describeClassSource($widgetClass),
             ];
         }
@@ -408,12 +396,12 @@ class ResourceContextScanner
      * @param  array<string, array<int|string, array<string, mixed>|string>>  $catalog
      * @return list<array<string, mixed>>
      */
-    protected function describeRegistry(array $catalog, bool $expandMinified): array
+    protected function describeRegistry(array $catalog): array
     {
         $resources = [];
 
         foreach (array_keys($catalog['resources']) as $resourceClass) {
-            $resource = $this->describeResource($resourceClass, $catalog, $expandMinified, true);
+            $resource = $this->describeResource($resourceClass, $catalog, true);
             $resources[] = [
                 'key' => $resource['key'],
                 'class' => $resource['class'],
@@ -425,7 +413,6 @@ class ResourceContextScanner
                 'table_class' => $resource['table']['definition_class']['class'] ?? null,
                 'relation_manager_count' => count($resource['relation_managers']),
                 'complexity_score' => $resource['complexity']['score'],
-                'minified' => $resource['discovery']['should_minify'],
                 'inputs' => $this->resourceAliases($catalog['resources'][$resourceClass]),
                 'source' => $resource['source'],
             ];
@@ -446,20 +433,17 @@ class ResourceContextScanner
             'forms' => array_values(array_map(fn (array $form): array => [
                 'class' => $form['class'],
                 'resource' => $form['resource'],
-                'minified' => $form['minified'],
                 'source' => $form['source'],
             ], $catalog['forms'])),
             'tables' => array_values(array_map(fn (array $table): array => [
                 'class' => $table['class'],
                 'resource' => $table['resource'],
-                'minified' => $table['minified'],
                 'source' => $table['source'],
             ], $catalog['tables'])),
             'relation_managers' => array_values(array_map(fn (array $relationManager): array => [
                 'class' => $relationManager['class'],
                 'resource' => $relationManager['resource'],
                 'relationship' => $relationManager['relationship'],
-                'minified' => $relationManager['minified'],
                 'source' => $relationManager['source'],
             ], $catalog['relation_managers'])),
             'pages' => array_values(array_map(fn (array $page): array => [
@@ -472,7 +456,6 @@ class ResourceContextScanner
                 'class' => $widget['class'],
                 'resource' => $widget['resource'],
                 'key' => $widget['key'],
-                'minified' => $widget['minified'],
                 'source' => $widget['source'],
             ], $catalog['widgets'])),
             'diagnostics' => $catalog['diagnostics'],
@@ -483,7 +466,7 @@ class ResourceContextScanner
      * @param  array<string, array<int|string, array<string, mixed>|string>>  $catalog
      * @return array<string, mixed>
      */
-    protected function describeResource(string $resourceClass, array $catalog, bool $expandMinified, bool $summaryOnly): array
+    protected function describeResource(string $resourceClass, array $catalog, bool $summaryOnly): array
     {
         $catalogEntry = $catalog['resources'][$resourceClass] ?? [
             'class' => $resourceClass,
@@ -491,12 +474,9 @@ class ResourceContextScanner
             'form' => null,
             'table' => null,
             'model' => $this->callPublicMethod($resourceClass, 'getModel', true),
-            'minified' => $this->hasAttribute($resourceClass, DiscoverShouldMinify::class),
-            'minify_reason' => $this->getMinifyReason($resourceClass),
             'source' => $this->describeClassSource($resourceClass),
         ];
 
-        $resourceMinified = (bool) $catalogEntry['minified'] && (! $expandMinified);
         $modelClass = is_string($catalogEntry['model']) ? $catalogEntry['model'] : null;
         $model = $modelClass ? $this->makeModel($modelClass) : null;
         $formClass = is_string($catalogEntry['form']) ? $catalogEntry['form'] : null;
@@ -516,22 +496,17 @@ class ResourceContextScanner
         $formSchema = $this->buildResourceFormSchema($resourceClass);
         $table = $this->buildResourceTable($resourceClass, $modelClass);
 
-        $formMinified = (! $expandMinified) && ($resourceMinified || $this->shouldClassBeMinified($formClass));
-        $tableMinified = (! $expandMinified) && ($resourceMinified || $this->shouldClassBeMinified($tableClass));
-
         $relationManagers = $this->describeRelationEntries(
             $this->normalizeRelationEntries($this->callPublicMethod($resourceClass, 'getRelations', true) ?? []),
             $modelClass,
             $relationPageClass,
-            $resourceMinified,
-            $expandMinified,
             $summaryOnly,
         );
 
         $formPayload = $this->describeSchemaPayload(
             $formSchema,
             $formClass,
-            $formMinified || $summaryOnly,
+            $summaryOnly,
             'configure',
             $resourceHookSources['form'],
         );
@@ -539,7 +514,7 @@ class ResourceContextScanner
         $tablePayload = $this->describeTablePayload(
             $table,
             $tableClass,
-            $tableMinified || $summaryOnly,
+            $summaryOnly,
             'configure',
             $resourceHookSources['table'],
             $policyPayload['class'] ?? null,
@@ -584,7 +559,7 @@ class ResourceContextScanner
     /**
      * @return list<array<string, mixed>>
      */
-    protected function describeRelationEntries(array $entries, ?string $ownerModelClass, ?string $pageClass, bool $resourceMinified, bool $expandMinified, bool $summaryOnly): array
+    protected function describeRelationEntries(array $entries, ?string $ownerModelClass, ?string $pageClass, bool $summaryOnly): array
     {
         $payload = [];
 
@@ -593,7 +568,7 @@ class ResourceContextScanner
                 $payload[] = [
                     'kind' => 'group',
                     'label' => $entry['label'],
-                    'managers' => $this->describeRelationEntries($entry['managers'], $ownerModelClass, $pageClass, $resourceMinified, $expandMinified, $summaryOnly),
+                    'managers' => $this->describeRelationEntries($entry['managers'], $ownerModelClass, $pageClass, $summaryOnly),
                 ];
 
                 continue;
@@ -606,8 +581,7 @@ class ResourceContextScanner
             }
 
             $managerClass = $entry['manager_class'];
-            $shouldMinify = (! $expandMinified) && ($resourceMinified || $this->shouldClassBeMinified($managerClass));
-            $payload[] = $this->describeRelationManager($managerClass, $entry['properties'], $ownerModelClass, $pageClass, $shouldMinify || $summaryOnly);
+            $payload[] = $this->describeRelationManager($managerClass, $entry['properties'], $ownerModelClass, $pageClass, $summaryOnly);
         }
 
         return $payload;
@@ -783,20 +757,8 @@ class ResourceContextScanner
     protected function summarizeSchemaComponent(object $component): array
     {
         $summary = $this->filterNullValues([
-            'class' => $component::class,
             'type' => class_basename($component),
             'name' => $this->normalizeValue($this->callPublicMethod($component, 'getName')),
-            'label' => $this->normalizeValue($this->callPublicMethod($component, 'getLabel')),
-            'state_path' => $this->normalizeValue($this->callPublicMethod($component, 'getStatePath')),
-            'relationship' => $this->normalizeValue($this->callPublicMethod($component, 'getRelationshipName')),
-            'icon' => $this->normalizeValue($this->callPublicMethod($component, 'getIcon')),
-            'required' => $this->callPublicMethod($component, 'isRequired'),
-            'searchable' => $this->callPublicMethod($component, 'isSearchable'),
-            'multiple' => $this->callPublicMethod($component, 'isMultiple'),
-            'disabled' => $this->callPublicMethod($component, 'isDisabled'),
-            'hidden' => $this->callPublicMethod($component, 'isHidden'),
-            'column_span' => $this->normalizeValue($this->callPublicMethod($component, 'getColumnSpan')),
-            'column_start' => $this->normalizeValue($this->callPublicMethod($component, 'getColumnStart')),
         ]);
 
         $childSchemas = $this->callPublicMethod($component, 'getChildSchemas');
@@ -830,15 +792,8 @@ class ResourceContextScanner
     protected function summarizeTableColumn(object $column): array
     {
         return $this->filterNullValues([
-            'class' => $column::class,
             'type' => class_basename($column),
             'name' => $this->normalizeValue($this->callPublicMethod($column, 'getName')),
-            'label' => $this->normalizeValue($this->callPublicMethod($column, 'getLabel')),
-            'searchable' => $this->callPublicMethod($column, 'isSearchable'),
-            'sortable' => $this->callPublicMethod($column, 'isSortable'),
-            'toggleable' => $this->callPublicMethod($column, 'isToggleable'),
-            'hidden_by_default' => $this->callPublicMethod($column, 'isToggledHiddenByDefault'),
-            'description' => $this->normalizeValue($this->callPublicMethod($column, 'getDescription')),
         ]);
     }
 
@@ -848,13 +803,8 @@ class ResourceContextScanner
     protected function summarizeTableFilter(object $filter): array
     {
         return $this->filterNullValues([
-            'class' => $filter::class,
             'type' => class_basename($filter),
             'name' => $this->normalizeValue($this->callPublicMethod($filter, 'getName')),
-            'label' => $this->normalizeValue($this->callPublicMethod($filter, 'getLabel')),
-            'attribute' => $this->normalizeValue($this->callPublicMethod($filter, 'getAttribute')),
-            'relationship' => $this->normalizeValue($this->callPublicMethod($filter, 'getRelationshipName')),
-            'multiple' => $this->callPublicMethod($filter, 'isMultiple'),
         ]);
     }
 
@@ -1335,8 +1285,6 @@ class ResourceContextScanner
                 'resource' => $widgetAttribute->resource,
                 'key' => $widgetAttribute->key,
             ] : null,
-            'should_minify' => $this->hasAttribute($class, DiscoverShouldMinify::class),
-            'minify_reason' => $this->getMinifyReason($class),
         ]);
     }
 
@@ -1888,18 +1836,7 @@ class ResourceContextScanner
         return array_filter($data, static fn (mixed $value): bool => $value !== null && $value !== []);
     }
 
-    protected function shouldClassBeMinified(?string $class): bool
-    {
-        return is_string($class) && $class !== '' && $this->hasAttribute($class, DiscoverShouldMinify::class);
-    }
 
-    protected function getMinifyReason(string $class): ?string
-    {
-        /** @var ?DiscoverShouldMinify $attribute */
-        $attribute = $this->getAttributeInstance($class, DiscoverShouldMinify::class);
-
-        return $attribute?->reason;
-    }
 
     protected function hasAttribute(string $class, string $attributeClass): bool
     {

@@ -13,5 +13,6 @@ class DiscoverAsResource
         public ?string $key = null,
         public ?string $form = null,
         public ?string $table = null,
+        public ?string $policy = null,
     ) {}
 }

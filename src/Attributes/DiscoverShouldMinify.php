@@ -6,6 +6,9 @@ namespace WireNinja\Accelerator\Attributes;
 
 use Attribute;
 
+/**
+ * @deprecated This attribute is no longer used. Scanning now focuses on class and component names only.
+ */
 #[Attribute(Attribute::TARGET_CLASS)]
 class DiscoverShouldMinify
 {
