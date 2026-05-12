@@ -9,6 +9,7 @@ use Illuminate\Foundation\Http\Middleware\CheckForMaintenanceMode;
 use Illuminate\Foundation\Http\Middleware\PreventRequestsDuringMaintenance;
 use Spatie\Permission\Middleware\PermissionMiddleware;
 use Spatie\Permission\Middleware\RoleMiddleware;
+use Spatie\Permission\Middleware\RoleOrPermissionMiddleware;
 use WireNinja\Accelerator\Http\Middleware\AddLinkHeadersForPreloadedAssets;
 use WireNinja\Accelerator\Http\Middleware\HandleInertiaRequests;
 
