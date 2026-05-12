@@ -54,8 +54,11 @@
         x-ref="stepsData"
     />
 
-    <div class="grid grid-cols-1 md:grid-cols-12 gap-8">
+    <!-- Main Wizard Canvas -->
+    <div class="grid grid-cols-1 md:grid-cols-12 gap-8 lg:gap-12 bg-white dark:bg-gray-900 shadow-sm ring-1 ring-gray-950/5 dark:ring-white/10 rounded-2xl p-6 sm:p-8">
+        
         @if (! $isHeaderHidden)
+            <!-- Navigation Sidebar (Vertical Tabs) -->
             <aside class="md:col-span-3">
                 <div @class([
                     'sticky top-24' => $isSticky,
@@ -67,130 +70,96 @@
                         role="list"
                         x-cloak
                         x-ref="header"
-                        class="flex flex-col"
+                        class="flex flex-col gap-1"
                     >
                         @foreach ($steps as $step)
-                            <li
-                                class="relative flex items-start group"
-                                x-bind:class="{
-                                    'fi-active': getStepIndex(step) === {{ $loop->index }},
-                                    'fi-completed': getStepIndex(step) > {{ $loop->index }},
-                                }"
-                            >
-                                @if (! $loop->last)
-                                    <!-- Connector Line -->
-                                    <div 
-                                        class="absolute left-8 top-11 -bottom-6 -ml-px w-0.5 transition-colors duration-300" 
-                                        aria-hidden="true"
-                                        x-bind:class="{
-                                            'bg-primary-600 dark:bg-primary-500': getStepIndex(step) > {{ $loop->index }},
-                                            'bg-gray-300 dark:bg-gray-700': getStepIndex(step) <= {{ $loop->index }},
-                                        }"
-                                    ></div>
-                                @endif
-
+                            <li class="relative">
                                 <button
                                     type="button"
                                     x-bind:aria-current="getStepIndex(step) === {{ $loop->index }} ? 'step' : null"
                                     x-on:click="step = @js($step->getKey())"
                                     x-bind:disabled="! isStepAccessible(@js($step->getKey())) || @js($previousAction->isDisabled())"
-                                    class="relative flex items-center w-full py-3 px-4 text-left rounded-xl transition-all duration-200 hover:bg-gray-50 dark:hover:bg-white/5 ring-1 ring-transparent focus:outline-none focus:ring-primary-500"
+                                    class="relative flex items-center w-full py-2.5 px-3 text-left rounded-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary-500/50"
                                     x-bind:class="{
-                                        'bg-primary-50/50 dark:bg-primary-500/10 ring-primary-500/20': getStepIndex(step) === {{ $loop->index }}
+                                        'bg-gray-100 dark:bg-gray-800': getStepIndex(step) === {{ $loop->index }},
+                                        'hover:bg-gray-50 dark:hover:bg-gray-800/50': getStepIndex(step) !== {{ $loop->index }}
                                     }"
                                 >
-                                    <span class="flex items-center shrink-0" aria-hidden="true">
-                                        <span 
-                                            class="relative z-10 flex items-center justify-center w-8 h-8 rounded-full border-2 shadow-sm transition-all duration-300"
-                                            x-bind:class="{
-                                                'bg-primary-600 border-primary-600 dark:bg-primary-500 dark:border-primary-500 scale-105': getStepIndex(step) >= {{ $loop->index }},
-                                                'bg-white border-gray-300 dark:bg-gray-800 dark:border-white/20': getStepIndex(step) < {{ $loop->index }},
-                                                'ring-4 ring-primary-100 dark:ring-primary-900/30': getStepIndex(step) === {{ $loop->index }},
-                                            }"
-                                        >
-                                            @php
-                                                $completedIcon = $step->getCompletedIcon();
-                                            @endphp
+                                    <span class="flex items-center shrink-0 mr-3" aria-hidden="true">
+                                        @php
+                                            $completedIcon = $step->getCompletedIcon();
+                                        @endphp
 
-                                            <!-- Completed Icon -->
-                                            <div
-                                                x-show="getStepIndex(step) > {{ $loop->index }}"
-                                                x-cloak
-                                            >
+                                        <!-- Completed Icon -->
+                                        <div x-show="getStepIndex(step) > {{ $loop->index }}" x-cloak>
+                                            {{
+                                                \Filament\Support\generate_icon_html(
+                                                    $completedIcon ?? \Filament\Support\Icons\Heroicon::OutlinedCheck,
+                                                    alias: filled($completedIcon) ? null : \Filament\Schemas\View\SchemaIconAlias::COMPONENTS_WIZARD_COMPLETED_STEP,
+                                                    attributes: new \Illuminate\View\ComponentAttributeBag([
+                                                        'class' => 'w-5 h-5 text-primary-600 dark:text-primary-500',
+                                                    ]),
+                                                    size: \Filament\Support\Enums\IconSize::Medium,
+                                                )
+                                            }}
+                                        </div>
+
+                                        <!-- Active/Pending Icon -->
+                                        <div x-show="getStepIndex(step) === {{ $loop->index }}" x-cloak>
+                                            @if (filled($icon = $step->getIcon()))
                                                 {{
                                                     \Filament\Support\generate_icon_html(
-                                                        $completedIcon ?? \Filament\Support\Icons\Heroicon::OutlinedCheck,
-                                                        alias: filled($completedIcon) ? null : \Filament\Schemas\View\SchemaIconAlias::COMPONENTS_WIZARD_COMPLETED_STEP,
+                                                        $icon,
                                                         attributes: new \Illuminate\View\ComponentAttributeBag([
-                                                            'class' => 'w-4 h-4 text-white',
+                                                            'class' => 'w-5 h-5 text-gray-900 dark:text-white',
                                                         ]),
-                                                        size: \Filament\Support\Enums\IconSize::Small,
+                                                        size: \Filament\Support\Enums\IconSize::Medium,
                                                     )
                                                 }}
-                                            </div>
+                                            @else
+                                                <span class="flex items-center justify-center w-5 h-5 text-sm font-bold text-gray-900 dark:text-white">
+                                                    {{ $loop->index + 1 }}
+                                                </span>
+                                            @endif
+                                        </div>
 
-                                            <!-- Active/Pending Icon -->
-                                            <div
-                                                x-show="getStepIndex(step) === {{ $loop->index }}"
-                                                x-cloak
-                                            >
-                                                @if (filled($icon = $step->getIcon()))
-                                                    {{
-                                                        \Filament\Support\generate_icon_html(
-                                                            $icon,
-                                                            attributes: new \Illuminate\View\ComponentAttributeBag([
-                                                                'class' => 'w-4 h-4 text-white',
-                                                            ]),
-                                                            size: \Filament\Support\Enums\IconSize::Small,
-                                                        )
-                                                    }}
-                                                @else
-                                                    <span class="text-xs font-bold text-white">
-                                                        {{ $loop->index + 1 }}
-                                                    </span>
-                                                @endif
-                                            </div>
-
-                                            <!-- Future Icon -->
-                                            <div
-                                                x-show="getStepIndex(step) < {{ $loop->index }}"
-                                                x-cloak
-                                            >
-                                                @if (filled($icon = $step->getIcon()))
-                                                    {{
-                                                        \Filament\Support\generate_icon_html(
-                                                            $icon,
-                                                            attributes: new \Illuminate\View\ComponentAttributeBag([
-                                                                'class' => 'w-4 h-4 text-gray-400 dark:text-gray-500',
-                                                            ]),
-                                                            size: \Filament\Support\Enums\IconSize::Small,
-                                                        )
-                                                    }}
-                                                @else
-                                                    <span class="text-xs font-bold text-gray-400 dark:text-gray-500">
-                                                        {{ $loop->index + 1 }}
-                                                    </span>
-                                                @endif
-                                            </div>
-                                        </span>
+                                        <!-- Future Icon -->
+                                        <div x-show="getStepIndex(step) < {{ $loop->index }}" x-cloak>
+                                            @if (filled($icon = $step->getIcon()))
+                                                {{
+                                                    \Filament\Support\generate_icon_html(
+                                                        $icon,
+                                                        attributes: new \Illuminate\View\ComponentAttributeBag([
+                                                            'class' => 'w-5 h-5 text-gray-400 dark:text-gray-500',
+                                                        ]),
+                                                        size: \Filament\Support\Enums\IconSize::Medium,
+                                                    )
+                                                }}
+                                            @else
+                                                <span class="flex items-center justify-center w-5 h-5 text-sm font-medium text-gray-400 dark:text-gray-500">
+                                                    {{ $loop->index + 1 }}
+                                                </span>
+                                            @endif
+                                        </div>
                                     </span>
-                                    <span class="flex flex-col min-w-0 ml-4">
+                                    
+                                    <span class="flex flex-col min-w-0">
                                         <span 
                                             class="text-sm font-bold tracking-tight transition-colors duration-200"
                                             x-bind:class="{
-                                                'text-primary-600 dark:text-primary-400': getStepIndex(step) === {{ $loop->index }},
-                                                'text-gray-900 dark:text-white': getStepIndex(step) > {{ $loop->index }},
-                                                'text-gray-500 dark:text-gray-400': getStepIndex(step) < {{ $loop->index }},
+                                                'text-gray-900 dark:text-white': getStepIndex(step) === {{ $loop->index }},
+                                                'text-gray-700 dark:text-gray-300': getStepIndex(step) > {{ $loop->index }},
+                                                'text-gray-400 dark:text-gray-500': getStepIndex(step) < {{ $loop->index }},
                                             }"
                                         >
                                             {{ $step->getLabel() }}
                                         </span>
                                         @if (filled($description = $step->getDescription()))
                                             <span 
-                                                class="text-xs transition-colors duration-200 mt-0.5 line-clamp-2"
+                                                class="text-xs mt-0.5 line-clamp-2 transition-colors duration-200"
                                                 x-bind:class="{
-                                                    'text-primary-600/70 dark:text-primary-400/70': getStepIndex(step) === {{ $loop->index }},
-                                                    'text-gray-500 dark:text-gray-400': getStepIndex(step) !== {{ $loop->index }},
+                                                    'text-gray-500 dark:text-gray-400': getStepIndex(step) === {{ $loop->index }},
+                                                    'text-gray-400 dark:text-gray-500': getStepIndex(step) !== {{ $loop->index }},
                                                 }"
                                             >
                                                 {{ $description }}
@@ -201,16 +170,32 @@
                             </li>
                         @endforeach
                     </ol>
+
+                    <!-- Simple Progress Indicator at the bottom of navigation -->
+                    <div class="mt-8 px-3">
+                        <div class="flex items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400">
+                            <span x-text="'Step ' + (getStepIndex(step) + 1) + ' of {{ count($steps) }}'"></span>
+                        </div>
+                        <div class="mt-2 h-1 w-full bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                            <div 
+                                class="h-full bg-primary-600 dark:bg-primary-500 transition-all duration-300 ease-out rounded-full"
+                                x-bind:style="'width: ' + (((getStepIndex(step) + 1) / {{ count($steps) }}) * 100) + '%'"
+                            ></div>
+                        </div>
+                    </div>
+
                 </div>
             </aside>
         @endif
 
-        <div class="md:col-span-9 flex flex-col gap-6 bg-white dark:bg-gray-900 shadow-sm ring-1 ring-gray-950/5 dark:ring-white/10 rounded-2xl p-6 sm:p-8">
+        <!-- Form Content Area -->
+        <div class="md:col-span-9 flex flex-col gap-8">
             @foreach ($steps as $step)
                 {{ $step }}
             @endforeach
 
-            <div x-cloak class="fi-sc-wizard-footer flex items-center justify-between gap-3 pt-6 border-t border-gray-200 dark:border-white/10">
+            <!-- Footer / Actions -->
+            <div x-cloak class="fi-sc-wizard-footer flex items-center justify-between gap-3 pt-2">
                 <div class="flex items-center gap-3">
                     <div
                         x-cloak
