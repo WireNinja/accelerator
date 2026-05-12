@@ -65,9 +65,13 @@
                 ])>
                     
                     <!-- Title and Description (if provided) -->
-                    @if (filled($heading = $getNavigationHeading()) || filled($description = $getNavigationDescription()))
+                    @php
+                        $navHeading = $getNavigationHeading();
+                        $navDescription = $getNavigationDescription();
+                    @endphp
+                    @if (filled($navHeading) || filled($navDescription))
                         <div class="mb-6 px-3">
-                            @if (filled($heading))
+                            @if (filled($navHeading))
                                 <h3 class="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
                                     {{
                                         \Filament\Support\generate_icon_html(
@@ -78,12 +82,12 @@
                                             size: \Filament\Support\Enums\IconSize::Medium,
                                         )
                                     }}
-                                    {{ $heading }}
+                                    {{ $navHeading }}
                                 </h3>
                             @endif
-                            @if (filled($description))
+                            @if (filled($navDescription))
                                 <p class="mt-2 text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
-                                    {{ $description }}
+                                    {{ $navDescription }}
                                 </p>
                             @endif
                         </div>
