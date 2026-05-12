@@ -205,7 +205,7 @@
             </aside>
         @endif
 
-        <div class="md:col-span-9 flex flex-col gap-6">
+        <div class="md:col-span-9 flex flex-col gap-6 bg-white dark:bg-gray-900 shadow-sm ring-1 ring-gray-950/5 dark:ring-white/10 rounded-2xl p-6 sm:p-8">
             @foreach ($steps as $step)
                 {{ $step }}
             @endforeach
