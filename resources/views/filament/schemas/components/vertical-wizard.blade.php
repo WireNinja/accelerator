@@ -55,7 +55,7 @@
     />
 
     <!-- Main Wizard Canvas -->
-    <div class="grid grid-cols-1 md:grid-cols-12 gap-8 lg:gap-12 bg-white dark:bg-gray-900 shadow-sm ring-1 ring-gray-950/5 dark:ring-white/10 rounded-2xl p-6 sm:p-8">
+    <div class="grid grid-cols-1 md:grid-cols-12 gap-8 lg:gap-12 bg-gray-50/50 dark:bg-gray-900/50 shadow-sm ring-1 ring-gray-950/5 dark:ring-white/10 rounded-2xl p-4 sm:p-6 lg:p-8">
         
         @if (! $isHeaderHidden)
             <!-- Navigation Sidebar (Vertical Tabs) -->
@@ -63,6 +63,32 @@
                 <div @class([
                     'sticky top-24' => $isSticky,
                 ])>
+                    
+                    <!-- Title and Description (if provided) -->
+                    @if (filled($heading = $getNavigationHeading()) || filled($description = $getNavigationDescription()))
+                        <div class="mb-6 px-3">
+                            @if (filled($heading))
+                                <h3 class="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                                    {{
+                                        \Filament\Support\generate_icon_html(
+                                            \Filament\Support\Icons\Heroicon::OutlinedClipboardDocumentList,
+                                            attributes: new \Illuminate\View\ComponentAttributeBag([
+                                                'class' => 'w-5 h-5 text-gray-500 dark:text-gray-400',
+                                            ]),
+                                            size: \Filament\Support\Enums\IconSize::Medium,
+                                        )
+                                    }}
+                                    {{ $heading }}
+                                </h3>
+                            @endif
+                            @if (filled($description))
+                                <p class="mt-2 text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+                                    {{ $description }}
+                                </p>
+                            @endif
+                        </div>
+                    @endif
+
                     <ol
                         @if (filled($label = $getLabel()))
                             aria-label="{{ $label }}"
