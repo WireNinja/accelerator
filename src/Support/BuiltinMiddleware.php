@@ -11,6 +11,7 @@ use Spatie\Permission\Middleware\PermissionMiddleware;
 use Spatie\Permission\Middleware\RoleMiddleware;
 use Spatie\Permission\Middleware\RoleOrPermissionMiddleware;
 use WireNinja\Accelerator\Http\Middleware\AddLinkHeadersForPreloadedAssets;
+use WireNinja\Accelerator\Http\Middleware\HandleAppearance;
 use WireNinja\Accelerator\Http\Middleware\HandleInertiaRequests;
 
 final class BuiltinMiddleware
@@ -25,7 +26,7 @@ final class BuiltinMiddleware
         $middleware->encryptCookies(except: ['appearance', 'sidebar_state']);
 
         $middleware->web(append: [
-            // HandleAppearance::class,
+            HandleAppearance::class,
             HandleInertiaRequests::class,
             AddLinkHeadersForPreloadedAssets::class,
         ]);
