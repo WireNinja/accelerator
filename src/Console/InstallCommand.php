@@ -20,6 +20,7 @@ class InstallCommand extends Command
     use HasBanner;
 
     protected array $allowedOverwrites = [];
+    protected bool $envOverwritten = false;
 
     protected array $wizardComponents = [
         'reverb' => [
@@ -87,9 +88,11 @@ class InstallCommand extends Command
 
         $this->resolveConflicts($selected);
 
+        $this->syncEnvironment();
+
         $this->installComponents($selected);
 
-        $this->prepareEnvironment();
+        $this->publishConfigs();
 
         $this->finalizeInstallation();
     }
@@ -106,6 +109,10 @@ class InstallCommand extends Command
         $envDest = base_path('.env.example');
         if (File::exists($envDest)) {
             $conflicts[] = '.env.example';
+        }
+        $realEnvDest = base_path('.env');
+        if (File::exists($realEnvDest)) {
+            $conflicts[] = '.env';
         }
 
         // Check configs
@@ -161,42 +168,53 @@ class InstallCommand extends Command
         }
     }
 
-    protected function prepareEnvironment(): void
-    {
-        $this->syncEnvironment();
-        $this->publishConfigs();
-    }
-
     protected function syncEnvironment(): void
     {
-        $this->components->task('Synchronizing environment from .base-env.example to .env.example', function () {
+        $this->components->task('Synchronizing environment from .base-env.example', function () {
             $baseEnvPath = __DIR__ . '/../../.base-env.example';
             $examplePath = base_path('.env.example');
+            $envPath = base_path('.env');
 
             if (! File::exists($baseEnvPath)) {
                 throw new RuntimeException('.base-env.example not found in accelerator package. Cannot synchronize environment.');
             }
 
-            if (File::exists($examplePath) && ! $this->option('force') && ! in_array('.env.example', $this->allowedOverwrites)) {
-                return false;
-            }
+            if (! File::exists($examplePath) || $this->option('force') || in_array('.env.example', $this->allowedOverwrites)) {
+                if (File::exists($examplePath)) {
+                    $backupPath = base_path('.env.example.backup_' . now()->format('Y_m_d_His'));
+                    if ($this->option('dry')) {
+                        $this->components->info("Would backup existing .env.example to {$backupPath}");
+                    } else {
+                        File::copy($examplePath, $backupPath);
+                    }
+                }
 
-            if (File::exists($examplePath)) {
-                $backupPath = base_path('.env.example.backup_' . now()->format('Y_m_d_His'));
                 if ($this->option('dry')) {
-                    $this->components->info("Would backup existing .env.example to {$backupPath}");
+                    $this->components->info('Would copy .base-env.example to .env.example');
                 } else {
-                    File::copy($examplePath, $backupPath);
+                    File::copy($baseEnvPath, $examplePath);
                 }
             }
 
-            if ($this->option('dry')) {
-                $this->components->info('Would copy .base-env.example to .env.example');
+            if (! File::exists($envPath) || $this->option('force') || in_array('.env', $this->allowedOverwrites)) {
+                $this->envOverwritten = true;
+                if (File::exists($envPath)) {
+                    $backupPath = base_path('.env.backup_' . now()->format('Y_m_d_His'));
+                    if ($this->option('dry')) {
+                        $this->components->info("Would backup existing .env to {$backupPath}");
+                    } else {
+                        File::copy($envPath, $backupPath);
+                    }
+                }
 
-                return true;
+                if ($this->option('dry')) {
+                    $this->components->info('Would copy .base-env.example to .env');
+                } else {
+                    File::copy($baseEnvPath, $envPath);
+                }
             }
 
-            File::copy($baseEnvPath, $examplePath);
+            return true;
         });
     }
 
@@ -271,12 +289,18 @@ class InstallCommand extends Command
         $this->components->info('Running final initialization steps...');
         $this->newLine();
 
-        $commands = [
+        $commands = [];
+
+        if ($this->envOverwritten) {
+            $commands[] = ['php', 'artisan', 'key:generate', '--force'];
+        }
+
+        $commands = array_merge($commands, [
             ['php', 'artisan', 'migrate', '--force'],
             ['php', 'artisan', 'storage:unlink'],
             ['php', 'artisan', 'storage:link', '--force'],
             ['php', 'artisan', 'webpush:vapid', '--force'],
-        ];
+        ]);
 
         foreach ($commands as $cmd) {
             if ($this->option('dry')) {
