@@ -67,7 +67,6 @@ class InstallCommand extends Command
                 'resources/css/inertia.css' => 'resources/css/inertia.css',
                 'resources/views/app.blade.php' => 'resources/views/app.blade.php',
                 'public/favicon.svg' => 'public/favicon.svg',
-                'resources/svg' => 'resources/svg',
             ],
         ],
     ];
@@ -110,10 +109,10 @@ class InstallCommand extends Command
         }
 
         // Check configs
-        $configSource = __DIR__.'/../../stubs/config';
+        $configSource = __DIR__ . '/../../stubs/config';
         if (File::isDirectory($configSource)) {
             foreach (File::files($configSource) as $file) {
-                $targetFile = 'config/'.$file->getFilename();
+                $targetFile = 'config/' . $file->getFilename();
                 if (File::exists(base_path($targetFile))) {
                     $conflicts[] = $targetFile;
                 }
@@ -144,15 +143,22 @@ class InstallCommand extends Command
 
         $this->newLine();
         $this->components->warn('Some files already exist. Please select which ones to overwrite (default: none):');
-        
+
+        $options = $conflicts;
+        array_unshift($options, '[ OVERWRITE ALL ]');
+
         $selectedToOverwrite = multiselect(
             label: 'Files to overwrite',
-            options: $conflicts,
+            options: $options,
             default: [],
             hint: 'Use space to toggle select, enter to confirm'
         );
 
-        $this->allowedOverwrites = array_merge($this->allowedOverwrites, $selectedToOverwrite);
+        if (in_array('[ OVERWRITE ALL ]', $selectedToOverwrite)) {
+            $this->allowedOverwrites = array_merge($this->allowedOverwrites, $conflicts);
+        } else {
+            $this->allowedOverwrites = array_merge($this->allowedOverwrites, $selectedToOverwrite);
+        }
     }
 
     protected function prepareEnvironment(): void
@@ -164,7 +170,7 @@ class InstallCommand extends Command
     protected function syncEnvironment(): void
     {
         $this->components->task('Synchronizing environment from .base-env.example to .env.example', function () {
-            $baseEnvPath = __DIR__.'/../../.base-env.example';
+            $baseEnvPath = __DIR__ . '/../../.base-env.example';
             $examplePath = base_path('.env.example');
 
             if (! File::exists($baseEnvPath)) {
@@ -176,7 +182,7 @@ class InstallCommand extends Command
             }
 
             if (File::exists($examplePath)) {
-                $backupPath = base_path('.env.example.backup_'.now()->format('Y_m_d_His'));
+                $backupPath = base_path('.env.example.backup_' . now()->format('Y_m_d_His'));
                 if ($this->option('dry')) {
                     $this->components->info("Would backup existing .env.example to {$backupPath}");
                 } else {
@@ -198,7 +204,7 @@ class InstallCommand extends Command
     {
         $selected = multiselect(
             label: 'Which components would you like to install?',
-            options: array_map(fn ($c) => $c['label'], $this->wizardComponents),
+            options: array_map(fn($c) => $c['label'], $this->wizardComponents),
             default: array_keys($this->wizardComponents),
             hint: 'Use space to toggle select, enter to confirm'
         );
@@ -222,15 +228,19 @@ class InstallCommand extends Command
             $this->components->task("Configuring {$component['label']}", function () use ($component) {
                 foreach ($component['commands'] as $cmd) {
                     if ($this->option('dry')) {
-                        $this->components->info('Would run command: '.implode(' ', $cmd));
+                        $this->components->info('Would run command: ' . implode(' ', $cmd));
                     } else {
                         $this->runProcess($cmd, failOnError: false);
                     }
                 }
 
                 foreach ($component['stubs'] as $stubPath => $targetPath) {
-                    $source = __DIR__.'/../../stubs/'.$stubPath;
+                    $source = __DIR__ . '/../../stubs/' . $stubPath;
                     $dest = base_path($targetPath);
+
+                    if (!File::exists($source)) {
+                        continue;
+                    }
 
                     if (File::exists($dest) && ! $this->option('force') && ! in_array($targetPath, $this->allowedOverwrites)) {
                         $this->components->warn("Target {$targetPath} already exists. Skipped.");
@@ -244,7 +254,7 @@ class InstallCommand extends Command
                     }
 
                     File::ensureDirectoryExists(dirname($dest));
-                    
+
                     if (File::isDirectory($source)) {
                         File::copyDirectory($source, $dest);
                     } else {
@@ -270,7 +280,7 @@ class InstallCommand extends Command
 
         foreach ($commands as $cmd) {
             if ($this->option('dry')) {
-                $this->components->info('Would run command: '.implode(' ', $cmd));
+                $this->components->info('Would run command: ' . implode(' ', $cmd));
             } else {
                 $this->runProcess($cmd, failOnError: false);
             }
@@ -288,7 +298,7 @@ class InstallCommand extends Command
     protected function publishConfigs(): void
     {
         $this->components->task('Publishing internal configurations', function () {
-            $source = __DIR__.'/../../stubs/config';
+            $source = __DIR__ . '/../../stubs/config';
             $dest = base_path('config');
 
             if (! File::isDirectory($source)) {
@@ -296,15 +306,15 @@ class InstallCommand extends Command
             }
 
             foreach (File::files($source) as $file) {
-                $targetFile = $dest.'/'.$file->getFilename();
+                $targetFile = $dest . '/' . $file->getFilename();
 
-                if (File::exists($targetFile) && ! $this->option('force') && ! in_array('config/'.$file->getFilename(), $this->allowedOverwrites)) {
+                if (File::exists($targetFile) && ! $this->option('force') && ! in_array('config/' . $file->getFilename(), $this->allowedOverwrites)) {
                     continue;
                 }
 
                 if ($this->option('dry')) {
                     $action = File::exists($targetFile) ? 'overwrite existing' : 'create new';
-                    $this->components->info("Would {$action} config file: config/".$file->getFilename());
+                    $this->components->info("Would {$action} config file: config/" . $file->getFilename());
 
                     continue;
                 }
