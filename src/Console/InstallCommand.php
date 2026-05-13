@@ -88,9 +88,9 @@ class InstallCommand extends Command
 
         $this->resolveConflicts($selected);
 
-        $this->prepareEnvironment();
-
         $this->installComponents($selected);
+
+        $this->prepareEnvironment();
 
         $this->finalizeInstallation();
     }
