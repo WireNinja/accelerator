@@ -87,11 +87,9 @@ class InstallCommand extends Command
         }
 
         $this->resolveConflicts($selected);
-
         $this->syncEnvironment();
-
+        $this->cleanupDefaultMigrations();
         $this->installComponents($selected);
-
         $this->publishConfigs();
 
         $this->finalizeInstallation();
@@ -202,6 +200,33 @@ class InstallCommand extends Command
             }
 
             return true;
+        });
+    }
+
+    protected function cleanupDefaultMigrations(): void
+    {
+        $this->components->task('Cleaning up default Laravel migrations', function () {
+            $migrationsPath = base_path('database/migrations');
+            if (! File::isDirectory($migrationsPath)) {
+                return;
+            }
+
+            $defaults = [
+                '0001_01_01_000000_create_users_table.php',
+                '0001_01_01_000001_create_cache_table.php',
+                '0001_01_01_000002_create_jobs_table.php',
+            ];
+
+            foreach ($defaults as $file) {
+                $path = $migrationsPath . '/' . $file;
+                if (File::exists($path)) {
+                    if ($this->option('dry')) {
+                        $this->components->info("Would delete default migration: {$file}");
+                    } else {
+                        File::delete($path);
+                    }
+                }
+            }
         });
     }
 
