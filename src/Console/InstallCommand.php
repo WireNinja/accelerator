@@ -288,6 +288,19 @@ class InstallCommand extends Command
             $commands[] = ['php', 'artisan', 'key:generate', '--force'];
         }
 
+        // Ensure sqlite database exists if needed
+        if (config('database.default') === 'sqlite' || env('DB_CONNECTION') === 'sqlite') {
+            $dbPath = database_path('database.sqlite');
+            if (! File::exists($dbPath)) {
+                if ($this->option('dry')) {
+                    $this->components->info('Would create missing database/database.sqlite file');
+                } else {
+                    File::ensureDirectoryExists(dirname($dbPath));
+                    File::put($dbPath, '');
+                }
+            }
+        }
+
         $commands = array_merge($commands, [
             ['php', 'artisan', 'migrate', '--force'],
             ['php', 'artisan', 'storage:unlink'],
