@@ -25,7 +25,7 @@ class InstallCommand extends Command
     protected array $wizardComponents = [
         'reverb' => [
             'label' => 'Laravel Reverb (Real-time Broadcaster)',
-            'commands' => [['php', 'artisan', 'install:broadcasting', '--reverb', '--without-node', '--force']],
+            'commands' => [['php', 'artisan', 'install:broadcasting', '--reverb', '--without-node']],
             'stubs' => [],
         ],
         'filament-core' => [
@@ -44,7 +44,7 @@ class InstallCommand extends Command
         'localization' => [
             'label' => 'Localization (Indonesian)',
             'commands' => [
-                ['php', 'artisan', 'lang:add', 'id', '--force'],
+                ['php', 'artisan', 'lang:add', 'id'],
                 ['php', 'artisan', 'lang:update'],
             ],
             'stubs' => [],
@@ -208,14 +208,48 @@ class InstallCommand extends Command
                 }
 
                 if ($this->option('dry')) {
-                    $this->components->info('Would copy .base-env.example to .env');
+                    $this->components->info('Would merge .base-env.example into .env');
                 } else {
-                    File::copy($baseEnvPath, $envPath);
+                    $this->mergeEnv($baseEnvPath, $envPath);
                 }
             }
 
             return true;
         });
+    }
+
+    protected function mergeEnv(string $sourcePath, string $destPath): void
+    {
+        $sourceLines = explode("\n", File::get($sourcePath));
+        $destContent = File::exists($destPath) ? File::get($destPath) : '';
+        
+        if (!empty($destContent) && !str_ends_with($destContent, "\n")) {
+            $destContent .= "\n";
+        }
+
+        preg_match_all('/^([A-Z_0-9]+)=/m', $destContent, $matches);
+        $existingKeys = $matches[1] ?? [];
+
+        $appended = false;
+        foreach ($sourceLines as $line) {
+            $trimmed = trim($line);
+            if (empty($trimmed) || str_starts_with($trimmed, '#')) {
+                continue;
+            }
+
+            preg_match('/^([A-Z_0-9]+)=/', $line, $keyMatch);
+            if (!empty($keyMatch[1])) {
+                $key = $keyMatch[1];
+                if (!in_array($key, $existingKeys)) {
+                    $destContent .= $line . "\n";
+                    $appended = true;
+                }
+            }
+        }
+
+        if ($appended) {
+            File::put($destPath, $destContent);
+        }
     }
 
     protected function promptForComponents(): array
@@ -243,8 +277,14 @@ class InstallCommand extends Command
         foreach ($selected as $key) {
             $component = $this->wizardComponents[$key];
 
-            $this->components->task("Configuring {$component['label']}", function () use ($component) {
+            $this->components->task("Configuring {$component['label']}", function () use ($key, $component) {
                 foreach ($component['commands'] as $cmd) {
+                    if ($key === 'reverb' && $cmd[2] === 'install:broadcasting') {
+                        if (File::exists(base_path('config/broadcasting.php'))) {
+                            $cmd = ['php', 'artisan', 'reverb:install'];
+                        }
+                    }
+
                     if ($this->option('dry')) {
                         $this->components->info('Would run command: ' . implode(' ', $cmd));
                     } else {
