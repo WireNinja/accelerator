@@ -110,10 +110,6 @@ class InstallCommand extends Command
         if (File::exists($envDest)) {
             $conflicts[] = '.env.example';
         }
-        $realEnvDest = base_path('.env');
-        if (File::exists($realEnvDest)) {
-            $conflicts[] = '.env';
-        }
 
         // Check configs
         $configSource = __DIR__ . '/../../stubs/config';
@@ -196,60 +192,17 @@ class InstallCommand extends Command
                 }
             }
 
-            if (! File::exists($envPath) || $this->option('force') || in_array('.env', $this->allowedOverwrites)) {
+            if (! File::exists($envPath)) {
                 $this->envOverwritten = true;
-                if (File::exists($envPath)) {
-                    $backupPath = base_path('.env.backup_' . now()->format('Y_m_d_His'));
-                    if ($this->option('dry')) {
-                        $this->components->info("Would backup existing .env to {$backupPath}");
-                    } else {
-                        File::copy($envPath, $backupPath);
-                    }
-                }
-
                 if ($this->option('dry')) {
-                    $this->components->info('Would merge .base-env.example into .env');
+                    $this->components->info('Would copy .base-env.example to .env');
                 } else {
-                    $this->mergeEnv($baseEnvPath, $envPath);
+                    File::copy($baseEnvPath, $envPath);
                 }
             }
 
             return true;
         });
-    }
-
-    protected function mergeEnv(string $sourcePath, string $destPath): void
-    {
-        $sourceLines = explode("\n", File::get($sourcePath));
-        $destContent = File::exists($destPath) ? File::get($destPath) : '';
-        
-        if (!empty($destContent) && !str_ends_with($destContent, "\n")) {
-            $destContent .= "\n";
-        }
-
-        preg_match_all('/^([A-Z_0-9]+)=/m', $destContent, $matches);
-        $existingKeys = $matches[1] ?? [];
-
-        $appended = false;
-        foreach ($sourceLines as $line) {
-            $trimmed = trim($line);
-            if (empty($trimmed) || str_starts_with($trimmed, '#')) {
-                continue;
-            }
-
-            preg_match('/^([A-Z_0-9]+)=/', $line, $keyMatch);
-            if (!empty($keyMatch[1])) {
-                $key = $keyMatch[1];
-                if (!in_array($key, $existingKeys)) {
-                    $destContent .= $line . "\n";
-                    $appended = true;
-                }
-            }
-        }
-
-        if ($appended) {
-            File::put($destPath, $destContent);
-        }
     }
 
     protected function promptForComponents(): array
