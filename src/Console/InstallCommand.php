@@ -19,6 +19,8 @@ class InstallCommand extends Command
 {
     use HasBanner;
 
+    protected array $allowedOverwrites = [];
+
     protected array $wizardComponents = [
         'reverb' => [
             'label' => 'Laravel Reverb (Real-time Broadcaster)',
@@ -52,14 +54,20 @@ class InstallCommand extends Command
             'stubs' => [
                 'app/Enums/System/ResourceEnum.php' => 'app/Enums/System/ResourceEnum.php',
                 'app/Enums/System/RoleEnum.php' => 'app/Enums/System/RoleEnum.php',
+                'app/Enums/System/PanelEnum.php' => 'app/Enums/System/PanelEnum.php',
+                'bootstrap/app.php' => 'bootstrap/app.php',
+                'bootstrap/providers.php' => 'bootstrap/providers.php',
+                'routes/console.php' => 'routes/console.php',
             ],
         ],
         'frontend-core' => [
-            'label' => 'Frontend Core (Inertia, CSS, Blade)',
+            'label' => 'Frontend Core (Inertia, CSS, Blade, Assets)',
             'commands' => [],
             'stubs' => [
                 'resources/css/inertia.css' => 'resources/css/inertia.css',
                 'resources/views/app.blade.php' => 'resources/views/app.blade.php',
+                'public/favicon.svg' => 'public/favicon.svg',
+                'resources/svg' => 'resources/svg',
             ],
         ],
     ];
@@ -72,17 +80,79 @@ class InstallCommand extends Command
             $this->components->warn('DRY RUN MODE ENABLED. No actual changes will be made.');
         }
 
-        $this->prepareEnvironment();
-
         $selected = $this->promptForComponents();
 
         if (empty($selected)) {
             return;
         }
 
+        $this->resolveConflicts($selected);
+
+        $this->prepareEnvironment();
+
         $this->installComponents($selected);
 
         $this->finalizeInstallation();
+    }
+
+    protected function resolveConflicts(array $selectedComponents): void
+    {
+        if ($this->option('force')) {
+            return;
+        }
+
+        $conflicts = [];
+
+        // Check environment file
+        $envDest = base_path('.env.example');
+        if (File::exists($envDest)) {
+            $conflicts[] = '.env.example';
+        }
+
+        // Check configs
+        $configSource = __DIR__.'/../../stubs/config';
+        if (File::isDirectory($configSource)) {
+            foreach (File::files($configSource) as $file) {
+                $targetFile = 'config/'.$file->getFilename();
+                if (File::exists(base_path($targetFile))) {
+                    $conflicts[] = $targetFile;
+                }
+            }
+        }
+
+        // Check stubs from selected components
+        foreach ($selectedComponents as $key) {
+            $component = $this->wizardComponents[$key];
+            foreach ($component['stubs'] as $targetPath) {
+                $dest = base_path($targetPath);
+                if (File::exists($dest)) {
+                    if ($targetPath === 'app/Models/User.php') {
+                        $content = File::get($dest);
+                        if (str_contains($content, 'extends Authenticatable') && !str_contains($content, 'AcceleratedUser')) {
+                            $this->allowedOverwrites[] = $targetPath;
+                            continue; // Auto-overwrite fresh User model
+                        }
+                    }
+                    $conflicts[] = $targetPath;
+                }
+            }
+        }
+
+        if (empty($conflicts)) {
+            return;
+        }
+
+        $this->newLine();
+        $this->components->warn('Some files already exist. Please select which ones to overwrite (default: none):');
+        
+        $selectedToOverwrite = multiselect(
+            label: 'Files to overwrite',
+            options: $conflicts,
+            default: [],
+            hint: 'Use space to toggle select, enter to confirm'
+        );
+
+        $this->allowedOverwrites = array_merge($this->allowedOverwrites, $selectedToOverwrite);
     }
 
     protected function prepareEnvironment(): void
@@ -101,7 +171,7 @@ class InstallCommand extends Command
                 throw new RuntimeException('.base-env.example not found in accelerator package. Cannot synchronize environment.');
             }
 
-            if (File::exists($examplePath) && ! $this->option('force')) {
+            if (File::exists($examplePath) && ! $this->option('force') && ! in_array('.env.example', $this->allowedOverwrites)) {
                 return false;
             }
 
@@ -162,21 +232,24 @@ class InstallCommand extends Command
                     $source = __DIR__.'/../../stubs/'.$stubPath;
                     $dest = base_path($targetPath);
 
-                    if (File::exists($dest) && ! $this->option('force')) {
-                        $this->components->warn("File {$targetPath} already exists. Use --force to overwrite.");
-
+                    if (File::exists($dest) && ! $this->option('force') && ! in_array($targetPath, $this->allowedOverwrites)) {
+                        $this->components->warn("Target {$targetPath} already exists. Skipped.");
                         continue;
                     }
 
                     if ($this->option('dry')) {
                         $action = File::exists($dest) ? 'overwrite existing' : 'create new';
-                        $this->components->info("Would {$action} file: {$targetPath}");
-
+                        $this->components->info("Would {$action}: {$targetPath}");
                         continue;
                     }
 
                     File::ensureDirectoryExists(dirname($dest));
-                    File::copy($source, $dest);
+                    
+                    if (File::isDirectory($source)) {
+                        File::copyDirectory($source, $dest);
+                    } else {
+                        File::copy($source, $dest);
+                    }
                 }
             });
         }
@@ -225,7 +298,7 @@ class InstallCommand extends Command
             foreach (File::files($source) as $file) {
                 $targetFile = $dest.'/'.$file->getFilename();
 
-                if (File::exists($targetFile) && ! $this->option('force')) {
+                if (File::exists($targetFile) && ! $this->option('force') && ! in_array('config/'.$file->getFilename(), $this->allowedOverwrites)) {
                     continue;
                 }
 
