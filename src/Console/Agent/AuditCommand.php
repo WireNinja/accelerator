@@ -303,6 +303,20 @@ class AuditCommand extends Command
         $rows[] = ['Folder: resources/svg', $svgFolderExists ? '<fg=green>OK</>' : '<fg=red>MISSING</>'];
         $integrationStatus['svg_folder'] = $svgFolderExists;
 
+        $inertiaCssExists = File::exists(resource_path('css/inertia.css'));
+        if (! $inertiaCssExists) {
+            $warnings[] = 'resources/css/inertia.css is missing.';
+        }
+        $rows[] = ['File: inertia.css', $inertiaCssExists ? '<fg=green>OK</>' : '<fg=red>MISSING</>'];
+        $integrationStatus['inertia_css'] = $inertiaCssExists;
+
+        $appBladeExists = File::exists(resource_path('views/app.blade.php'));
+        if (! $appBladeExists) {
+            $warnings[] = 'resources/views/app.blade.php is missing.';
+        }
+        $rows[] = ['File: app.blade.php', $appBladeExists ? '<fg=green>OK</>' : '<fg=red>MISSING</>'];
+        $integrationStatus['app_blade'] = $appBladeExists;
+
         $storageLinkExists = is_link(public_path('storage'));
         if (! $storageLinkExists) {
             $warnings[] = 'public/storage is not a symlink. Run "php artisan storage:link".';
@@ -318,6 +332,7 @@ class AuditCommand extends Command
                 'AppServiceProvider' => 'AppServiceProvider::class',
                 'AcceleratorServiceProvider' => 'AcceleratorServiceProvider::class',
                 'HorizonServiceProvider' => 'HorizonServiceProvider::class',
+                'FortifyServiceProvider' => 'FortifyServiceProvider::class',
             ];
 
             foreach ($essentialProviders as $name => $class) {

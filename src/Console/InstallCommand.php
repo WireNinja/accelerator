@@ -54,6 +54,14 @@ class InstallCommand extends Command
                 'app/Enums/System/RoleEnum.php' => 'app/Enums/System/RoleEnum.php',
             ],
         ],
+        'frontend-core' => [
+            'label' => 'Frontend Core (Inertia, CSS, Blade)',
+            'commands' => [],
+            'stubs' => [
+                'resources/css/inertia.css' => 'resources/css/inertia.css',
+                'resources/views/app.blade.php' => 'resources/views/app.blade.php',
+            ],
+        ],
     ];
 
     public function handle(): void
