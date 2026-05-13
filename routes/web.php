@@ -81,7 +81,7 @@ Route::middleware(['web'])->group(function () {
     if (app()->isLocal() || app()->hasDebugModeEnabled()) {
         // This route must be registered manually in reverse proxy like nginx or Caddy, to optimize response time.
         // This route only available in local environment to enhance DX, and should not be used in production environment for security hardening.
-        Route::get('/build/sw.js', fn() => response(headers: [
+        Route::get('/build/sw.js', fn () => response(headers: [
             'Cache-Control' => 'no-cache, no-store, must-revalidate',
             'Pragma' => 'no-cache',
             'Expires' => '0',

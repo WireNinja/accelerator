@@ -10,7 +10,7 @@ use \WireNinja\Accelerator\Constant\Profile;
         </x-slot>
 
         <x-slot name="description">
-            Silahkan hubungi tim support kami.
+            Silahkan hubungi tim support.
         </x-slot>
 
         <x-slot name="footer">
@@ -19,7 +19,8 @@ use \WireNinja\Accelerator\Constant\Profile;
                 size="sm"
                 tag="a"
                 href="https://wa.me/{{ Profile::DEVELOPER_WHATSAPP }}"
-                target="_blank">
+                target="_blank"
+                class="w-full">
                 Whatsapp
             </x-filament::button>
 
@@ -28,7 +29,8 @@ use \WireNinja\Accelerator\Constant\Profile;
                 size="sm"
                 tag="a"
                 href="https://t.me/{{ Profile::DEVELOPER_TELEGRAM }}"
-                target="_blank">
+                target="_blank"
+                class="w-full">
                 Telegram
             </x-filament::button>
         </x-slot>

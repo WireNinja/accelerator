@@ -14,6 +14,7 @@
     },
     "require": {
         "php": "^8.5",
+        "laravel/framework": "^13.0",
         "composer-plugin-api": "^2.0",
         "bezhansalleh/filament-shield": "^4.2",
         "blade-ui-kit/blade-icons": "^1.9",
@@ -42,7 +43,10 @@
         "filament/spatie-laravel-media-library-plugin": "^5.0",
         "laravel/mcp": "^0.7.0",
         "laravel-notification-channels/telegram": "^7.0",
-        "codewithdennis/filament-advanced-choice": "^2.0"
+        "codewithdennis/filament-advanced-choice": "^2.0",
+        "inertiajs/inertia-laravel": "^3.1",
+        "laravel/fortify": "^1.36",
+        "laravel/wayfinder": "^0.1.20"
     },
     "extra": {
         "class": "WireNinja\\Accelerator\\Composer\\Plugin",

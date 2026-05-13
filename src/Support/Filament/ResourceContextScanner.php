@@ -1838,8 +1838,6 @@ class ResourceContextScanner
         return array_filter($data, static fn (mixed $value): bool => $value !== null && $value !== []);
     }
 
-
-
     protected function hasAttribute(string $class, string $attributeClass): bool
     {
         if (! class_exists($class)) {

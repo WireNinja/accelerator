@@ -2,6 +2,7 @@
 
 namespace WireNinja\Accelerator\Filament;
 
+use Filament\Actions\Action;
 use Filament\Auth\MultiFactor\App\AppAuthentication;
 use Filament\Auth\MultiFactor\Email\EmailAuthentication;
 use Filament\Auth\Pages\Register;
@@ -30,6 +31,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 use ReflectionClass;
+use WireNinja\Accelerator\Constant\Profile;
 use WireNinja\Accelerator\Filament\Pages\Auth\Login;
 use WireNinja\Accelerator\Filament\Pages\ManageProfile;
 use WireNinja\Accelerator\Http\Middleware\TrackOnlineStatus;
@@ -62,13 +64,25 @@ final class PanelPreset
                     ->codeExpiryMinutes(5),
             ])
             ->colors([
-                'primary' => Color::Amber,
-                'secondary' => Color::Slate,
-                'success' => Color::Green,
-                'danger' => Color::Red,
-                'warning' => Color::Yellow,
-                'info' => Color::Blue,
-                'gray' => Color::Gray,
+                'primary' => [
+                    50 => '#fafafa',
+                    100 => '#f4f4f5',
+                    200 => '#e4e4e7',
+                    300 => '#d4d4d8', // Dark mode hover
+                    400 => '#ffffff', // Dark mode main
+                    500 => '#000000', // Light mode main
+                    600 => '#18181b', // Light mode hover
+                    700 => '#27272a',
+                    800 => '#3f3f46',
+                    900 => '#52525b',
+                    950 => '#71717a',
+                ],
+                'secondary' => Color::Gray,
+                'success' => Color::Emerald,
+                'danger' => Color::Rose,
+                'warning' => Color::Amber,
+                'info' => Color::Sky,
+                'gray' => Color::Zinc,
             ])
             ->maxContentWidth(Width::Full)
             ->sidebarLivewireComponent(Sidebar::class)
@@ -100,15 +114,17 @@ final class PanelPreset
                 // TrackOnlineStatus::class,
             ])
             ->databaseNotifications()
-            ->broadcasting(fn() => config('broadcasting.default') === 'reverb')
+            ->broadcasting(fn () => config('broadcasting.default') === 'reverb')
             ->spa()
             ->topbar(false)
             ->globalSearch(false)
+            ->darkMode(false)
+            ->defaultThemeMode(ThemeMode::Light)
             ->collapsibleNavigationGroups()
             ->sidebarFullyCollapsibleOnDesktop()
             ->databaseTransactions()
-            ->unsavedChangesAlerts(fn() => resolve('app')->isProduction())
-            ->strictAuthorization(fn() => resolve('app')->isLocal())
+            ->unsavedChangesAlerts(fn () => resolve('app')->isProduction())
+            ->strictAuthorization(fn () => resolve('app')->isLocal())
             ->profile(ManageProfile::class, isSimple: false)
             ->revealablePasswords()
             ->defaultThemeMode(ThemeMode::Light)
@@ -119,28 +135,40 @@ final class PanelPreset
             ->lazyLoadedDatabaseNotifications()
             ->renderHook(
                 PanelsRenderHook::AUTH_LOGIN_FORM_AFTER,
-                fn() => config('services.google.client_id') ? view('accelerator::filament.auth.google-login') : ''
+                fn () => config('services.google.client_id') ? view('accelerator::filament.auth.google-login') : ''
             )
             ->renderHook(
                 PanelsRenderHook::SIDEBAR_NAV_START,
-                fn() => view('accelerator::partials.pwa.notice')
+                fn () => view('accelerator::partials.pwa.notice')
             )
             ->renderHook(
                 PanelsRenderHook::SIDEBAR_NAV_END,
-                fn() => view('accelerator::filament.sidebar.support')
+                fn () => view('accelerator::filament.sidebar.support')
             )
             ->renderHook(
                 PanelsRenderHook::PAGE_START,
-                fn() => view('accelerator::filament.sidebar.toggle')
+                fn () => view('accelerator::filament.sidebar.toggle')
             )
             ->renderHook(
                 PanelsRenderHook::HEAD_END,
-                fn() => view('accelerator::partials.pwa.head')
+                fn () => view('accelerator::partials.pwa.head')
             )
             ->renderHook(
                 PanelsRenderHook::BODY_END,
-                fn() => view('accelerator::filament.business-exception-handler', BuiltinExceptions::getFilamentBusinessExceptionViewData())
+                fn () => view('accelerator::filament.business-exception-handler', BuiltinExceptions::getFilamentBusinessExceptionViewData())
             )
+            ->userMenuItems([
+                Action::make('whatsapp_support')
+                    ->label('Whatsapp Support')
+                    ->url(fn () => sprintf('https://wa.me/%s', Profile::DEVELOPER_WHATSAPP))
+                    ->openUrlInNewTab()
+                    ->icon('lucide-phone-outgoing'),
+                Action::make('telegram_support')
+                    ->label('Telegram Support')
+                    ->url(fn () => sprintf('https://t.me/%s', Profile::DEVELOPER_TELEGRAM))
+                    ->openUrlInNewTab()
+                    ->icon('lucide-send'),
+            ])
             ->bootUsing(function (Panel $panel) {
                 rescue(function () use ($panel) {
                     $settings = resolve(SystemSettings::class);

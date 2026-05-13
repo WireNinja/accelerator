@@ -49,14 +49,14 @@
         @endif
         @class([
             'flex items-center gap-x-3 px-3 py-2 text-sm font-medium transition-all duration-200 rounded-xl',
-            'text-primary-600 bg-primary-50 dark:text-primary-400 dark:bg-primary-400/10 shadow-sm shadow-primary-500/10' => $active,
+            'bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-white shadow-none' => $active,
             'text-gray-700 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-white/5 dark:hover:text-white' => !$active,
         ])
     >
         @if (filled($icon) && ((! $subGrouped) || ($sidebarCollapsible && (! $subNavigation))))
             <div @class([
                 'shrink-0 transition-transform duration-200 group-hover:scale-110',
-                'text-primary-600 dark:text-primary-400' => $active,
+                'text-gray-900 dark:text-white' => $active,
                 'text-gray-400 group-hover:text-gray-600 dark:text-gray-500 dark:group-hover:text-gray-300' => !$active,
             ])>
                 {{
@@ -76,7 +76,7 @@
             >
                 <div @class([
                     'h-1.5 w-1.5 rounded-full transition-all duration-200',
-                    'bg-primary-500 ring-4 ring-primary-500/20 shadow-[0_0_8px_rgba(var(--primary-500),0.4)]' => $active,
+                    'bg-gray-900 dark:bg-white shadow-sm' => $active,
                     'bg-gray-300 group-hover:bg-gray-400 dark:bg-gray-700 dark:group-hover:bg-gray-600' => !$active,
                 ])></div>
             </div>

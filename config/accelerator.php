@@ -1,9 +1,9 @@
 <?php
 
+use App\Enums\System\LauncherEnum;
 use App\Enums\System\PanelEnum;
 use App\Enums\System\ResourceEnum;
 use App\Enums\System\RoleEnum;
-use App\Enums\System\LauncherEnum;
 
 return [
     'runtime' => env('SERVER_RUNTIME', 'fpm'), // 'swoole' or 'frankenphp' or 'fpm'

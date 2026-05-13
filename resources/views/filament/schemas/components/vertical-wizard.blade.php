@@ -55,7 +55,7 @@
     />
 
     <!-- Main Wizard Canvas -->
-    <div class="grid grid-cols-1 md:grid-cols-12 gap-8 lg:gap-12 bg-slate-50 dark:bg-gray-900/80 shadow-sm ring-1 ring-gray-950/5 dark:ring-white/10 rounded-2xl p-4 sm:p-6 lg:p-8">
+    <div class="grid grid-cols-1 md:grid-cols-12 gap-8 lg:gap-12 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4 sm:p-6 lg:p-8">
         
         @if (! $isHeaderHidden)
             <!-- Navigation Sidebar (Vertical Tabs) -->
@@ -109,10 +109,10 @@
                                     x-bind:aria-current="getStepIndex(step) === {{ $loop->index }} ? 'step' : null"
                                     x-on:click="step = @js($step->getKey())"
                                     x-bind:disabled="! isStepAccessible(@js($step->getKey())) || @js($previousAction->isDisabled())"
-                                    class="relative flex items-center w-full py-2.5 px-3 text-left rounded-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary-500/50"
+                                    class="relative flex items-center w-full py-2.5 px-3 text-left rounded-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-white"
                                     x-bind:class="{
-                                        'bg-white shadow-sm ring-1 ring-gray-950/5 dark:bg-gray-800 dark:ring-white/10': getStepIndex(step) === {{ $loop->index }},
-                                        'hover:bg-gray-200/50 dark:hover:bg-gray-800/50': getStepIndex(step) !== {{ $loop->index }}
+                                        'bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-800 shadow-none': getStepIndex(step) === {{ $loop->index }},
+                                        'border border-transparent hover:bg-gray-100 dark:hover:bg-gray-800/30': getStepIndex(step) !== {{ $loop->index }}
                                     }"
                                 >
                                     <span class="flex items-center shrink-0 mr-3" aria-hidden="true">

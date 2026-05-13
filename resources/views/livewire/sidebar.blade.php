@@ -123,8 +123,8 @@
                     x-show="$store.sidebar.isOpen"
                     @class([
                         'fi-sidebar-parent flex h-full w-[66px] shrink-0 flex-col py-2 justify-between',
-                        'border-r border-gray-100 dark:border-white/5' => !$isRtl,
-                        'border-l border-gray-100 dark:border-white/5' => $isRtl,
+                        'border-r border-gray-200 dark:border-gray-800' => !$isRtl,
+                        'border-l border-gray-200 dark:border-gray-800' => $isRtl,
                     ])
                 >
                     <div class="flex flex-col gap-y-3 py-2 w-full items-center">
