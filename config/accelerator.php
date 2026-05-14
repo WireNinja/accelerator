@@ -12,6 +12,10 @@ return [
         'hosting' => env('INFRA_HOSTING', 'dedicated'), // 'shared' or 'dedicated'
     ],
 
+    'proxy' => [
+        'trust_local' => env('ACCELERATOR_TRUST_LOCAL_PROXY', true),
+    ],
+
     'enums' => [
         'role' => RoleEnum::class,
         'resource' => ResourceEnum::class,
