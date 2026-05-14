@@ -36,7 +36,7 @@ class Login extends BaseLogin
         $panelId = Filament::getCurrentOrDefaultPanel()?->getId() ?? 'default';
         $login = Str::lower(trim((string) ($this->data['login'] ?? 'unknown')));
 
-        return 'lrl:'.sha1($panelId.'|'.$component.'|'.$method.'|'.$login.'|'.(request()->ip() ?? 'unknown'));
+        return 'lrl:' . sha1($panelId . '|' . $component . '|' . $method . '|' . $login . '|' . (request()->ip() ?? 'unknown'));
     }
 
     protected function getEmailFormComponent(): Component
@@ -46,7 +46,7 @@ class Login extends BaseLogin
             ->placeholder('Masukkan email atau username')
             ->autocomplete('username')
             ->required()
-            ->default('admin@example.com')
+            ->default(config('accelerator.dev.login_default'))
             ->autofocus();
     }
 
@@ -59,7 +59,7 @@ class Login extends BaseLogin
             ->revealable(filament()->arePasswordsRevealable())
             ->autocomplete('current-password')
             ->required()
-            ->default('password');
+            ->default(config('accelerator.dev.password_default'));
     }
 
     protected function throwFailureValidationException(): never

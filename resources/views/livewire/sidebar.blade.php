@@ -61,13 +61,37 @@
                     <div x-show="$store.sidebar.isOpen" class="flex-1 px-1">
                         {{ \Filament\Support\Facades\FilamentView::renderHook(\Filament\View\PanelsRenderHook::SIDEBAR_LOGO_BEFORE) }}
                         <div class="fi-sidebar-header-logo-ctn transition-all duration-300 transform">
-                            @if ($homeUrl = filament()->getHomeUrl())
-                                <a {{ \Filament\Support\generate_href_html($homeUrl) }} class="block focus:outline-none">
-                                    <x-filament-panels::logo />
-                                </a>
-                            @else
-                                <x-filament-panels::logo />
-                            @endif
+                            @php
+                                $sidebarBrandLogo = filament()->getBrandLogo();
+                                $sidebarBrandLogoHeight = filament()->getBrandLogoHeight() ?? '1.5rem';
+                                $sidebarBrandName = filament()->getBrandName();
+                                $sidebarHomeUrl = filament()->getHomeUrl();
+                            @endphp
+                            @php $logoAndName = true; @endphp
+                            <div class="flex items-center gap-2.5">
+                                @if (filled($sidebarBrandLogo))
+                                    @if ($sidebarBrandLogo instanceof \Illuminate\Contracts\Support\Htmlable)
+                                        <div class="fi-logo shrink-0" style="height: {{ $sidebarBrandLogoHeight }}">{{ $sidebarBrandLogo }}</div>
+                                    @else
+                                        <img
+                                            src="{{ $sidebarBrandLogo }}"
+                                            alt="{{ $sidebarBrandName }}"
+                                            class="fi-logo shrink-0 object-contain"
+                                            style="height: {{ $sidebarBrandLogoHeight }}"
+                                        >
+                                    @endif
+                                @endif
+                                {{-- BRAND NAME, FONT SIZE --}}
+                                @if ($sidebarHomeUrl)
+                                    <a {{ \Filament\Support\generate_href_html($sidebarHomeUrl) }} class="text-[15px] font-bold tracking-tight text-gray-900 dark:text-white hover:opacity-75 transition-opacity focus:outline-none truncate">
+                                        {{ $sidebarBrandName }}
+                                    </a>
+                                @else
+                                    <span class="text-[15px] font-bold tracking-tight text-gray-900 dark:text-white truncate">
+                                        {{ $sidebarBrandName }}
+                                    </span>
+                                @endif
+                            </div>
                         </div>
                         {{ \Filament\Support\Facades\FilamentView::renderHook(\Filament\View\PanelsRenderHook::SIDEBAR_LOGO_AFTER) }}
                     </div>

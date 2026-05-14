@@ -14,15 +14,15 @@
 
     <div class="w-full flex flex-col">
         @if (filled($heading) || filled($subheading))
-            <div class="mb-10 text-left">
+            <div class="mb-8 text-left">
                 @if (filled($heading))
-                    <h2 class="text-[40px] leading-tight font-medium tracking-tight text-gray-900 dark:text-white">
+                    <h2 class="text-[36px] leading-tight font-semibold tracking-tight text-white">
                         {{ $heading }}
                     </h2>
                 @endif
                 
                 @if (filled($subheading))
-                    <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                    <p class="mt-2 text-sm text-white/50">
                         {{ $subheading }}
                     </p>
                 @endif

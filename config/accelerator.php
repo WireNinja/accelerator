@@ -29,4 +29,9 @@ return [
         'auto_register' => true,
         'email_to' => env('HORIZON_EMAIL_TO'),
     ],
+
+    'dev' => [
+        'login_default' => env('DEV_LOGIN', null),
+        'password_default' => env('DEV_PASSWORD', null),
+    ],
 ];

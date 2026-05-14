@@ -22,6 +22,10 @@
     if (is_string($maxContentWidth)) {
         $maxContentWidth = Width::tryFrom($maxContentWidth) ?? $maxContentWidth;
     }
+
+    $brandLogo = filament()->getBrandLogo();
+    $brandLogoHeight = filament()->getBrandLogoHeight() ?? '1.5rem';
+    $brandName = filament()->getBrandName();
 @endphp
 
 <x-filament-panels::layout.base :livewire="$livewire">
@@ -31,91 +35,162 @@
         'subheading' => null,
     ])
 
-    <div class="min-h-screen min-h-[100dvh] w-full flex items-center justify-center p-4 lg:p-8 bg-gray-100 dark:bg-gray-950">
+    <style>
+        /* ── Kill Filament's white body / simple-layout wrapper ── */
+        html, body {
+            background-color: #030712 !important;
+            overflow: hidden !important;
+        }
+        .fi-simple-layout,
+        .fi-simple-page,
+        .fi-simple-main {
+            background: transparent !important;
+            padding: 0 !important;
+            min-height: unset !important;
+            height: 100% !important;
+            overflow: hidden !important;
+        }
+
+        /* ── Filament input / label overrides scoped to login ── */
+        /* actual rendered class for input labels */
+        .acl-login-panel .fi-fo-field-label-content,
+        .acl-login-panel .fi-fo-field-wrp-label,
+        .acl-login-panel .fi-fo-field-wrp-label label,
+        .acl-login-panel [class*="fi-fo"] label {
+            color: rgba(255,255,255,0.8) !important;
+        }
+        .acl-login-panel .fi-input {
+            background-color: rgba(255,255,255,0.08) !important;
+            border-color: rgba(255,255,255,0.15) !important;
+            color: #fff !important;
+        }
+        .acl-login-panel .fi-input::placeholder {
+            color: rgba(255,255,255,0.35) !important;
+        }
+        .acl-login-panel .fi-input-wrp {
+            background-color: rgba(255,255,255,0.06) !important;
+            border-color: rgba(255,255,255,0.15) !important;
+        }
+        .acl-login-panel .fi-input-wrp:focus-within {
+            outline-color: rgba(255,255,255,0.5) !important;
+            border-color: rgba(255,255,255,0.35) !important;
+        }
+        .acl-login-panel a,
+        .acl-login-panel .fi-btn-color-gray {
+            color: rgba(255,255,255,0.55) !important;
+        }
+        .acl-login-panel a:hover {
+            color: #fff !important;
+        }
+        .acl-login-panel .fi-checkbox-label,
+        .acl-login-panel .fi-fo-field-wrp-hint {
+            color: rgba(255,255,255,0.55) !important;
+        }
+        /* ── Submit / primary button override ── */
+        .acl-login-panel .fi-btn.fi-color-primary,
+        .acl-login-panel .fi-btn.fi-color.fi-color-primary {
+            background-color: #fff !important;
+            color: #030712 !important;
+            border-color: transparent !important;
+        }
+        .acl-login-panel .fi-btn.fi-color-primary:hover {
+            background-color: rgba(255,255,255,0.88) !important;
+        }
+        /* ── Suffix action separator (eye icon divider) ── */
+        /* Filament adds border-l on the suffix action container.
+           Keep it subtle — only show when the wrapper is focused. */
+        .acl-login-panel .fi-input-wrp .fi-input-suffix-action,
+        .acl-login-panel .fi-input-wrp [data-suffix],
+        .acl-login-panel .fi-input-wrp > *:last-child {
+            border-color: rgba(255,255,255,0.12) !important;
+        }
+        .acl-login-panel .fi-input-wrp:not(:focus-within) .fi-input-suffix-action,
+        .acl-login-panel .fi-input-wrp:not(:focus-within) > *:last-child {
+            border-color: rgba(255,255,255,0.12) !important;
+        }
+    </style>
+
+    {{-- Full-viewport locked wrapper (no scroll) --}}
+    <div class="fixed inset-0 bg-gray-950 overflow-hidden">
+
         {{ \Filament\Support\Facades\FilamentView::renderHook(\Filament\View\PanelsRenderHook::SIMPLE_LAYOUT_START, scopes: $renderHookScopes) }}
 
-        <!-- Main Container -->
-        <div class="w-full max-w-[1200px] lg:h-[760px] min-h-[600px] bg-[#272320] rounded-[32px] shadow-[0_30px_60px_rgba(0,0,0,0.15)] flex flex-col lg:flex-row overflow-hidden relative">
-            
-        <!-- Left Image Panel (Visible on large screens) -->
-        <div class="hidden lg:flex lg:w-[45%] h-full relative p-12 flex-col text-white overflow-hidden">
-            
-            @if (filled($simplePageImageUrl))
-                <img class="absolute inset-0 h-full w-full object-cover" 
-                     src="{{ $simplePageImageUrl }}" 
-                     alt="Background">
-                <!-- Overlay to blend with brand color -->
-                <div class="absolute inset-0 bg-black/40"></div>
-                <div class="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent"></div>
+        {{-- Background image --}}
+        @if (filled($simplePageImageUrl))
+            <img class="absolute inset-0 h-full w-full object-cover" src="{{ $simplePageImageUrl }}" alt="">
+        @else
+            <svg class="absolute inset-0 w-full h-full opacity-[0.04]" xmlns="http://www.w3.org/2000/svg">
+                <line x1="50%" y1="0" x2="50%" y2="100%" stroke="white" stroke-width="1" />
+                <line x1="0" y1="50%" x2="100%" y2="50%" stroke="white" stroke-width="1" />
+                <circle cx="50%" cy="50%" r="200" fill="none" stroke="white" stroke-width="1" />
+                <circle cx="50%" cy="50%" r="400" fill="none" stroke="white" stroke-width="1" />
+            </svg>
+        @endif
+
+        {{-- Mobile: flat dark overlay so text is always readable --}}
+        <div class="absolute inset-0 bg-gray-950/80 lg:hidden pointer-events-none"></div>
+        {{-- Desktop: smooth left-to-right multi-stop gradient --}}
+        <div class="absolute inset-0 hidden lg:block pointer-events-none" style="background: linear-gradient(to right, #030712 0%, #030712 35%, rgba(3,7,18,0.88) 50%, rgba(3,7,18,0.55) 65%, rgba(3,7,18,0.15) 80%, transparent 100%);"></div>
+
+        {{-- BOTTOM-RIGHT: logo watermark, fixed to viewport --}}
+        <div class="absolute bottom-8 right-10 z-10 pointer-events-none select-none">
+            @if (filled($brandLogo))
+                @if ($brandLogo instanceof \Illuminate\Contracts\Support\Htmlable)
+                    <div style="height: 6rem">{{ $brandLogo }}</div>
+                @else
+                    <img src="{{ $brandLogo }}" alt="{{ $brandName }}" class="object-contain" style="height: 6rem">
+                @endif
+            @else
+                <span class="text-[52px] font-bold tracking-tighter text-white/10 leading-none">
+                    {{ $brandName }}
+                </span>
             @endif
-                <svg class="absolute inset-0 w-full h-full pointer-events-none opacity-[0.07]" xmlns="http://www.w3.org/2000/svg">
-                    <!-- Crosshair lines -->
-                    <line x1="50%" y1="0" x2="50%" y2="100%" stroke="white" stroke-width="1.5" />
-                    <line x1="0" y1="35%" x2="100%" y2="35%" stroke="white" stroke-width="1.5" />
-                    <!-- Concentric Circles -->
-                    <circle cx="50%" cy="35%" r="120" fill="none" stroke="white" stroke-width="1.5" />
-                    <circle cx="50%" cy="35%" r="240" fill="none" stroke="white" stroke-width="1.5" />
-                </svg>
+        </div>
 
-                <!-- Top Text -->
-                <p class="text-[11px] font-light tracking-wide text-white/70 relative z-10 mt-2">
-                    {{ resolve(\WireNinja\Accelerator\Settings\SystemSettings::class)->simple_page_subtitle ?? 'Internal System – online solutions for your workspace.' }}
-                </p>
+        {{-- FORM COLUMN: occupies left side, full viewport height, no scroll --}}
+        <div class="relative z-20 h-full flex flex-col w-full max-w-[480px] px-8 lg:px-12 py-10 acl-login-panel overflow-hidden">
 
-                <!-- Main Title -->
-                <div class="w-full flex justify-center mt-32 relative z-10">
-                    <h1 class="text-[52px] leading-[1.05] font-semibold text-center tracking-tight drop-shadow-lg">
-                        {!! nl2br(e(resolve(\WireNinja\Accelerator\Settings\SystemSettings::class)->simple_page_title ?? 'Manage\nyour workspace')) !!}
-                    </h1>
-                </div>
-            </div>
-
-            <!-- ================= RIGHT SECTION (White) ================= -->
-            <!-- Memiliki border radius kiri yang menutupi bagian dark background -->
-            <div class="w-full lg:w-[55%] h-full bg-white dark:bg-gray-900 lg:rounded-l-[48px] relative z-20 flex flex-col px-6 lg:px-16 py-8 lg:py-12 justify-between">
-                
-                <header class="flex justify-between items-center w-full mb-8 lg:mb-0">
-                    <!-- Brand -->
-                    <div class="flex items-center gap-2.5">
-                        @if (filled(filament()->getBrandLogo()))
-                            <x-filament-panels::logo />
+            {{-- TOP-LEFT: logo + brand name --}}
+            <header class="flex items-center justify-between shrink-0">
+                <div class="flex items-center gap-3">
+                    @if (filled($brandLogo))
+                        @if ($brandLogo instanceof \Illuminate\Contracts\Support\Htmlable)
+                            <div class="shrink-0 text-white" style="height: 1.75rem">{{ $brandLogo }}</div>
                         @else
-                            <span class="text-xl font-bold tracking-tight text-gray-900 dark:text-white">
-                                {{ filament()->getBrandName() }}
-                            </span>
+                            <img src="{{ $brandLogo }}" alt="{{ $brandName }}" class="shrink-0 object-contain" style="height: 1.75rem">
+                        @endif
+                    @endif
+                    <span class="text-lg font-bold tracking-tight text-white leading-none">{{ $brandName }}</span>
+                </div>
+
+                @if (($hasTopbar ?? true) && filament()->auth()->check())
+                    <div class="flex items-center gap-4">
+                        @if (filament()->hasDatabaseNotifications())
+                            @livewire(filament()->getDatabaseNotificationsLivewireComponent(), [
+                                'lazy' => filament()->hasLazyLoadedDatabaseNotifications(),
+                                'position' => \Filament\Enums\DatabaseNotificationsPosition::Topbar,
+                            ])
+                        @endif
+                        @if (filament()->hasUserMenu())
+                            @livewire(Filament\Livewire\SimpleUserMenu::class)
                         @endif
                     </div>
+                @endif
+            </header>
 
-                    @if (($hasTopbar ?? true) && filament()->auth()->check())
-                        <div class="flex items-center justify-end gap-4">
-                            @if (filament()->hasDatabaseNotifications())
-                                @livewire(filament()->getDatabaseNotificationsLivewireComponent(), [
-                                    'lazy' => filament()->hasLazyLoadedDatabaseNotifications(),
-                                    'position' => \Filament\Enums\DatabaseNotificationsPosition::Topbar,
-                                ])
-                            @endif
+            {{-- CENTRE: form, vertically centred in remaining space --}}
+            <main class="flex-1 flex flex-col justify-center min-h-0">
+                {{ $slot }}
+            </main>
 
-                            @if (filament()->hasUserMenu())
-                                @livewire(Filament\Livewire\SimpleUserMenu::class)
-                            @endif
-                        </div>
-                    @endif
-                </header>
-
-                <!-- Main Login Form Container -->
-                <main class="w-full max-w-[420px] mx-auto flex flex-col justify-center flex-grow -mt-8">
-                    {{ $slot }}
-                </main>
-
-                <!-- Bottom Footer -->
-                <footer class="flex justify-between items-center mt-8 lg:mt-0 text-[12px] text-gray-400 font-medium">
-                    <span>&copy; {{ date('Y') }} {{ filament()->getBrandName() }}</span>
-                </footer>
-            </div>
-            
+            {{-- BOTTOM-LEFT: copyright --}}
+            <footer class="shrink-0 text-[11px] text-white/30 font-medium">
+                &copy; {{ date('Y') }} {{ $brandName }}
+            </footer>
         </div>
 
         {{ \Filament\Support\Facades\FilamentView::renderHook(\Filament\View\PanelsRenderHook::FOOTER, scopes: $renderHookScopes) }}
         {{ \Filament\Support\Facades\FilamentView::renderHook(\Filament\View\PanelsRenderHook::SIMPLE_LAYOUT_END, scopes: $renderHookScopes) }}
+
     </div>
 </x-filament-panels::layout.base>
