@@ -7,7 +7,6 @@ namespace WireNinja\Accelerator\Support;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Foundation\Http\Middleware\CheckForMaintenanceMode;
 use Illuminate\Foundation\Http\Middleware\PreventRequestsDuringMaintenance;
-use Illuminate\Http\Request;
 use Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets;
 use Spatie\Permission\Middleware\PermissionMiddleware;
 use Spatie\Permission\Middleware\RoleMiddleware;
@@ -19,16 +18,6 @@ final class BuiltinMiddleware
 {
     public static function make(Middleware $middleware): void
     {
-        if (config('accelerator.proxy.trust_local', true)) {
-            $middleware->trustProxies(
-                at: ['127.0.0.1', '::1'],
-                headers: Request::HEADER_X_FORWARDED_FOR
-                    | Request::HEADER_X_FORWARDED_HOST
-                    | Request::HEADER_X_FORWARDED_PORT
-                    | Request::HEADER_X_FORWARDED_PROTO
-            );
-        }
-
         $middleware->remove([
             PreventRequestsDuringMaintenance::class,
             CheckForMaintenanceMode::class,

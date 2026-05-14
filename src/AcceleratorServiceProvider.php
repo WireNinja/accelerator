@@ -5,6 +5,8 @@ namespace WireNinja\Accelerator;
 use Filament\Support\Assets\Css;
 use Filament\Support\Assets\Js;
 use Filament\Support\Facades\FilamentAsset;
+use Illuminate\Http\Middleware\TrustProxies;
+use Illuminate\Http\Request;
 use Illuminate\Support\ServiceProvider;
 use Livewire\Livewire;
 use Override;
@@ -37,6 +39,7 @@ class AcceleratorServiceProvider extends ServiceProvider
         $this->loadRoutesFrom(__DIR__.'/../routes/web.php');
         $this->loadViewsFrom(__DIR__.'/../resources/views', 'accelerator');
         $this->mergeConfigFrom(__DIR__.'/../config/accelerator.php', 'accelerator');
+        $this->trustLocalProxy();
 
         FilamentAsset::register([
             Js::make('iconify', 'https://cdn.jsdelivr.net/npm/iconify-icon@2')->loadedOnRequest(),
@@ -75,5 +78,20 @@ class AcceleratorServiceProvider extends ServiceProvider
         $this->bootTelegramConfiguration();
         $this->bootShieldDestructiveCommands();
         $this->bootFilamentConfiguration();
+    }
+
+    private function trustLocalProxy(): void
+    {
+        if (! config('accelerator.proxy.trust_local', true)) {
+            return;
+        }
+
+        TrustProxies::at(['127.0.0.1', '::1']);
+        TrustProxies::withHeaders(
+            Request::HEADER_X_FORWARDED_FOR
+            | Request::HEADER_X_FORWARDED_HOST
+            | Request::HEADER_X_FORWARDED_PORT
+            | Request::HEADER_X_FORWARDED_PROTO
+        );
     }
 }
