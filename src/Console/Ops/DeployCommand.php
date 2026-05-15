@@ -367,12 +367,16 @@ server {
     listen 443 ssl;
     listen [::]:443 ssl;
     http2 on;
+    listen 443 quic;
+    listen [::]:443 quic;
+    http3 on;
     server_name {$domain};
     root {$root};
 
     ssl_certificate /etc/letsencrypt/live/{$domain}/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/{$domain}/privkey.pem;
     ssl_protocols TLSv1.2 TLSv1.3;
+    add_header Alt-Svc 'h3=":443"; ma=86400';
 
 {$handler}
 
@@ -407,7 +411,7 @@ NGINX : '';
     index index.php;
     location / { try_files \$uri \$uri/ /index.php?\$query_string; }
     location ~ \.php$ { fastcgi_pass unix:/var/run/php/php8.5-fpm.sock; fastcgi_param SCRIPT_FILENAME \$realpath_root\$fastcgi_script_name; include fastcgi_params; }
-    location ~* \.(css|js|png|jpg|jpeg|gif|ico|svg|webp|woff|woff2|ttf|eot|map|txt)$ { expires 365d; add_header Cache-Control "public, immutable"; }
+    location ~* \.(css|js|png|jpg|jpeg|gif|ico|svg|webp|woff|woff2|ttf|eot|map|txt)$ { try_files \$uri /index.php?\$query_string; expires 365d; add_header Cache-Control "public, immutable"; }
 NGINX;
         }
 
