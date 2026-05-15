@@ -7,6 +7,7 @@ namespace WireNinja\Accelerator\Console\Ops;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
+use RuntimeException;
 use Symfony\Component\Process\Process;
 use WireNinja\Accelerator\Support\Deployment\DeployConfig;
 
@@ -119,6 +120,16 @@ final class DeployCommand extends Command
 
     private function replaceWithSymlink(string $link, string $target): void
     {
+        if ($this->requiresSudo($link)) {
+            if (file_exists($link) || is_link($link)) {
+                $this->runProcess(['sudo', 'mv', $link, $link.'.old_'.now()->format('Y-m-d_H-i-s')]);
+            }
+
+            $this->runProcess(['sudo', 'ln', '-s', $target, $link]);
+
+            return;
+        }
+
         if (file_exists($link) || is_link($link)) {
             rename($link, $link.'.old_'.now()->format('Y-m-d_H-i-s'));
         }
@@ -199,9 +210,9 @@ final class DeployCommand extends Command
      */
     private function restartServices(array $stage): void
     {
-        $this->runProcess(['supervisorctl', 'reread']);
-        $this->runProcess(['supervisorctl', 'update']);
-        $this->runProcess(['supervisorctl', 'restart', "{$stage['group']}:*"]);
+        $this->runProcess(['sudo', 'supervisorctl', 'reread']);
+        $this->runProcess(['sudo', 'supervisorctl', 'update']);
+        $this->runProcess(['sudo', 'supervisorctl', 'restart', "{$stage['group']}:*"]);
     }
 
     /**
@@ -215,14 +226,14 @@ final class DeployCommand extends Command
 
         if (($stage['ssl']['enabled'] ?? false) && ! $this->hasSslCertificate($stage)) {
             $this->writeNginxConfig($stage, ssl: false);
-            $this->runProcess(['nginx', '-t']);
-            $this->runProcess(['systemctl', 'reload', 'nginx']);
+            $this->runProcess(['sudo', 'nginx', '-t']);
+            $this->runProcess(['sudo', 'systemctl', 'reload', 'nginx']);
             $this->requestCertificate($stage);
             $this->writeNginxConfig($stage, ssl: true);
         }
 
-        $this->runProcess(['nginx', '-t']);
-        $this->runProcess(['systemctl', 'reload', 'nginx']);
+        $this->runProcess(['sudo', 'nginx', '-t']);
+        $this->runProcess(['sudo', 'systemctl', 'reload', 'nginx']);
     }
 
     /**
@@ -430,6 +441,7 @@ NGINX;
     private function requestCertificate(array $stage): void
     {
         $this->runProcess([
+            'sudo',
             'certbot',
             'certonly',
             '--webroot',
@@ -449,12 +461,36 @@ NGINX;
      */
     private function writeFile(string $target, string $content, array $stage): void
     {
+        if ($this->requiresSudo($target)) {
+            $temporary = tempnam(sys_get_temp_dir(), 'accelerator-deploy-');
+
+            if ($temporary === false) {
+                throw new RuntimeException('Unable to create temporary deployment file.');
+            }
+
+            file_put_contents($temporary, $content);
+
+            if (file_exists($target)) {
+                $archive = "{$stage['paths']['archive']}/".basename($target).'.'.now()->format('Y-m-d_H-i-s');
+                $this->runProcess(['sudo', 'cp', $target, $archive]);
+            }
+
+            $this->runProcess(['sudo', 'cp', $temporary, $target]);
+
+            return;
+        }
+
         if (file_exists($target)) {
             $archive = "{$stage['paths']['archive']}/".basename($target).'.'.now()->format('Y-m-d_H-i-s');
             copy($target, $archive);
         }
 
         file_put_contents($target, $content);
+    }
+
+    private function requiresSudo(string $path): bool
+    {
+        return str_starts_with($path, '/etc/');
     }
 
     /**

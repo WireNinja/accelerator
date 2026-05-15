@@ -29,7 +29,7 @@ final class RestartCommand extends Command
             ? "{$stage['group']}:*"
             : "{$stage['group']}:".DeployConfig::programName($stage, $service);
 
-        return $this->runProcess(['supervisorctl', 'restart', $target]);
+        return $this->runProcess(['sudo', 'supervisorctl', 'restart', $target]);
     }
 
     /**

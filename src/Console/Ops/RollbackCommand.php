@@ -55,7 +55,7 @@ final class RollbackCommand extends Command
 
         rename($next, $paths['current']);
 
-        $process = new Process(['supervisorctl', 'restart', "{$stage['group']}:*"]);
+        $process = new Process(['sudo', 'supervisorctl', 'restart', "{$stage['group']}:*"]);
         $process->run(fn (string $type, string $buffer) => $this->output->write($buffer));
 
         $this->components->info("Rolled back [{$stage['name']}] to [{$previous}].");

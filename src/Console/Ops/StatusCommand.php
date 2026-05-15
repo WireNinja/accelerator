@@ -36,7 +36,7 @@ final class StatusCommand extends Command
             ['Enabled Services', implode(', ', $stage['services']) ?: '-'],
         ]);
 
-        $this->line($this->runProcess(['supervisorctl', 'status', "{$stage['group']}:*"]));
+        $this->line($this->runProcess(['sudo', 'supervisorctl', 'status', "{$stage['group']}:*"]));
 
         return self::SUCCESS;
     }
