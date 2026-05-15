@@ -106,23 +106,27 @@ final class DeployCommand extends Command
     {
         $shared = $stage['paths']['shared'];
 
-        $this->replaceWithSymlink("{$releasePath}/.env", "{$shared}/.env");
-        $this->replaceWithSymlink("{$releasePath}/storage", "{$shared}/storage");
+        $this->replaceWithSymlink("{$releasePath}/.env", "{$shared}/.env", $stage);
+        $this->replaceWithSymlink("{$releasePath}/storage", "{$shared}/storage", $stage);
 
         if (! is_dir("{$shared}/storage/app/public")) {
             mkdir("{$shared}/storage/app/public", 0755, true);
         }
 
         if (is_dir("{$releasePath}/public")) {
-            $this->replaceWithSymlink("{$releasePath}/public/storage", "{$shared}/storage/app/public");
+            $this->replaceWithSymlink("{$releasePath}/public/storage", "{$shared}/storage/app/public", $stage);
         }
     }
 
-    private function replaceWithSymlink(string $link, string $target): void
+    /**
+     * @param array<string, mixed> $stage
+     */
+    private function replaceWithSymlink(string $link, string $target, array $stage): void
     {
         if ($this->requiresSudo($link)) {
             if (file_exists($link) || is_link($link)) {
-                $this->runProcess(['sudo', 'mv', $link, $link.'.old_'.now()->format('Y-m-d_H-i-s')]);
+                $archive = "{$stage['paths']['archive']}/".basename($link).'.'.now()->format('Y-m-d_H-i-s');
+                $this->runProcess(['sudo', 'mv', $link, $archive]);
             }
 
             $this->runProcess(['sudo', 'ln', '-s', $target, $link]);
@@ -315,7 +319,7 @@ CONF;
         $content = $ssl ? $this->nginxSslConfig($stage) : $this->nginxHttpConfig($stage);
 
         $this->writeFile($target, $content, $stage);
-        $this->replaceWithSymlink($enabled, $target);
+        $this->replaceWithSymlink($enabled, $target, $stage);
     }
 
     /**
