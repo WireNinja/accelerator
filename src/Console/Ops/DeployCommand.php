@@ -125,7 +125,7 @@ final class DeployCommand extends Command
     {
         if ($this->requiresSudo($link)) {
             if (file_exists($link) || is_link($link)) {
-                $archive = "{$stage['paths']['archive']}/".basename($link).'.'.now()->format('Y-m-d_H-i-s');
+                $archive = $this->archivePath($stage, basename($link));
                 $this->runProcess(['sudo', 'mv', $link, $archive]);
             }
 
@@ -475,7 +475,7 @@ NGINX;
             file_put_contents($temporary, $content);
 
             if (file_exists($target)) {
-                $archive = "{$stage['paths']['archive']}/".basename($target).'.'.now()->format('Y-m-d_H-i-s');
+                $archive = $this->archivePath($stage, basename($target));
                 $this->runProcess(['sudo', 'cp', $target, $archive]);
             }
 
@@ -485,11 +485,28 @@ NGINX;
         }
 
         if (file_exists($target)) {
-            $archive = "{$stage['paths']['archive']}/".basename($target).'.'.now()->format('Y-m-d_H-i-s');
+            $archive = $this->archivePath($stage, basename($target));
             copy($target, $archive);
         }
 
         file_put_contents($target, $content);
+    }
+
+    /**
+     * @param array<string, mixed> $stage
+     */
+    private function archivePath(array $stage, string $name): string
+    {
+        $base = "{$stage['paths']['archive']}/{$name}.".now()->format('Y-m-d_H-i-s');
+        $path = $base;
+        $attempt = 1;
+
+        while (file_exists($path) || is_link($path)) {
+            $attempt++;
+            $path = "{$base}.{$attempt}";
+        }
+
+        return $path;
     }
 
     private function requiresSudo(string $path): bool
