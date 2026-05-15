@@ -1,13 +1,13 @@
 ---
 name: laravel-pwa-development
-description: Set up and maintain Laravel PWAs with @wireninja/vite-plugin-laravel-pwa, including Vite config, required manifest values, icon source files, asset generation, and build verification.
+description: Set up and maintain Laravel PWAs with @wireninja/vite-plugin-laravel-pwa, including Vite config, required manifest values, icon source files, CLI asset generation, and build verification.
 ---
 
 # Laravel PWA Development
 
 ## When To Use
 
-Use this skill when setting up or changing a Laravel PWA that uses `@wireninja/vite-plugin-laravel-pwa`, `vite-plugin-pwa`, service workers, web app manifests, generated PWA icons, or `accelerator:generate-pwa-icons`.
+Use this skill when setting up or changing a Laravel PWA that uses `@wireninja/vite-plugin-laravel-pwa`, `vite-plugin-pwa`, service workers, web app manifests, or generated PWA icons.
 
 ## Install
 
@@ -35,19 +35,13 @@ Use a square, centered logo with enough safe padding. This source is used to gen
 
 ## Generate Assets
 
-Use either the package CLI:
+Use the package CLI:
 
 ```bash
 npx laravel-pwa icons
 ```
 
-or the Accelerator bridge:
-
-```bash
-php artisan accelerator:generate-pwa-icons
-```
-
-Both default to:
+It defaults to:
 
 ```text
 public/favicon.svg
@@ -68,7 +62,6 @@ To use a different SVG:
 
 ```bash
 npx laravel-pwa icons --source=public/logo.svg --preset=minimal
-php artisan accelerator:generate-pwa-icons public/logo.svg --preset=minimal
 ```
 
 ## Vite Config
@@ -136,12 +129,6 @@ Confirm build output includes:
 public/manifest.webmanifest
 public/sw.js
 public/workbox-*.js
-```
-
-For Accelerator projects, also run:
-
-```bash
-php artisan accelerator:generate-pwa-icons
 ```
 
 If a browser does not pick up a new PWA version, clear the service worker/application cache in dev tools or change the manifest-visible config.

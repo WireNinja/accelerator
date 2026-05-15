@@ -17,7 +17,6 @@ use WireNinja\Accelerator\Console\Agent\ResourceContextCommand;
 use WireNinja\Accelerator\Console\EnvCommand;
 use WireNinja\Accelerator\Console\FlushLastSeenCommand;
 use WireNinja\Accelerator\Console\Generator\ModelOutlineCommand;
-use WireNinja\Accelerator\Console\Generator\PwaIconsCommand;
 use WireNinja\Accelerator\Console\InstallCommand;
 use WireNinja\Accelerator\Console\ModelAuditCommand;
 use WireNinja\Accelerator\Console\ModelDocCommand;
@@ -75,7 +74,6 @@ class AcceleratorServiceProvider extends ServiceProvider
                 EnvCommand::class,
                 FlushLastSeenCommand::class,
                 NotifyOverdueTicketsCommand::class,
-                PwaIconsCommand::class,
                 BackupStatusCommand::class,
                 DeployCommand::class,
                 EnvCheckCommand::class,
