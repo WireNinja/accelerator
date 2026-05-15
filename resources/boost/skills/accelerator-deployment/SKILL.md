@@ -110,6 +110,18 @@ Invalidate PHP files in the new release before service restart.
 
 Use per-file `opcache_invalidate()` over the release path. Do not use global `opcache_reset()` as the default deploy strategy because it can affect unrelated PHP applications sharing the same OPcache process.
 
+## Self-Hosted Package Updates
+
+When the deployment generator itself changes inside Accelerator, the first deploy from an old release may still render Nginx or Supervisor config with the old package code before `current` moves to the new release.
+
+After upgrading Accelerator deployment code:
+
+- deploy once to move `current` to the release that contains the new package
+- verify generated config
+- deploy a second time if the first deploy still rendered config from the previous release
+
+Record this explicitly in the deployment notes so future operators do not confuse it with an application deploy failure.
+
 ## Nightwatch
 
 Nightwatch is opt-in:
@@ -136,3 +148,4 @@ Confirm:
 - Supervisor services are running
 - exactly one enabled Nginx config matches the domain
 - the domain returns the expected HTTP status
+- dynamic route-backed JavaScript such as Livewire assets returns HTTP 200 behind Nginx

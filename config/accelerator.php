@@ -79,9 +79,9 @@ return [
                 'bun_bin' => env('OPS_DEPLOY_PROD_BUN_BIN', env('OPS_DEPLOY_BUN_BIN', 'bun')),
                 'run_user' => env('OPS_DEPLOY_PROD_RUN_USER', env('OPS_DEPLOY_RUN_USER', 'www-data')),
                 'ports' => [
-                    'octane' => (int) env('OPS_DEPLOY_PROD_OCTANE_PORT', 9010),
-                    'reverb' => (int) env('OPS_DEPLOY_PROD_REVERB_PORT', 9011),
-                    'nightwatch' => (int) env('OPS_DEPLOY_PROD_NIGHTWATCH_PORT', 2410),
+                    'octane' => (int) env('OPS_DEPLOY_PROD_OCTANE_PORT', 9014),
+                    'reverb' => (int) env('OPS_DEPLOY_PROD_REVERB_PORT', 9015),
+                    'nightwatch' => (int) env('OPS_DEPLOY_PROD_NIGHTWATCH_PORT', 2414),
                 ],
                 'ssl' => [
                     'enabled' => env('OPS_DEPLOY_PROD_SSL_ENABLED', true),
@@ -98,7 +98,7 @@ return [
                     'nightwatch' => [
                         'enabled' => env('OPS_DEPLOY_PROD_NIGHTWATCH_ENABLED', false),
                         'host' => env('OPS_DEPLOY_PROD_NIGHTWATCH_HOST', '127.0.0.1'),
-                        'port' => (int) env('OPS_DEPLOY_PROD_NIGHTWATCH_PORT', 2410),
+                        'port' => (int) env('OPS_DEPLOY_PROD_NIGHTWATCH_PORT', 2414),
                     ],
                 ],
             ],
