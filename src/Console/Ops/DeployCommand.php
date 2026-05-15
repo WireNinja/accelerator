@@ -7,6 +7,7 @@ namespace WireNinja\Accelerator\Console\Ops;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
+use InvalidArgumentException;
 use RuntimeException;
 use Symfony\Component\Process\Process;
 use WireNinja\Accelerator\Support\Deployment\DeployConfig;
@@ -19,7 +20,7 @@ final class DeployCommand extends Command
     {
         try {
             $stage = DeployConfig::stage($this->option('stage'));
-        } catch (\InvalidArgumentException $exception) {
+        } catch (InvalidArgumentException $exception) {
             $this->components->error($exception->getMessage());
 
             return self::FAILURE;
@@ -72,7 +73,7 @@ final class DeployCommand extends Command
     }
 
     /**
-     * @param array<string, mixed> $stage
+     * @param  array<string, mixed>  $stage
      */
     private function remoteSha(array $stage): string
     {
@@ -80,11 +81,11 @@ final class DeployCommand extends Command
         $process->mustRun();
         $output = trim($process->getOutput());
 
-        return strtok($output, "\t ") ?: throw new \RuntimeException('Unable to resolve remote git SHA.');
+        return strtok($output, "\t ") ?: throw new RuntimeException('Unable to resolve remote git SHA.');
     }
 
     /**
-     * @param array<string, string> $paths
+     * @param  array<string, string>  $paths
      */
     private function ensureBaseDirectories(array $paths): void
     {
@@ -100,7 +101,7 @@ final class DeployCommand extends Command
     }
 
     /**
-     * @param array<string, mixed> $stage
+     * @param  array<string, mixed>  $stage
      */
     private function linkSharedFiles(array $stage, string $releasePath): void
     {
@@ -119,7 +120,7 @@ final class DeployCommand extends Command
     }
 
     /**
-     * @param array<string, mixed> $stage
+     * @param  array<string, mixed>  $stage
      */
     private function replaceWithSymlink(string $link, string $target, array $stage): void
     {
@@ -142,7 +143,7 @@ final class DeployCommand extends Command
     }
 
     /**
-     * @param array<string, mixed> $stage
+     * @param  array<string, mixed>  $stage
      */
     private function installDependencies(array $stage, string $releasePath): void
     {
@@ -158,7 +159,7 @@ final class DeployCommand extends Command
     }
 
     /**
-     * @param array<string, mixed> $stage
+     * @param  array<string, mixed>  $stage
      */
     private function buildAssets(array $stage, string $releasePath): void
     {
@@ -169,18 +170,95 @@ final class DeployCommand extends Command
     }
 
     /**
-     * @param array<string, mixed> $stage
+     * @param  array<string, mixed>  $stage
      */
     private function prepareLaravel(array $stage, string $releasePath): void
     {
         $php = (string) $stage['php_bin'];
 
-        $this->runProcess([$php, 'artisan', 'optimize'], $releasePath);
+        $this->ensureSharedEnvReadable($stage);
+
+        if ($this->commandExists('larahelp')) {
+            $this->runProcess(['larahelp', '--reoptimize'], $releasePath);
+            $this->runProcess(['larahelp', $this->usesSqlite($releasePath) ? '--setfacl-with-sqlite' : '--setfacl'], $releasePath);
+            $this->applyRuntimeAcl($stage, $releasePath);
+        } else {
+            $this->runProcess([$php, 'artisan', 'optimize:clear', '--quiet'], $releasePath);
+            $this->runProcess([$php, 'artisan', 'optimize', '--quiet'], $releasePath);
+            $this->applyRuntimeAcl($stage, $releasePath);
+        }
+
         $this->runProcess([$php, 'artisan', 'migrate', '--force', '--no-interaction'], $releasePath);
+        $this->runProcess([$php, 'artisan', 'storage:link', '--force', '--no-interaction'], $releasePath);
     }
 
     /**
-     * @param array<string, string> $paths
+     * @param  array<string, mixed>  $stage
+     */
+    private function ensureSharedEnvReadable(array $stage): void
+    {
+        $env = "{$stage['paths']['shared']}/.env";
+        $runUser = (string) $stage['run_user'];
+
+        if ($this->commandExists('setfacl')) {
+            $this->runProcess(['sudo', 'setfacl', '-m', "u:{$runUser}:r", $env]);
+
+            return;
+        }
+
+        $this->runProcess(['sudo', 'chgrp', $runUser, $env]);
+        $this->runProcess(['sudo', 'chmod', '0640', $env]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $stage
+     */
+    private function applyRuntimeAcl(array $stage, string $releasePath): void
+    {
+        $runUser = (string) $stage['run_user'];
+        $paths = ['storage', 'bootstrap/cache'];
+
+        if ($this->usesSqlite($releasePath)) {
+            $paths[] = 'database';
+        }
+
+        if ($this->commandExists('setfacl')) {
+            $this->runProcess(['sudo', 'setfacl', '-R', '-m', "u:{$runUser}:rwx", ...$paths], $releasePath);
+            $this->runProcess(['sudo', 'setfacl', '-dR', '-m', "u:{$runUser}:rwx", ...$paths], $releasePath);
+
+            return;
+        }
+
+        $this->runProcess(['sudo', 'chgrp', '-R', $runUser, ...$paths], $releasePath);
+        $this->runProcess(['sudo', 'chmod', '-R', 'g+rwX', ...$paths], $releasePath);
+    }
+
+    private function usesSqlite(string $releasePath): bool
+    {
+        return $this->readEnvValue("{$releasePath}/.env", 'DB_CONNECTION') === 'sqlite';
+    }
+
+    private function readEnvValue(string $path, string $key): ?string
+    {
+        foreach (file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
+            $line = trim($line);
+
+            if ($line === '' || str_starts_with($line, '#') || ! str_contains($line, '=')) {
+                continue;
+            }
+
+            [$name, $value] = explode('=', $line, 2);
+
+            if (trim($name) === $key) {
+                return trim($value, "\"'");
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  array<string, string>  $paths
      */
     private function switchCurrent(array $paths, string $releasePath): void
     {
@@ -200,7 +278,7 @@ final class DeployCommand extends Command
     }
 
     /**
-     * @param array<string, mixed> $stage
+     * @param  array<string, mixed>  $stage
      */
     private function invalidateOpcache(array $stage, string $releasePath): void
     {
@@ -210,7 +288,7 @@ final class DeployCommand extends Command
     }
 
     /**
-     * @param array<string, mixed> $stage
+     * @param  array<string, mixed>  $stage
      */
     private function restartServices(array $stage): void
     {
@@ -220,7 +298,7 @@ final class DeployCommand extends Command
     }
 
     /**
-     * @param array<string, mixed> $stage
+     * @param  array<string, mixed>  $stage
      */
     private function syncInfrastructure(array $stage): void
     {
@@ -241,7 +319,7 @@ final class DeployCommand extends Command
     }
 
     /**
-     * @param array<string, mixed> $stage
+     * @param  array<string, mixed>  $stage
      */
     private function ensureLogDirectory(array $stage): void
     {
@@ -253,7 +331,7 @@ final class DeployCommand extends Command
     }
 
     /**
-     * @param array<string, mixed> $stage
+     * @param  array<string, mixed>  $stage
      */
     private function writeSupervisorConfig(array $stage): void
     {
@@ -273,7 +351,7 @@ final class DeployCommand extends Command
     }
 
     /**
-     * @param array<string, mixed> $stage
+     * @param  array<string, mixed>  $stage
      */
     private function supervisorProgram(array $stage, string $service, string $program): string
     {
@@ -288,7 +366,7 @@ final class DeployCommand extends Command
             'reverb' => "{$php} {$root}/artisan reverb:start --host=127.0.0.1 --port={$stage['ports']['reverb']} --no-interaction",
             'scheduler' => "{$php} {$root}/artisan schedule:work --no-interaction",
             'nightwatch' => "{$php} {$root}/artisan nightwatch:agent --listen-on={$stage['services_raw']['nightwatch']['host']}:{$stage['ports']['nightwatch']} --no-interaction",
-            default => throw new \InvalidArgumentException("Unsupported service [{$service}]."),
+            default => throw new InvalidArgumentException("Unsupported service [{$service}]."),
         };
 
         return <<<CONF
@@ -309,7 +387,7 @@ CONF;
     }
 
     /**
-     * @param array<string, mixed> $stage
+     * @param  array<string, mixed>  $stage
      */
     private function writeNginxConfig(array $stage, bool $ssl): void
     {
@@ -323,7 +401,7 @@ CONF;
     }
 
     /**
-     * @param array<string, mixed> $stage
+     * @param  array<string, mixed>  $stage
      */
     private function nginxHttpConfig(array $stage): string
     {
@@ -347,7 +425,7 @@ NGINX;
     }
 
     /**
-     * @param array<string, mixed> $stage
+     * @param  array<string, mixed>  $stage
      */
     private function nginxSslConfig(array $stage): string
     {
@@ -387,7 +465,7 @@ NGINX;
     }
 
     /**
-     * @param array<string, mixed> $stage
+     * @param  array<string, mixed>  $stage
      */
     private function nginxHandler(array $stage): string
     {
@@ -436,7 +514,7 @@ NGINX;
     }
 
     /**
-     * @param array<string, mixed> $stage
+     * @param  array<string, mixed>  $stage
      */
     private function hasSslCertificate(array $stage): bool
     {
@@ -444,7 +522,7 @@ NGINX;
     }
 
     /**
-     * @param array<string, mixed> $stage
+     * @param  array<string, mixed>  $stage
      */
     private function requestCertificate(array $stage): void
     {
@@ -465,7 +543,7 @@ NGINX;
     }
 
     /**
-     * @param array<string, mixed> $stage
+     * @param  array<string, mixed>  $stage
      */
     private function writeFile(string $target, string $content, array $stage): void
     {
@@ -497,7 +575,7 @@ NGINX;
     }
 
     /**
-     * @param array<string, mixed> $stage
+     * @param  array<string, mixed>  $stage
      */
     private function archivePath(array $stage, string $name): string
     {
@@ -518,8 +596,16 @@ NGINX;
         return str_starts_with($path, '/etc/');
     }
 
+    private function commandExists(string $command): bool
+    {
+        $process = new Process(['bash', '-lc', 'command -v '.escapeshellarg($command).' >/dev/null 2>&1']);
+        $process->run();
+
+        return $process->isSuccessful();
+    }
+
     /**
-     * @param list<string> $command
+     * @param  list<string>  $command
      */
     private function runProcess(array $command, ?string $cwd = null): void
     {

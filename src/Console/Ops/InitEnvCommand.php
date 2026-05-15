@@ -8,6 +8,8 @@ use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
 use Illuminate\Support\Str;
+use InvalidArgumentException;
+use Symfony\Component\Process\Process;
 use WireNinja\Accelerator\Support\Deployment\DeployConfig;
 
 #[Signature('ops:init-env {--stage= : Deployment stage} {--force : Archive existing shared .env and create a new one}')]
@@ -18,7 +20,7 @@ final class InitEnvCommand extends Command
     {
         try {
             $stage = DeployConfig::stage($this->option('stage'));
-        } catch (\InvalidArgumentException $exception) {
+        } catch (InvalidArgumentException $exception) {
             $this->components->error($exception->getMessage());
 
             return self::FAILURE;
@@ -64,6 +66,7 @@ final class InitEnvCommand extends Command
 
         file_put_contents($target, $content);
         chmod($target, 0600);
+        $this->grantRuntimeReadAccess($target, (string) $stage['run_user']);
 
         $this->components->info("Shared env initialized at [{$target}]. Review secrets before deploy.");
 
@@ -79,5 +82,34 @@ final class InitEnvCommand extends Command
         }
 
         return rtrim($content).PHP_EOL.$line.PHP_EOL;
+    }
+
+    private function grantRuntimeReadAccess(string $target, string $runUser): void
+    {
+        if ($this->commandExists('setfacl')) {
+            $this->runProcess(['sudo', 'setfacl', '-m', "u:{$runUser}:r", $target]);
+
+            return;
+        }
+
+        $this->runProcess(['sudo', 'chgrp', $runUser, $target]);
+        $this->runProcess(['sudo', 'chmod', '0640', $target]);
+    }
+
+    /**
+     * @param  list<string>  $command
+     */
+    private function runProcess(array $command): void
+    {
+        $process = new Process($command);
+        $process->mustRun(fn (string $type, string $buffer) => $this->output->write($buffer));
+    }
+
+    private function commandExists(string $command): bool
+    {
+        $process = new Process(['bash', '-lc', 'command -v '.escapeshellarg($command).' >/dev/null 2>&1']);
+        $process->run();
+
+        return $process->isSuccessful();
     }
 }
