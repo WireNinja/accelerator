@@ -1,29 +1,35 @@
 ---
 name: accelerator-ops-observability
-description: Inspect Accelerator operational state, logs, backup status, OPcache, Horizon, Nightwatch, Reverb, and Supervisor without touching unrelated services.
+description: Inspect Accelerator runtime state, logs, backup status, OPcache, Horizon, Nightwatch, Reverb, Supervisor, and Nginx without touching unrelated services.
 ---
 
 # Accelerator Ops Observability
 
 ## When To Use
 
-Use this skill when debugging deployment health, runtime services, OPcache state, logs, backup status, Horizon, Nightwatch, Reverb, Octane, or server process state in an Accelerator project.
+Use this skill when debugging deployment health, runtime services, OPcache state, logs, backup status, Horizon, Nightwatch, Reverb, Octane, Supervisor, or Nginx in an Accelerator project.
 
-## Commands
+## Primary Checks
 
-Use stage-scoped commands first:
+Use Envoy for deploy/service state:
 
 ```bash
-php artisan ops:status --stage=test
-php artisan ops:logs octane --stage=test
-php artisan ops:logs horizon --stage=test
-php artisan ops:logs reverb --stage=test
-php artisan ops:logs scheduler --stage=test
-php artisan ops:restart all --stage=test
-php artisan ops:backup-status --stage=test
+vendor/bin/envoy run status --stage=test
+vendor/bin/envoy run logs --stage=test --service=octane
+vendor/bin/envoy run restart --stage=test --service=all
 ```
 
 Use `--stage=prod` only after confirming production is the intended target.
+
+## Backup Status
+
+Use:
+
+```bash
+php artisan vps:backup-status
+```
+
+Do not use `php artisan ops:backup-status`.
 
 ## Server Checks
 

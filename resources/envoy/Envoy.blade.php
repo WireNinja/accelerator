@@ -100,12 +100,12 @@
 
 @story('init')
     prepare-layout
-    seed-env
     deploy
 @endstory
 
 @story('deploy')
     ensure-deploy-tools
+    sync-env
     clone-release
     link-shared
     build-release
@@ -118,6 +118,7 @@
 
 @story('deploy-slim')
     ensure-deploy-tools
+    sync-env
     clone-release
     link-shared
     harden-release
@@ -154,7 +155,7 @@
     test -d {{ $archivePath }}
 @endtask
 
-@task('seed-env', ['on' => 'localhost'])
+@task('sync-env', ['on' => 'localhost'])
     set -euo pipefail
     test -s {{ $seedEnvFile }}
     ssh {{ $sshHost }} 'set -euo pipefail; mkdir -p {{ $sharedPath }} {{ $archivePath }}; if [ -f {{ $sharedPath }}/.env ]; then cp {{ $sharedPath }}/.env {{ $archivePath }}/.env.before-seed-$(date +%Y-%m-%d_%H-%M-%S); fi'

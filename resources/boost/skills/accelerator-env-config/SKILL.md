@@ -1,13 +1,13 @@
 ---
 name: accelerator-env-config
-description: Work with WireNinja Accelerator env files, config defaults, EnvReader, and generated environment checks without bypassing Laravel config.
+description: Work with WireNinja Accelerator env files, config defaults, EnvReader, and Envoy deploy env without bypassing Laravel config.
 ---
 
 # Accelerator Env And Config
 
 ## When To Use
 
-Use this skill when adding or reviewing Accelerator config keys, `.env.example`, `.base-env.example`, `accelerator:env`, `ops:env-check`, or any code that reads deployment/runtime settings.
+Use this skill when adding or reviewing Accelerator config keys, `.env.example`, `.base-env.example`, `.env.envoy`, `accelerator:env`, or any code that reads deployment/runtime settings.
 
 ## Rules
 
@@ -18,6 +18,8 @@ Use this skill when adding or reviewing Accelerator config keys, `.env.example`,
 - Add project-specific env keys to the application `.env.example` only when the project needs concrete values.
 - Treat `.env` as local/server runtime state. Do not print secrets in responses.
 - Use `WireNinja\Accelerator\Support\EnvReader` or existing Artisan commands for env inspection when available.
+- Keep `.env`, `.env.staging`, and `.env.production` key-compatible except where a file intentionally contains deploy-only or runtime-only keys.
+- Keep `.env.envoy` limited to `OPS_DEPLOY_*` keys and formatted into readable sections.
 
 ## Checks
 
@@ -26,7 +28,6 @@ Use these commands before changing deploy/runtime env behavior:
 ```bash
 php artisan config:show accelerator
 php artisan accelerator:env
-php artisan ops:env-check --stage=test
 ```
 
 When comparing env files, compare keys first. Values may intentionally differ between the package base example, project example, local `.env`, and server `shared/.env`.

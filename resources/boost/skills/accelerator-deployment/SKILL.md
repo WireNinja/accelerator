@@ -17,6 +17,7 @@ Use this skill when working on WireNinja Accelerator deployment automation, `Env
 - Envoy reads deployment values directly from project-root `.env.envoy`.
 - `.env.envoy` contains only `OPS_DEPLOY_*` keys and must not be committed.
 - Runtime `.env` seeding comes from local `.env.staging` for `test` and local `.env.production` for `prod`; these files must not be committed.
+- Envoy syncs the selected local env seed file to `{root}/shared/.env` on every deploy, not only during `init`.
 - Use `larahelp` directly for Laravel optimize and ACL work. Do not hide deploy behind fallback helper abstractions.
 - Scope every SSH operation to the configured stage root/domain/group.
 - Do not touch unrelated domains, projects, Nginx configs, Supervisor groups, or `/var/www` paths.
@@ -85,6 +86,7 @@ Envoy deploy should:
 - verify required tools: `git`, `composer`, configured PHP binary, configured Bun binary, `larahelp`, and `setfacl`
 - create a new ISO-like release folder
 - clone the configured repository and branch
+- sync the selected local env seed file to `{root}/shared/.env`
 - link `{root}/shared/.env` to release `.env`
 - link `{root}/shared/storage` to release `storage`
 - link release `public/storage` to `{root}/shared/storage/app/public`
@@ -106,7 +108,7 @@ For first deployment:
 2. Prepare `.env.staging` or `.env.production` locally with the runtime app secrets.
 3. Run `vendor/bin/envoy run init --stage=test`.
 
-`init` creates the remote layout, copies the selected local env seed file to `{root}/shared/.env`, then runs the same release deploy.
+`init` creates the remote layout, then runs the same release deploy. The deploy flow syncs the selected local env seed file to `{root}/shared/.env`.
 
 ## Server Safety
 

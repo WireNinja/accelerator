@@ -1,6 +1,6 @@
 <?php
 
-namespace WireNinja\Accelerator\Console\Ops;
+namespace WireNinja\Accelerator\Console\Vps;
 
 use Exception;
 use Illuminate\Console\Attributes\Description;
@@ -8,7 +8,7 @@ use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Storage;
 
-#[Signature('ops:backup-status')]
+#[Signature('vps:backup-status')]
 #[Description('Audit database backups and storage usage')]
 class BackupStatusCommand extends Command
 {
