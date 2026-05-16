@@ -218,9 +218,9 @@
 @task('harden-release', ['on' => 'vps'])
     set -euo pipefail
     cd {{ $releasePath }}
-    find . -type d -not -path "./vendor*" -not -path "./node_modules*" -not -path "./.git*" -not -path "./storage*" -not -path "./bootstrap/cache*" -exec chmod 755 {} +
-    find . -type f -not -path "./vendor*" -not -path "./node_modules*" -not -path "./.git*" -not -path "./storage*" -not -path "./bootstrap/cache*" -not -name "artisan" -exec chmod 644 {} +
-    chmod +x artisan
+    find . -type d -not -path "./storage*" -not -path "./bootstrap/cache*" -exec chmod 755 {} +
+    find . -type f -not -path "./storage*" -not -path "./bootstrap/cache*" -not -name "artisan" -exec chmod 644 {} +
+    chmod 755 artisan
     chmod 600 {{ $sharedPath }}/.env
     sudo setfacl -m u:{{ $runUser }}:r {{ $sharedPath }}/.env
 @endtask
