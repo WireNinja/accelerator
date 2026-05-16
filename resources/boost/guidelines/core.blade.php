@@ -12,13 +12,14 @@ WireNinja Accelerator provides reusable Laravel application conventions, built-i
 
 ### Deployment
 
-- Use `php artisan ops:*` commands for deployment work instead of project-local shell scripts.
-- Use `php artisan ops:deploy` for release-based deployments.
-- Use `php artisan ops:status` to inspect the active release, shared env, Supervisor group, and service status.
-- Use `php artisan ops:restart {service}` to restart `all`, `octane`, `horizon`, `reverb`, `scheduler`, or `nightwatch`.
-- Use `php artisan ops:logs {service}` to read service logs from shared storage.
-- Use `php artisan ops:rollback` instead of manually changing the `current` symlink.
-- Use the package Envoy bridge at `vendor/wireninja/accelerator/resources/envoy/Envoy.blade.php`; project Envoy files should only provide server/path defaults and stable story aliases.
+- Use Envoy as the deployment orchestrator.
+- Do not call `php artisan ops:*` from Envoy.
+- Do not bootstrap Laravel config from Envoy.
+- Envoy reads deploy configuration from project-root `.env.envoy`, which contains only `OPS_DEPLOY_*` keys and must not be committed.
+- Use `.env.staging` and `.env.production` as local-only runtime env seed files for first deploy; do not commit them.
+- Use the package Envoy bridge at `vendor/wireninja/accelerator/resources/envoy/Envoy.blade.php`; project Envoy files should only provide server aliases.
+- Use `vendor/bin/envoy run deploy --stage=test` for release-based deployments.
+- Use `vendor/bin/envoy run init --stage=test` for first deploy when seeding `{root}/shared/.env` from the local env seed file.
 
 ### Release Layout
 
