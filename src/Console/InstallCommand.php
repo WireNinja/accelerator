@@ -106,20 +106,28 @@ class InstallCommand extends Command
 
         $selected = $this->promptForComponents();
 
-        if (empty($selected)) {
+        if (empty($selected) && ! $this->hasAddonWork()) {
             return;
         }
 
-        $this->resolveConflicts($selected);
-        $this->syncEnvironment();
-        $this->cleanupDefaultMigrations();
-        $this->installComponents($selected);
-        $this->publishConfigs();
+        if (! empty($selected)) {
+            $this->resolveConflicts($selected);
+            $this->syncEnvironment();
+            $this->cleanupDefaultMigrations();
+            $this->installComponents($selected);
+            $this->publishConfigs();
+        }
+
         $this->syncDeploymentFiles();
         $this->installPwaPackage();
         $this->syncBoostResources();
 
         $this->finalizeInstallation();
+    }
+
+    protected function hasAddonWork(): bool
+    {
+        return (bool) ($this->option('with-deploy') || $this->option('with-pwa') || $this->option('with-boost'));
     }
 
     protected function resolveConflicts(array $selectedComponents): void
