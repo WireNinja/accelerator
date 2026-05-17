@@ -12,7 +12,6 @@ Use this skill for first deployment, continuous deployment, deployment cleanup, 
 ## Non-Negotiable Rules
 
 - Envoy is the deployment orchestrator.
-- Do not use `php artisan ops:*`; those commands are legacy and must not exist.
 - Do not bootstrap Laravel config from Envoy.
 - Envoy reads deploy config directly from project-root `.env.envoy`.
 - `OPS_DEPLOY_*` keys belong only in `.env.envoy`, never in `.env`, `.env.staging`, `.env.production`, `.env.example`, or `.base-env.example`.
@@ -239,7 +238,6 @@ Verify dynamic assets that are generated or served by Laravel packages:
 ```text
 /livewire/livewire.min.js
 /build/manifest.webmanifest
-/build/registerSW.js
 /sw.js
 ```
 
@@ -309,7 +307,6 @@ Local:
 - `.env`, `.env.staging`, and `.env.production` have compatible key sets
 - `DB_SOCKET` is not active for SQLite
 - Reverb bind keys are intentional
-- `php artisan list` has no `ops:*` deployment commands
 
 Remote:
 
@@ -343,7 +340,6 @@ Preferred future machine-readable audit shape:
 ```bash
 vendor/bin/envoy tasks
 vendor/bin/envoy run status --stage=test
-php artisan list | rg 'ops:|vps:backup-status'
 ssh <host> 'sudo nginx -t'
 ssh <host> 'sudo supervisorctl status {group}:*'
 ssh <host> 'readlink -f {root}/current'
@@ -353,7 +349,6 @@ curl -I -L https://{domain}
 
 Expected:
 
-- no `ops:*` Artisan commands
 - `vps:backup-status` may exist
 - Nginx points to `{root}/current/public`
 - only intended stage services are running

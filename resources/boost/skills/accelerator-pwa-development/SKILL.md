@@ -130,7 +130,7 @@ This renders:
 - favicon links
 - Apple touch icon
 - `/build/manifest.webmanifest`
-- `/build/registerSW.js`
+- production-only service worker registration for `/sw.js`
 
 For Filament panels using `PanelPreset`, the same head partial is already injected through the `PanelsRenderHook::HEAD_END` render hook. Do not duplicate it inside Filament panel pages.
 
@@ -146,7 +146,6 @@ Confirm build output includes:
 
 ```text
 public/build/manifest.webmanifest
-public/build/registerSW.js
 public/sw.js
 public/workbox-*.js
 ```

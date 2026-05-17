@@ -2,9 +2,9 @@
   Accelerator Envoy release deployer
   ----------------------------------
 
-  This file is intentionally shell-first. It does not bootstrap Laravel and it
-  does not call `php artisan ops:*`. Deployment config is read from `.env.envoy`
-  in the project root using a tiny local PHP parser.
+  This file is intentionally shell-first. It does not bootstrap Laravel.
+  Deployment config is read from `.env.envoy` in the project root using a tiny
+  local PHP parser.
 --}}
 
 @setup

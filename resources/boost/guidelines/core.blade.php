@@ -21,8 +21,6 @@ WireNinja Accelerator provides reusable Laravel application conventions, built-i
 ### Deployment
 
 - Use Envoy as the deployment orchestrator.
-- Do not call `php artisan ops:*` from Envoy.
-- `php artisan ops:*` deployment commands are legacy and must not be reintroduced.
 - Do not bootstrap Laravel config from Envoy.
 - Envoy reads deploy configuration from project-root `.env.envoy`, which contains only `OPS_DEPLOY_*` keys and must not be committed.
 - Do not put `OPS_DEPLOY_*` keys in `.env`, `.env.staging`, `.env.production`, `.env.example`, or `.base-env.example`.

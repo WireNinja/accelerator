@@ -21,6 +21,7 @@ Use this skill when adding or reviewing Accelerator config keys, `.env.example`,
 - Keep `.env`, `.env.staging`, `.env.production`, `.env.example`, and `.base-env.example` key-compatible for runtime application keys.
 - Do not put `OPS_DEPLOY_*` keys in runtime env files or examples. Those keys belong only in `.env.envoy`.
 - Keep `.env.envoy` limited to `OPS_DEPLOY_*` keys and formatted into readable sections.
+- Do not use nested references for `VITE_*` keys, such as `VITE_REVERB_APP_KEY="${REVERB_APP_KEY}"`. Vite may expose the literal string to the browser. Use explicit frontend-safe values instead.
 
 ## Checks
 
