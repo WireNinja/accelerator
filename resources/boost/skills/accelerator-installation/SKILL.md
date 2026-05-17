@@ -203,14 +203,6 @@ Verify:
 bun run build
 ```
 
-Add the package PWA head component to the normal Blade/Inertia app shell:
-
-```blade
-<x-accelerator::pwa.head />
-```
-
-Filament panels using Accelerator `PanelPreset` already receive the same PWA partial through the panel render hook.
-
 ## Boost Resources
 
 Refresh generated AI guidance:

@@ -111,29 +111,6 @@ The package is intentionally opinionated for Laravel:
 
 Do not manually copy the old large `VitePWA(...)` config into new projects unless the package defaults are insufficient.
 
-## Blade Header
-
-For normal Blade or Inertia app shells, use the Accelerator package component in the document `<head>`:
-
-```blade
-<x-accelerator::pwa.head />
-```
-
-Equivalent include:
-
-```blade
-@include('accelerator::partials.pwa.head')
-```
-
-This renders:
-
-- favicon links
-- Apple touch icon
-- `/build/manifest.webmanifest`
-- `/build/registerSW.js`
-
-For Filament panels using `PanelPreset`, the same head partial is already injected through the `PanelsRenderHook::HEAD_END` render hook. Do not duplicate it inside Filament panel pages.
-
 ## Verification
 
 After setup or changes:
@@ -145,8 +122,7 @@ bun run build
 Confirm build output includes:
 
 ```text
-public/build/manifest.webmanifest
-public/build/registerSW.js
+public/manifest.webmanifest
 public/sw.js
 public/workbox-*.js
 ```

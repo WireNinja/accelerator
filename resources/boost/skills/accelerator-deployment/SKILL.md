@@ -238,7 +238,6 @@ Verify dynamic assets that are generated or served by Laravel packages:
 ```text
 /livewire/livewire.min.js
 /build/manifest.webmanifest
-/build/registerSW.js
 /sw.js
 ```
 
