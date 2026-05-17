@@ -7,16 +7,19 @@ WireNinja Accelerator provides reusable Laravel application conventions, built-i
 - Prefer reading Accelerator behavior from `config('accelerator.*')`.
 - Do not call `env()` directly outside config files.
 - Accelerator config is intentionally env-driven so applications can use new package config keys without publishing config files in every project.
-- Deployment config defaults to two stages: `test` and `prod`.
-- The default deployment stage is `test`.
+- Deploy orchestration config lives in `.env.envoy`, not Laravel runtime config.
+- Accelerator deploys default to two stages: `test` and `prod`; the default stage is `test`.
 
 ### Deployment
 
 - Use Envoy as the deployment orchestrator.
 - Do not call `php artisan ops:*` from Envoy.
+- `php artisan ops:*` deployment commands are legacy and must not be reintroduced.
 - Do not bootstrap Laravel config from Envoy.
 - Envoy reads deploy configuration from project-root `.env.envoy`, which contains only `OPS_DEPLOY_*` keys and must not be committed.
+- Do not put `OPS_DEPLOY_*` keys in `.env`, `.env.staging`, `.env.production`, `.env.example`, or `.base-env.example`.
 - Use `.env.staging` and `.env.production` as local-only runtime env seed files for first deploy; do not commit them.
+- Envoy syncs the selected runtime env seed to `{root}/shared/.env` on every deploy.
 - Use the package Envoy bridge at `vendor/wireninja/accelerator/resources/envoy/Envoy.blade.php`; project Envoy files should only provide server aliases.
 - Use `vendor/bin/envoy run deploy --stage=test` for release-based deployments.
 - Use `vendor/bin/envoy run init --stage=test` for first deploy when seeding `{root}/shared/.env` from the local env seed file.

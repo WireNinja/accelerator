@@ -43,6 +43,28 @@ curl -I -L https://{domain}
 
 Keep all commands scoped to the configured root, domain, and Supervisor group.
 
+## Reaudit After Cleanup
+
+Check for old deployment residue with scoped commands:
+
+```bash
+sudo supervisorctl status | grep '{group}'
+sudo grep -RIl '{domain}\|{root}\|{group}' /etc/nginx /etc/supervisor
+find {root} -maxdepth 2 -mindepth 1 -print
+find {root}/releases -mindepth 1 -maxdepth 1 -type d | wc -l
+```
+
+Expected clean state:
+
+- one current release unless rollback history is intentionally kept
+- `{root}/current` points inside `{root}/releases`
+- `{root}/archive` contains only deliberate snapshots, not old app trees
+- no `{root}/html`
+- no deploy runner folders
+- no stale env backup files in `{root}/shared`
+- no generic or cross-project Supervisor names
+- Nginx references only `{root}/current/public`
+
 ## OPcache
 
 - Prefer per-release `opcache_invalidate()` during deploy.
