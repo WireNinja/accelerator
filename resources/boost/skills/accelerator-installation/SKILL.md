@@ -146,11 +146,13 @@ For SQLite, do not activate empty MySQL-only keys:
 DB_CONNECTION=sqlite
 # DB_HOST=127.0.0.1
 # DB_PORT=3306
-# DB_DATABASE=laravel
+# DB_DATABASE=/var/www/example.com/shared/database/database.sqlite
 # DB_USERNAME=root
 # DB_PASSWORD=
 # DB_SOCKET=
 ```
+
+On a release-based VPS deployment, SQLite must use a shared absolute path. Do not keep the live database inside a release directory.
 
 For Reverb, keep client-facing values active and only activate server bind values when needed:
 
@@ -200,6 +202,14 @@ Verify:
 ```bash
 bun run build
 ```
+
+Add the package PWA head component to the normal Blade/Inertia app shell:
+
+```blade
+<x-accelerator::pwa.head />
+```
+
+Filament panels using Accelerator `PanelPreset` already receive the same PWA partial through the panel render hook.
 
 ## Boost Resources
 

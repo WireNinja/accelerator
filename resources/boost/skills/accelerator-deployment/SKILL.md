@@ -69,6 +69,15 @@ Do not copy deployment shell scripts into the project.
 
 `.env.staging` and `.env.production` contain runtime application secrets and must be key-compatible with `.env`.
 
+For SQLite deployments, the database file must be shared across releases:
+
+```dotenv
+DB_CONNECTION=sqlite
+DB_DATABASE=/var/www/example.com/shared/database/database.sqlite
+```
+
+Create `{root}/shared/database` on first deploy and seed or move the live SQLite file there before switching traffic. Do not leave SQLite at `database/database.sqlite` inside a release.
+
 ## Server Layout
 
 Expected root:
@@ -139,8 +148,10 @@ Before touching the VPS:
 2. Confirm domain, root, group, ports, repo, branch, PHP binary, Bun binary, and run user.
 3. Confirm `.env.staging` or `.env.production` exists and is non-empty.
 4. Confirm runtime env files have no `OPS_DEPLOY_*` keys.
-5. Confirm ports are not used by another project.
+5. Confirm ports are not used by another project by running `ss -ltnp` on the VPS.
 6. Confirm the target root belongs to the intended project.
+7. Confirm `.env`, `.env.staging`, and `.env.production` have compatible keys.
+8. Confirm database-specific keys are intentional. For SQLite, keep `DB_SOCKET`, `DB_HOST`, `DB_PORT`, `DB_USERNAME`, and `DB_PASSWORD` commented or empty.
 
 On the VPS:
 
@@ -154,6 +165,20 @@ On the VPS:
 8. Verify HTTPS, Livewire/Filament dynamic assets, Reverb websocket routes, OPcache state, and service logs.
 
 Initial deploy still needs human-owned secrets in runtime env seed files. Do not invent production secrets.
+
+Port assignment is human/agent-owned. `.env.envoy` stores the selected values, but it does not know what the VPS already uses. Pick a contiguous project range only after checking the VPS:
+
+```bash
+ssh onidel 'ss -ltnp'
+```
+
+Example:
+
+```dotenv
+OPS_DEPLOY_PROD_OCTANE_PORT=9020
+OPS_DEPLOY_PROD_REVERB_PORT=9021
+OPS_DEPLOY_PROD_NIGHTWATCH_PORT=2420
+```
 
 ## Continuous Deploy Checklist
 
@@ -187,6 +212,15 @@ Deploy flow:
 14. Invalidate OPcache per PHP file in the new release.
 15. Restart Supervisor group.
 
+The selected runtime seed is synced every deploy:
+
+```text
+.env.staging    -> {root}/shared/.env for test
+.env.production -> {root}/shared/.env for prod
+```
+
+After adopting this flow, do not treat remote `{root}/shared/.env` as the source of truth. Edit the local seed and deploy again.
+
 ## Nginx Requirements
 
 The active Nginx config should:
@@ -199,6 +233,15 @@ The active Nginx config should:
 - proxy Reverb websocket endpoints to the stage Reverb port
 - avoid blocking dynamic route-backed assets such as Livewire JavaScript
 - log to domain-specific access/error files
+
+Verify dynamic assets that are generated or served by Laravel packages:
+
+```text
+/livewire/livewire.min.js
+/build/manifest.webmanifest
+/build/registerSW.js
+/sw.js
+```
 
 Never point Nginx to:
 
@@ -255,6 +298,45 @@ Preserve or snapshot before deleting:
 - shared storage
 
 Never delete shared app uploads casually. Check `{root}/shared/storage/app` before removing anything.
+
+## Audit Checklist
+
+Local:
+
+- `.env.envoy` has the required stage keys
+- target stage is enabled
+- runtime seed exists and has no `OPS_DEPLOY_*`
+- `.env`, `.env.staging`, and `.env.production` have compatible key sets
+- `DB_SOCKET` is not active for SQLite
+- Reverb bind keys are intentional
+- `php artisan list` has no `ops:*` deployment commands
+
+Remote:
+
+- Nginx config passes `nginx -t`
+- Nginx root is `{root}/current/public`
+- stage ports are owned only by this project after deploy
+- Supervisor group names are stage-scoped
+- `{root}/current` points to an existing release
+- `{root}/shared/.env` exists and has no `OPS_DEPLOY_*`
+- SQLite DB, if used, is under `{root}/shared/database`
+- dynamic package assets return HTTP 200
+
+Preferred future machine-readable audit shape:
+
+```json
+{
+  "status": "pass",
+  "checks": [
+    {
+      "id": "remote.current.exists",
+      "severity": "error",
+      "status": "pass",
+      "message": "current points to an existing release."
+    }
+  ]
+}
+```
 
 ## Verification Commands
 
