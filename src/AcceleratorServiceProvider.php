@@ -21,14 +21,6 @@ use WireNinja\Accelerator\Console\InstallCommand;
 use WireNinja\Accelerator\Console\ModelAuditCommand;
 use WireNinja\Accelerator\Console\ModelDocCommand;
 use WireNinja\Accelerator\Console\NotifyOverdueTicketsCommand;
-use WireNinja\Accelerator\Console\Ops\DeployCommand;
-use WireNinja\Accelerator\Console\Ops\EnvCheckCommand;
-use WireNinja\Accelerator\Console\Ops\InitEnvCommand;
-use WireNinja\Accelerator\Console\Ops\InitServerCommand;
-use WireNinja\Accelerator\Console\Ops\LogsCommand;
-use WireNinja\Accelerator\Console\Ops\RestartCommand;
-use WireNinja\Accelerator\Console\Ops\RollbackCommand;
-use WireNinja\Accelerator\Console\Ops\StatusCommand;
 use WireNinja\Accelerator\Console\Shield\SafeRegenerateCommand;
 use WireNinja\Accelerator\Console\Vps\BackupStatusCommand;
 use WireNinja\Accelerator\Livewire\Synthesizers\BigDecimalSynth;
@@ -75,14 +67,6 @@ class AcceleratorServiceProvider extends ServiceProvider
                 FlushLastSeenCommand::class,
                 NotifyOverdueTicketsCommand::class,
                 BackupStatusCommand::class,
-                DeployCommand::class,
-                EnvCheckCommand::class,
-                InitEnvCommand::class,
-                InitServerCommand::class,
-                LogsCommand::class,
-                RestartCommand::class,
-                RollbackCommand::class,
-                StatusCommand::class,
             ]);
         }
 

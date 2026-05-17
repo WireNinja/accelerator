@@ -18,7 +18,8 @@ Use this skill when adding or reviewing Accelerator config keys, `.env.example`,
 - Add project-specific env keys to the application `.env.example` only when the project needs concrete values.
 - Treat `.env` as local/server runtime state. Do not print secrets in responses.
 - Use `WireNinja\Accelerator\Support\EnvReader` or existing Artisan commands for env inspection when available.
-- Keep `.env`, `.env.staging`, and `.env.production` key-compatible except where a file intentionally contains deploy-only or runtime-only keys.
+- Keep `.env`, `.env.staging`, `.env.production`, `.env.example`, and `.base-env.example` key-compatible for runtime application keys.
+- Do not put `OPS_DEPLOY_*` keys in runtime env files or examples. Those keys belong only in `.env.envoy`.
 - Keep `.env.envoy` limited to `OPS_DEPLOY_*` keys and formatted into readable sections.
 
 ## Checks
@@ -32,9 +33,9 @@ php artisan accelerator:env
 
 When comparing env files, compare keys first. Values may intentionally differ between the package base example, project example, local `.env`, and server `shared/.env`.
 
-## Expected Deploy Env Shape
+## Expected `.env.envoy` Shape
 
-Deployment config should support:
+Envoy deploy config should support:
 
 - `OPS_DEPLOY_DEFAULT_STAGE`
 - shared deploy defaults such as repo, branch, PHP binary, run user, and SSL email
@@ -42,4 +43,4 @@ Deployment config should support:
 - stage-specific Octane, Reverb, and Nightwatch ports
 - stage-specific service enable flags when needed
 
-Do not make `SERVER_RUNTIME` override stage runtime accidentally. Prefer explicit `OPS_DEPLOY_{STAGE}_RUNTIME` for deploy stages.
+Do not make runtime `SERVER_RUNTIME` override deploy stage runtime accidentally. Use explicit `OPS_DEPLOY_{STAGE}_RUNTIME` in `.env.envoy`.

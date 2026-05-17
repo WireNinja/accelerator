@@ -29,8 +29,6 @@ Use:
 php artisan vps:backup-status
 ```
 
-Do not use `php artisan ops:backup-status`.
-
 ## Server Checks
 
 For SSH diagnostics:
