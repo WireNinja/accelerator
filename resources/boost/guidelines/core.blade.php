@@ -10,6 +10,14 @@ WireNinja Accelerator provides reusable Laravel application conventions, built-i
 - Deploy orchestration config lives in `.env.envoy`, not Laravel runtime config.
 - Accelerator deploys default to two stages: `test` and `prod`; the default stage is `test`.
 
+### Installation
+
+- Use `php artisan accelerator:install` for interactive installs.
+- For AI agents or non-TTY terminals, use explicit flags such as `--no-interaction`, `--preset=none`, `--component=*`, `--with-deploy`, `--with-pwa`, and `--with-boost`.
+- Use `--without=frontend-core` when a project already owns its Inertia frontend.
+- Use `--stage-mode=single --default-stage=prod` for production-only projects.
+- The installer may generate `.env.envoy`, `.env.staging`, and `.env.production`; those files are local-only and must stay ignored.
+
 ### Deployment
 
 - Use Envoy as the deployment orchestrator.

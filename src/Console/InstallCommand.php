@@ -13,8 +13,32 @@ use WireNinja\Accelerator\Console\Concerns\HasBanner;
 
 use function Laravel\Prompts\multiselect;
 
-#[Signature('accelerator:install {--force : Overwrite existing files} {--dry : Run without making actual changes}')]
-#[Description('Fully interactive wizard for Laravel/Filament Accelerator installation')]
+#[Signature('accelerator:install
+    {--force : Overwrite existing files}
+    {--dry : Run without making actual changes}
+    {--preset=full : Component preset: full, app, or none}
+    {--component=* : Component key to install; can be repeated}
+    {--without=* : Component key to exclude from the preset}
+    {--with-deploy : Generate Envoy deployment files}
+    {--with-pwa : Install the Laravel PWA Vite package with Bun}
+    {--with-boost : Refresh Laravel Boost resources}
+    {--stage-mode=dual : Deployment stage mode: dual or single}
+    {--default-stage=test : Default deployment stage}
+    {--project= : Deployment project name}
+    {--ssh-host=onidel : SSH host alias used by Envoy}
+    {--repo= : Git repository SSH URL}
+    {--branch=main : Git branch to deploy}
+    {--domain= : Single-stage domain}
+    {--root= : Single-stage deploy root}
+    {--group= : Single-stage Supervisor group}
+    {--octane-port= : Single-stage Octane port}
+    {--reverb-port= : Single-stage Reverb port}
+    {--nightwatch-port= : Single-stage Nightwatch port}
+    {--php-bin=php : PHP binary on the VPS}
+    {--bun-bin=bun : Bun binary on the VPS}
+    {--run-user=www-data : Runtime user for ACL and Supervisor}
+    {--ssl-email= : Certbot email address}')]
+#[Description('Install WireNinja Accelerator components and optional deployment/PWA scaffolding')]
 class InstallCommand extends Command
 {
     use HasBanner;
@@ -91,6 +115,9 @@ class InstallCommand extends Command
         $this->cleanupDefaultMigrations();
         $this->installComponents($selected);
         $this->publishConfigs();
+        $this->syncDeploymentFiles();
+        $this->installPwaPackage();
+        $this->syncBoostResources();
 
         $this->finalizeInstallation();
     }
@@ -232,6 +259,16 @@ class InstallCommand extends Command
 
     protected function promptForComponents(): array
     {
+        $explicitComponents = $this->option('component');
+
+        if (! empty($explicitComponents)) {
+            return $this->normalizeComponentSelection($explicitComponents);
+        }
+
+        if (! $this->input->isInteractive()) {
+            return $this->componentsForPreset((string) $this->option('preset'));
+        }
+
         $selected = multiselect(
             label: 'Which components would you like to install?',
             options: array_map(fn($c) => $c['label'], $this->wizardComponents),
@@ -244,6 +281,32 @@ class InstallCommand extends Command
         }
 
         return $selected;
+    }
+
+    protected function componentsForPreset(string $preset): array
+    {
+        $selected = match ($preset) {
+            'full' => array_keys($this->wizardComponents),
+            'app' => ['reverb', 'octane', 'localization', 'app-config'],
+            'none' => [],
+            default => throw new RuntimeException("Unsupported Accelerator install preset [{$preset}]."),
+        };
+
+        return $this->normalizeComponentSelection($selected);
+    }
+
+    protected function normalizeComponentSelection(array $selected): array
+    {
+        $without = $this->option('without');
+        $valid = array_keys($this->wizardComponents);
+
+        foreach ([...$selected, ...$without] as $component) {
+            if (! in_array($component, $valid, true)) {
+                throw new RuntimeException("Unknown Accelerator install component [{$component}]. Valid components: " . implode(', ', $valid));
+            }
+        }
+
+        return array_values(array_diff(array_unique($selected), $without));
     }
 
     protected function installComponents(array $selected): void
@@ -314,7 +377,7 @@ class InstallCommand extends Command
         }
 
         // Ensure sqlite database exists if needed
-        if (config('database.default') === 'sqlite' || env('DB_CONNECTION') === 'sqlite') {
+        if (config('database.default') === 'sqlite' || $this->envFileValue('.env', 'DB_CONNECTION') === 'sqlite') {
             $dbPath = database_path('database.sqlite');
             if (! File::exists($dbPath)) {
                 if ($this->option('dry')) {
@@ -348,6 +411,276 @@ class InstallCommand extends Command
             $this->components->success('Accelerator Installation Complete!');
         }
         $this->newLine();
+    }
+
+    protected function syncDeploymentFiles(): void
+    {
+        if (! $this->option('with-deploy')) {
+            return;
+        }
+
+        $this->components->task('Preparing Accelerator Envoy deployment files', function () {
+            $this->writeFile('Envoy.blade.php', $this->envoyBridgeContent(), overwrite: true);
+            $this->writeFile('.env.envoy', $this->envoyEnvContent(), overwrite: $this->option('force'));
+            $this->writeFile('.env.staging', $this->runtimeEnvSeedContent('staging'), overwrite: false);
+            $this->writeFile('.env.production', $this->runtimeEnvSeedContent('production'), overwrite: false);
+            $this->ensureGitignoreEntries([
+                '.env.envoy',
+                '.env.staging',
+                '.env.production',
+            ]);
+
+            return true;
+        });
+    }
+
+    protected function installPwaPackage(): void
+    {
+        if (! $this->option('with-pwa')) {
+            return;
+        }
+
+        $this->components->task('Installing Laravel PWA Vite package with Bun', function () {
+            $packagePath = base_path('package.json');
+
+            if (! File::exists($packagePath)) {
+                $this->components->warn('package.json is missing. Skipping PWA package install.');
+
+                return true;
+            }
+
+            if ($this->option('dry')) {
+                $this->components->info('Would run command: bun add -d @wireninja/vite-plugin-laravel-pwa vite-plugin-pwa');
+
+                return true;
+            }
+
+            $this->runProcess(['bun', 'add', '-d', '@wireninja/vite-plugin-laravel-pwa', 'vite-plugin-pwa'], failOnError: false);
+
+            return true;
+        });
+    }
+
+    protected function syncBoostResources(): void
+    {
+        if (! $this->option('with-boost')) {
+            return;
+        }
+
+        $this->components->task('Refreshing Laravel Boost resources', function () {
+            $this->mergeBoostPackageConfig();
+
+            if ($this->option('dry')) {
+                $this->components->info('Would run command: php artisan boost:update --ansi');
+
+                return true;
+            }
+
+            $this->runProcess(['php', 'artisan', 'boost:update', '--ansi'], failOnError: false);
+
+            return true;
+        });
+    }
+
+    protected function mergeBoostPackageConfig(): void
+    {
+        $path = base_path('boost.json');
+        $data = File::exists($path) ? json_decode(File::get($path), true) : [];
+
+        if (! is_array($data)) {
+            $data = [];
+        }
+
+        $data['packages'] = array_values(array_unique([
+            ...($data['packages'] ?? []),
+            'wireninja/accelerator',
+        ]));
+
+        $data['skills'] = array_values(array_unique([
+            ...($data['skills'] ?? []),
+            'accelerator-deployment',
+            'accelerator-env-config',
+            'accelerator-filament',
+            'accelerator-installation',
+            'accelerator-model-outline',
+            'accelerator-ops-observability',
+            'accelerator-pwa-development',
+        ]));
+
+        if ($this->option('dry')) {
+            $this->components->info('Would merge wireninja/accelerator into boost.json');
+
+            return;
+        }
+
+        File::put($path, json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . PHP_EOL);
+    }
+
+    protected function envoyBridgeContent(): string
+    {
+        $sshHost = $this->option('ssh-host') ?: 'onidel';
+
+        return <<<BLADE
+@servers(['vps' => ['{$sshHost}'], 'localhost' => '127.0.0.1'])
+
+@import('vendor/wireninja/accelerator/resources/envoy/Envoy.blade.php')
+BLADE . PHP_EOL;
+    }
+
+    protected function envoyEnvContent(): string
+    {
+        $stageMode = (string) $this->option('stage-mode');
+        $defaultStage = (string) $this->option('default-stage');
+
+        if (! in_array($stageMode, ['dual', 'single'], true)) {
+            throw new RuntimeException('Deployment stage mode must be [dual] or [single].');
+        }
+
+        if (! in_array($defaultStage, ['test', 'prod'], true)) {
+            throw new RuntimeException('Deployment default stage must be [test] or [prod].');
+        }
+
+        $project = $this->option('project') ?: strtolower((string) config('app.name', 'laravel'));
+        $domain = $this->option('domain') ?: 'example.com';
+        $root = $this->option('root') ?: "/var/www/{$domain}";
+        $group = $this->option('group') ?: "{$project}_{$defaultStage}";
+        $octanePort = $this->option('octane-port') ?: '9010';
+        $reverbPort = $this->option('reverb-port') ?: '9011';
+        $nightwatchPort = $this->option('nightwatch-port') ?: '2410';
+        $repo = $this->option('repo') ?: 'git@github.com:vendor/project.git';
+        $branch = $this->option('branch') ?: 'main';
+        $phpBin = $this->option('php-bin') ?: 'php';
+        $bunBin = $this->option('bun-bin') ?: 'bun';
+        $runUser = $this->option('run-user') ?: 'www-data';
+        $sshHost = $this->option('ssh-host') ?: 'onidel';
+        $sslEmail = $this->option('ssl-email') ?: "admin@{$domain}";
+        $testEnabled = $stageMode === 'dual' || $defaultStage === 'test' ? 'true' : 'false';
+        $prodEnabled = $stageMode === 'dual' || $defaultStage === 'prod' ? 'true' : 'false';
+
+        return <<<ENV
+# Global
+OPS_DEPLOY_DEFAULT_STAGE={$defaultStage}
+OPS_DEPLOY_PROJECT={$project}
+OPS_DEPLOY_SSH_HOST={$sshHost}
+OPS_DEPLOY_REPO={$repo}
+OPS_DEPLOY_BRANCH={$branch}
+OPS_DEPLOY_KEEP_RELEASES=5
+OPS_DEPLOY_PHP_BIN={$phpBin}
+OPS_DEPLOY_BUN_BIN={$bunBin}
+OPS_DEPLOY_RUN_USER={$runUser}
+OPS_DEPLOY_SSL_EMAIL={$sslEmail}
+
+# Test Stage
+OPS_DEPLOY_TEST_ENABLED={$testEnabled}
+OPS_DEPLOY_TEST_DOMAIN=test.{$domain}
+OPS_DEPLOY_TEST_ROOT=/var/www/test.{$domain}
+OPS_DEPLOY_TEST_GROUP={$project}_test
+OPS_DEPLOY_TEST_RUNTIME=swoole
+OPS_DEPLOY_TEST_OCTANE_PORT=9012
+OPS_DEPLOY_TEST_REVERB_PORT=9013
+OPS_DEPLOY_TEST_NIGHTWATCH_PORT=2412
+OPS_DEPLOY_TEST_NIGHTWATCH_ENABLED=false
+
+# Production Stage
+OPS_DEPLOY_PROD_ENABLED={$prodEnabled}
+OPS_DEPLOY_PROD_DOMAIN={$domain}
+OPS_DEPLOY_PROD_ROOT={$root}
+OPS_DEPLOY_PROD_GROUP={$group}
+OPS_DEPLOY_PROD_RUNTIME=swoole
+OPS_DEPLOY_PROD_OCTANE_PORT={$octanePort}
+OPS_DEPLOY_PROD_REVERB_PORT={$reverbPort}
+OPS_DEPLOY_PROD_NIGHTWATCH_PORT={$nightwatchPort}
+OPS_DEPLOY_PROD_NIGHTWATCH_ENABLED=false
+ENV . PHP_EOL;
+    }
+
+    protected function runtimeEnvSeedContent(string $environment): string
+    {
+        $source = File::exists(base_path('.env')) ? base_path('.env') : __DIR__ . '/../../.base-env.example';
+        $content = File::get($source);
+
+        return str_replace(
+            ['APP_ENV=local', 'APP_ENV=production', 'APP_DEBUG=true'],
+            ['APP_ENV=' . ($environment === 'production' ? 'production' : 'staging'), 'APP_ENV=' . ($environment === 'production' ? 'production' : 'staging'), 'APP_DEBUG=' . ($environment === 'production' ? 'false' : 'true')],
+            $this->stripOpsDeployKeys($content),
+        );
+    }
+
+    protected function stripOpsDeployKeys(string $content): string
+    {
+        $lines = preg_split('/\R/', $content) ?: [];
+        $kept = array_filter($lines, fn (string $line): bool => ! str_starts_with(trim($line), 'OPS_DEPLOY_'));
+
+        return rtrim(implode(PHP_EOL, $kept)) . PHP_EOL;
+    }
+
+    protected function ensureGitignoreEntries(array $entries): void
+    {
+        $path = base_path('.gitignore');
+        $content = File::exists($path) ? File::get($path) : '';
+        $lines = preg_split('/\R/', $content) ?: [];
+
+        foreach ($entries as $entry) {
+            if (! in_array($entry, $lines, true)) {
+                $lines[] = $entry;
+            }
+        }
+
+        if ($this->option('dry')) {
+            $this->components->info('Would ensure deployment env files are ignored in .gitignore');
+
+            return;
+        }
+
+        File::put($path, rtrim(implode(PHP_EOL, $lines)) . PHP_EOL);
+    }
+
+    protected function writeFile(string $relativePath, string $content, bool $overwrite): void
+    {
+        $path = base_path($relativePath);
+
+        if (File::exists($path) && ! $overwrite) {
+            $this->components->warn("Target {$relativePath} already exists. Skipped.");
+
+            return;
+        }
+
+        if ($this->option('dry')) {
+            $action = File::exists($path) ? 'overwrite existing' : 'create new';
+            $this->components->info("Would {$action}: {$relativePath}");
+
+            return;
+        }
+
+        File::ensureDirectoryExists(dirname($path));
+        File::put($path, $content);
+    }
+
+    protected function envFileValue(string $relativePath, string $key): ?string
+    {
+        $path = base_path($relativePath);
+
+        if (! File::exists($path)) {
+            return null;
+        }
+
+        foreach (File::lines($path) as $line) {
+            $line = trim($line);
+
+            if ($line === '' || str_starts_with($line, '#') || ! str_contains($line, '=')) {
+                continue;
+            }
+
+            [$envKey, $value] = explode('=', $line, 2);
+
+            if ($envKey !== $key) {
+                continue;
+            }
+
+            return trim($value, "\"'");
+        }
+
+        return null;
     }
 
     protected function publishConfigs(): void

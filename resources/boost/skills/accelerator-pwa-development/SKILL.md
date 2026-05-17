@@ -1,5 +1,5 @@
 ---
-name: laravel-pwa-development
+name: accelerator-pwa-development
 description: Set up and maintain Laravel PWAs with @wireninja/vite-plugin-laravel-pwa, including Vite config, required manifest values, icon source files, CLI asset generation, and build verification.
 ---
 
@@ -7,21 +7,17 @@ description: Set up and maintain Laravel PWAs with @wireninja/vite-plugin-larave
 
 ## When To Use
 
-Use this skill when setting up or changing a Laravel PWA that uses `@wireninja/vite-plugin-laravel-pwa`, `vite-plugin-pwa`, service workers, web app manifests, or generated PWA icons.
+Use this skill when setting up or changing a Laravel PWA through Accelerator conventions, `@wireninja/vite-plugin-laravel-pwa`, `vite-plugin-pwa`, service workers, web app manifests, or generated PWA icons.
 
 ## Install
 
 Install the package with `vite-plugin-pwa`:
 
 ```bash
-npm install -D @wireninja/vite-plugin-laravel-pwa vite-plugin-pwa
-```
-
-For Bun projects:
-
-```bash
 bun add -d @wireninja/vite-plugin-laravel-pwa vite-plugin-pwa
 ```
+
+Do not use npm in WireNinja projects unless the project explicitly standardizes on npm.
 
 ## Required Source Icon
 
@@ -38,7 +34,7 @@ Use a square, centered logo with enough safe padding. This source is used to gen
 Use the package CLI:
 
 ```bash
-npx laravel-pwa icons
+bunx laravel-pwa icons
 ```
 
 It defaults to:
@@ -61,7 +57,7 @@ public/apple-touch-icon-180x180.png
 To use a different SVG:
 
 ```bash
-npx laravel-pwa icons --source=public/logo.svg --preset=minimal
+bunx laravel-pwa icons --source=public/logo.svg --preset=minimal
 ```
 
 ## Vite Config
