@@ -7,8 +7,20 @@ use Illuminate\Support\Str;
 
 class EnvReader
 {
+    // TODO(deep-analysis): keyword list belum cover `webhook`, `signature`, `cipher`, `bearer`,
+    // `cred`, `dsn`. Pertimbangkan ekspansi setelah mapping kasus nyata project lain.
     protected static array $sensitiveKeywords = [
-        'key', 'secret', 'password', 'token', 'auth', 'pass', 'crypt', 'salt', 'vapid', 'private', 'access',
+        'key',
+        'secret',
+        'password',
+        'token',
+        'auth',
+        'pass',
+        'crypt',
+        'salt',
+        'vapid',
+        'private',
+        'access',
     ];
 
     public static function redacted(array $specificKeys = []): array
@@ -30,9 +42,15 @@ class EnvReader
             }
 
             $keyLower = strtolower($key);
+            // TODO(deep-analysis): substring match terlalu liberal. `OPENID_TOKEN` ke-detect via
+            // substring `token` (oke), tapi `WIDGET_KEY` juga match `key` walaupun bukan secret.
+            // Ganti ke token-based split (explode '_' lalu in_array) di Phase 3.
             $isSensitive = Str::contains($keyLower, self::$sensitiveKeywords);
 
-            // Special case: common IDs and public keys are usually not secrets
+            // Special case: common IDs and public keys are usually not secrets.
+            // TODO(deep-analysis): `Str::contains($keyLower, 'id')` bisa false-negative.
+            // `OPENID_TOKEN` punya substring `id` -> akan un-mark sensitive padahal token sensitive.
+            // Token-based check di Phase 3.
             if ($isSensitive && (Str::contains($keyLower, 'id') || Str::contains($keyLower, 'public')) && ! Str::contains($keyLower, ['secret', 'private'])) {
                 $isSensitive = false;
             }
@@ -40,6 +58,8 @@ class EnvReader
             if ($isSensitive && ! empty($value)) {
                 $data[$key] = '[REDACTED]';
             } else {
+                // TODO(deep-analysis): `empty('0')` === true di PHP, jadi env literal `0` di-treat
+                // sebagai `[EMPTY]`. Ganti ke `$value === ''` cek di Phase 3.
                 $data[$key] = empty($value) ? '[EMPTY]' : (is_string($value) ? trim($value, " \t\n\r\0\x0B\"'") : $value);
             }
         }

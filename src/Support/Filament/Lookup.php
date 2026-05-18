@@ -98,6 +98,9 @@ class Lookup
             return [];
         }
 
+        // TODO(deep-analysis): silent return [] saat model belum di-set bisa membingungkan user
+        // (dropdown tampak kosong tanpa pesan). Pertimbangkan throw RuntimeException kalau
+        // memang minta `model(null)` untuk fail-fast.
         if ($this->model === null) {
             return [];
         }
@@ -108,6 +111,9 @@ class Lookup
             ($this->modifyQuery)($query);
         }
 
+        // Hardcoded 'id' adalah konvensi proyek: SEMUA model di project ini pakai `id` sebagai
+        // primary key. Bila ada kebutuhan non-`id`, refactor harus dimulai dari standardisasi
+        // primary key, bukan dari helper ini.
         return $query->whereIn('id', (array) $ids)
             ->pluck($this->label, $this->value)
             ->toArray();
