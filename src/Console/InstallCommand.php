@@ -46,11 +46,26 @@ class InstallCommand extends Command
     protected array $allowedOverwrites = [];
     protected bool $envOverwritten = false;
 
+    /**
+     * Daftar komponen yang bisa dipilih lewat checkbox install.
+     *
+     * Tiap komponen punya:
+     * - label: yang ditampilkan ke user
+     * - commands: artisan command yang dieksekusi
+     * - stubs: file PHP/asset yang di-copy dari stubs/ ke base path
+     * - configs: nama file di stubs/config/ yang di-publish kalau komponen ini dipilih
+     *
+     * `app-config` sengaja membawa core config (app, auth, cache, database, dst)
+     * karena tanpa itu Laravel base tidak bisa boot dengan opinion Accelerator.
+     * Komponen lain hanya bawa config yang khusus dengannya — supaya user yang
+     * tidak butuh Filament tidak ke-publish filament-shield.php dst.
+     */
     protected array $wizardComponents = [
         'reverb' => [
             'label' => 'Laravel Reverb (Real-time Broadcaster)',
             'commands' => [['php', 'artisan', 'install:broadcasting', '--reverb', '--without-node']],
             'stubs' => [],
+            'configs' => ['broadcasting.php', 'reverb.php'],
         ],
         'filament-core' => [
             'label' => 'Filament Core (Panels, Widgets)',
@@ -59,11 +74,21 @@ class InstallCommand extends Command
                 'app/Models/User.php' => 'app/Models/User.php',
                 'app/Providers/Filament/AdminPanelProvider.php' => 'app/Providers/Filament/AdminPanelProvider.php',
             ],
+            'configs' => [
+                'filament.php',
+                'filament-shield.php',
+                'fortify.php',
+                'permission.php',
+                'livewire.php',
+                'media-library.php',
+                'query-builder.php',
+            ],
         ],
         'octane' => [
             'label' => 'Laravel Octane (Swoole Performance)',
             'commands' => [['php', 'artisan', 'octane:install', '--server=swoole', '--force']],
             'stubs' => [],
+            'configs' => ['octane.php'],
         ],
         'localization' => [
             'label' => 'Localization (Indonesian)',
@@ -72,6 +97,7 @@ class InstallCommand extends Command
                 ['php', 'artisan', 'lang:update'],
             ],
             'stubs' => [],
+            'configs' => [],
         ],
         'app-config' => [
             'label' => 'App Core & Service Provider Best Practices',
@@ -84,6 +110,27 @@ class InstallCommand extends Command
                 'bootstrap/providers.php' => 'bootstrap/providers.php',
                 'routes/console.php' => 'routes/console.php',
             ],
+            'configs' => [
+                'app.php',
+                'auth.php',
+                'cache.php',
+                'database.php',
+                'filesystems.php',
+                'logging.php',
+                'mail.php',
+                'queue.php',
+                'services.php',
+                'session.php',
+                'settings.php',
+                'activitylog.php',
+                'backup.php',
+                'blade-icons.php',
+                'horizon.php',
+                'pennant.php',
+                'scout.php',
+                'webpush.php',
+                'laravel-pdf.php',
+            ],
         ],
         'frontend-core' => [
             'label' => 'Frontend Core (Inertia, CSS, Blade, Assets)',
@@ -93,6 +140,7 @@ class InstallCommand extends Command
                 'resources/views/app.blade.php' => 'resources/views/app.blade.php',
                 'public/favicon.svg' => 'public/favicon.svg',
             ],
+            'configs' => ['inertia.php'],
         ],
     ];
 
@@ -115,7 +163,7 @@ class InstallCommand extends Command
             $this->syncEnvironment();
             $this->cleanupDefaultMigrations();
             $this->installComponents($selected);
-            $this->publishConfigs();
+            $this->publishConfigs($selected);
         }
 
         $this->syncDeploymentFiles();
@@ -144,14 +192,14 @@ class InstallCommand extends Command
             $conflicts[] = '.env.example';
         }
 
-        // Check configs
-        $configSource = __DIR__ . '/../../stubs/config';
-        if (File::isDirectory($configSource)) {
-            foreach (File::files($configSource) as $file) {
-                $targetFile = 'config/' . $file->getFilename();
-                if (File::exists(base_path($targetFile))) {
-                    $conflicts[] = $targetFile;
-                }
+        // Check configs — only consider configs that the selected components actually
+        // intend to publish. Sebelumnya semua stub config ke-flag walau user cuma
+        // pilih satu komponen.
+        $configsForSelection = $this->configsForComponents($selectedComponents);
+        foreach ($configsForSelection as $configFile) {
+            $targetFile = 'config/' . $configFile;
+            if (File::exists(base_path($targetFile))) {
+                $conflicts[] = $targetFile;
             }
         }
 
@@ -617,7 +665,7 @@ ENV . PHP_EOL;
     protected function stripOpsDeployKeys(string $content): string
     {
         $lines = preg_split('/\R/', $content) ?: [];
-        $kept = array_filter($lines, fn (string $line): bool => ! str_starts_with(trim($line), 'OPS_DEPLOY_'));
+        $kept = array_filter($lines, fn(string $line): bool => ! str_starts_with(trim($line), 'OPS_DEPLOY_'));
 
         return rtrim(implode(PHP_EOL, $kept)) . PHP_EOL;
     }
@@ -691,9 +739,24 @@ ENV . PHP_EOL;
         return null;
     }
 
-    protected function publishConfigs(): void
+    /**
+     * Publish only the configs relevant to the selected components.
+     *
+     * Sebelum perubahan ini, SEMUA stub config ke-publish setiap install dengan
+     * komponen apapun. Sekarang publishing tied ke pemilihan checkbox: install
+     * hanya `reverb` -> hanya broadcasting.php + reverb.php yang ke-publish.
+     *
+     * @param  array<int, string>  $selectedComponents
+     */
+    protected function publishConfigs(array $selectedComponents): void
     {
-        $this->components->task('Publishing internal configurations', function () {
+        $configsToPublish = $this->configsForComponents($selectedComponents);
+
+        if ($configsToPublish === []) {
+            return;
+        }
+
+        $this->components->task('Publishing internal configurations', function () use ($configsToPublish) {
             $source = __DIR__ . '/../../stubs/config';
             $dest = base_path('config');
 
@@ -701,24 +764,45 @@ ENV . PHP_EOL;
                 return;
             }
 
-            foreach (File::files($source) as $file) {
-                $targetFile = $dest . '/' . $file->getFilename();
+            foreach ($configsToPublish as $configFile) {
+                $sourceFile = $source . '/' . $configFile;
 
-                if (File::exists($targetFile) && ! $this->option('force') && ! in_array('config/' . $file->getFilename(), $this->allowedOverwrites)) {
+                if (! File::exists($sourceFile)) {
+                    continue;
+                }
+
+                $targetFile = $dest . '/' . $configFile;
+
+                if (File::exists($targetFile) && ! $this->option('force') && ! in_array('config/' . $configFile, $this->allowedOverwrites)) {
                     continue;
                 }
 
                 if ($this->option('dry')) {
                     $action = File::exists($targetFile) ? 'overwrite existing' : 'create new';
-                    $this->components->info("Would {$action} config file: config/" . $file->getFilename());
+                    $this->components->info("Would {$action} config file: config/" . $configFile);
 
                     continue;
                 }
 
                 File::ensureDirectoryExists($dest);
-                File::copy($file->getPathname(), $targetFile);
+                File::copy($sourceFile, $targetFile);
             }
         });
+    }
+
+    /**
+     * @param  array<int, string>  $selectedComponents
+     * @return array<int, string>
+     */
+    protected function configsForComponents(array $selectedComponents): array
+    {
+        $configs = [];
+
+        foreach ($selectedComponents as $component) {
+            $configs = [...$configs, ...($this->wizardComponents[$component]['configs'] ?? [])];
+        }
+
+        return array_values(array_unique($configs));
     }
 
     protected function runProcess(array $command, bool $failOnError = true): void
