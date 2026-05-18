@@ -3,13 +3,16 @@
 namespace WireNinja\Accelerator\Support;
 
 use Illuminate\Support\Facades\File;
-use Illuminate\Support\Str;
 
 class EnvReader
 {
-    // TODO(deep-analysis): keyword list belum cover `webhook`, `signature`, `cipher`, `bearer`,
-    // `cred`, `dsn`. Pertimbangkan ekspansi setelah mapping kasus nyata project lain.
-    protected static array $sensitiveKeywords = [
+    /**
+     * Token-based sensitive matching.
+     *
+     * Setiap key env di-split via `_` lalu di-cek per token. Hasilnya lebih ketat
+     * dari substring match — `WIDGET_KEY` match `key`, tapi `KEYCHAIN_HINT` tidak.
+     */
+    protected static array $sensitiveTokens = [
         'key',
         'secret',
         'password',
@@ -21,6 +24,31 @@ class EnvReader
         'vapid',
         'private',
         'access',
+        'webhook',
+        'signature',
+        'cipher',
+        'bearer',
+        'cred',
+        'credential',
+        'dsn',
+    ];
+
+    /**
+     * Token yang men-downgrade key dari sensitive ke non-sensitive.
+     * Contoh: `GOOGLE_CLIENT_ID` punya token `id` -> dianggap public ID.
+     */
+    protected static array $publicTokens = [
+        'id',
+        'public',
+    ];
+
+    /**
+     * Token yang membatalkan downgrade public di atas. Kalau key tetap mengandung
+     * token ini, `public/id` whitelist tidak boleh aktif.
+     */
+    protected static array $hardSensitiveTokens = [
+        'secret',
+        'private',
     ];
 
     public static function redacted(array $specificKeys = []): array
@@ -41,33 +69,57 @@ class EnvReader
                 continue;
             }
 
-            $keyLower = strtolower($key);
-            // TODO(deep-analysis): substring match terlalu liberal. `OPENID_TOKEN` ke-detect via
-            // substring `token` (oke), tapi `WIDGET_KEY` juga match `key` walaupun bukan secret.
-            // Ganti ke token-based split (explode '_' lalu in_array) di Phase 3.
-            $isSensitive = Str::contains($keyLower, self::$sensitiveKeywords);
+            $isSensitive = self::isSensitiveKey($key);
 
-            // Special case: common IDs and public keys are usually not secrets.
-            // TODO(deep-analysis): `Str::contains($keyLower, 'id')` bisa false-negative.
-            // `OPENID_TOKEN` punya substring `id` -> akan un-mark sensitive padahal token sensitive.
-            // Token-based check di Phase 3.
-            if ($isSensitive && (Str::contains($keyLower, 'id') || Str::contains($keyLower, 'public')) && ! Str::contains($keyLower, ['secret', 'private'])) {
-                $isSensitive = false;
-            }
-
-            if ($isSensitive && ! empty($value)) {
+            if ($isSensitive && $value !== '') {
                 $data[$key] = '[REDACTED]';
-            } else {
-                // TODO(deep-analysis): `empty('0')` === true di PHP, jadi env literal `0` di-treat
-                // sebagai `[EMPTY]`. Ganti ke `$value === ''` cek di Phase 3.
-                $data[$key] = empty($value) ? '[EMPTY]' : (is_string($value) ? trim($value, " \t\n\r\0\x0B\"'") : $value);
+
+                continue;
             }
+
+            // Sengaja pakai $value === '' (BUKAN empty()) supaya literal "0" tidak
+            // di-treat sebagai empty.
+            if ($value === '') {
+                $data[$key] = '[EMPTY]';
+
+                continue;
+            }
+
+            $data[$key] = is_string($value) ? trim($value, " \t\n\r\0\x0B\"'") : $value;
         }
 
-        // Sort by key for better readability
         ksort($data);
 
         return $data;
+    }
+
+    protected static function isSensitiveKey(string $key): bool
+    {
+        $tokens = self::tokenize($key);
+
+        $matchedSensitive = array_intersect($tokens, self::$sensitiveTokens) !== [];
+
+        if (! $matchedSensitive) {
+            return false;
+        }
+
+        $hasHardSensitive = array_intersect($tokens, self::$hardSensitiveTokens) !== [];
+
+        if ($hasHardSensitive) {
+            return true;
+        }
+
+        $hasPublicMarker = array_intersect($tokens, self::$publicTokens) !== [];
+
+        return ! $hasPublicMarker;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    protected static function tokenize(string $key): array
+    {
+        return array_values(array_filter(explode('_', strtolower($key)), fn(string $token): bool => $token !== ''));
     }
 
     protected static function readFromEnvFile(): array
@@ -78,13 +130,13 @@ class EnvReader
             return [];
         }
 
-        $lines = explode("\n", File::get($path));
+        $lines = preg_split('/\R/', File::get($path)) ?: [];
         $data = [];
 
         foreach ($lines as $line) {
             $line = trim($line);
 
-            if (empty($line) || str_starts_with($line, '#') || ! str_contains($line, '=')) {
+            if ($line === '' || str_starts_with($line, '#') || ! str_contains($line, '=')) {
                 continue;
             }
 
