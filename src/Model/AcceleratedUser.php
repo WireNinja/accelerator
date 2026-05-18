@@ -27,7 +27,6 @@ use WireNinja\Accelerator\Services\AcceleratedUserService;
  * @property string $name
  * @property string|null $avatar
  * @property CarbonImmutable|null $email_verified_at
- * @property CarbonImmutable|null $last_seen_at
  * @property CarbonImmutable|null $suspended_at
  * @property int|null $suspended_by
  * @property string|null $suspension_reason
@@ -53,7 +52,6 @@ class AcceleratedUser extends Authenticatable implements FilamentUser, HasAppAut
         return [
             'email_verified_at' => 'immutable_datetime',
             'has_email_authentication' => 'boolean',
-            'last_seen_at' => 'immutable_datetime',
             'receives_product_price_telegram_notifications' => 'boolean',
             'suspended_at' => 'immutable_datetime',
             'two_factor_confirmed_at' => 'immutable_datetime',
@@ -80,7 +78,7 @@ class AcceleratedUser extends Authenticatable implements FilamentUser, HasAppAut
         return Str::of($this->name)
             ->explode(' ')
             ->take(2)
-            ->map(fn ($word) => Str::substr($word, 0, 1))
+            ->map(fn($word) => Str::substr($word, 0, 1))
             ->implode('');
     }
 
@@ -109,11 +107,6 @@ class AcceleratedUser extends Authenticatable implements FilamentUser, HasAppAut
         return filled($this->suspended_at);
     }
 
-    public function isOnline(int $thresholdMinutes = 5): bool
-    {
-        return $this->last_seen_at?->gte(now()->subMinutes($thresholdMinutes)) ?? false;
-    }
-
     public function suspend(?AuthenticatableContract $suspender = null, ?string $reason = null): static
     {
         return $this->userService()->suspend($this, $suspender, $reason);
@@ -122,11 +115,6 @@ class AcceleratedUser extends Authenticatable implements FilamentUser, HasAppAut
     public function unsuspend(): static
     {
         return $this->userService()->unsuspend($this);
-    }
-
-    public function markAsOnline(): void
-    {
-        $this->userService()->touchOnlineStatus($this);
     }
 
     public function canImpersonate(): bool

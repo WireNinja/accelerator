@@ -35,8 +35,6 @@ return new class extends Migration
             $table->foreignId('suspended_by')->nullable()->constrained('users')->nullOnDelete();
             $table->text('suspension_reason')->nullable();
 
-            $table->timestamp('last_seen_at')->nullable();
-
             $table->rememberToken();
             $table->timestamps();
         });

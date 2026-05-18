@@ -105,10 +105,6 @@ class ManageProfile extends EditProfile
                                         ->label('2FA Dikonfirmasi')
                                         ->native(false)
                                         ->disabled(),
-                                    DateTimePicker::make('last_seen_at')
-                                        ->label('Terakhir Aktif')
-                                        ->native(false)
-                                        ->disabled(),
                                 ]),
                         ]),
 
@@ -128,7 +124,7 @@ class ManageProfile extends EditProfile
                                             Action::make('sendTelegramTestMessage')
                                                 ->icon('lucide-send-horizontal')
                                                 ->tooltip('Kirim pesan uji Telegram')
-                                                ->disabled(fn (Get $get): bool => blank($get('telegram_chat_id')))
+                                                ->disabled(fn(Get $get): bool => blank($get('telegram_chat_id')))
                                                 ->action(function (Get $get): void {
                                                     resolve(SendTelegramTestMessageAction::class)->handle(
                                                         mustUser(),

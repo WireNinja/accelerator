@@ -34,7 +34,6 @@ use ReflectionClass;
 use WireNinja\Accelerator\Constant\Profile;
 use WireNinja\Accelerator\Filament\Pages\Auth\Login;
 use WireNinja\Accelerator\Filament\Pages\ManageProfile;
-use WireNinja\Accelerator\Http\Middleware\TrackOnlineStatus;
 use WireNinja\Accelerator\Livewire\Sidebar;
 use WireNinja\Accelerator\Livewire\SystemInfoWidget;
 use WireNinja\Accelerator\Settings\SystemSettings;
@@ -111,7 +110,6 @@ final class PanelPreset
             ])
             ->authMiddleware([
                 Authenticate::class,
-                // TrackOnlineStatus::class,
             ])
             ->databaseNotifications()
             ->broadcasting(fn() => config('broadcasting.default') === 'reverb')

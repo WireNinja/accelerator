@@ -6,7 +6,6 @@ namespace WireNinja\Accelerator\Support;
 
 use Illuminate\Console\Scheduling\Event;
 use Illuminate\Support\Facades\Schedule;
-use WireNinja\Accelerator\Services\AcceleratedUserService;
 
 final class BuiltinSystemSchedule
 {
@@ -15,7 +14,6 @@ final class BuiltinSystemSchedule
         self::dbBackup();
         self::filesBackup();
         self::fullBackup();
-        self::flushLastSeen();
         self::ticketNotifyOverdue();
         self::snapshotHorizon();
     }
@@ -33,11 +31,6 @@ final class BuiltinSystemSchedule
     public static function fullBackup(): Event
     {
         return Schedule::command('backup:run')->dailyAt('03:00');
-    }
-
-    public static function flushLastSeen(): Event
-    {
-        return AcceleratedUserService::schedule();
     }
 
     public static function ticketNotifyOverdue(): Event

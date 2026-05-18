@@ -35,7 +35,6 @@ class InsiderDashboardController extends Controller
                 ['Super Admin', $user->isSuperAdmin() ? 'YES' : 'NO'],
                 ['Verified Email', $user->hasVerifiedEmail() ? 'YES' : 'NO'],
                 ['Suspended', $user->isSuspended() ? 'YES' : 'NO'],
-                ['Online', $user->isOnline() ? 'YES' : 'NO'],
             ]),
             $this->renderTable('Request', [
                 ['Method', $request->method()],
@@ -102,11 +101,11 @@ class InsiderDashboardController extends Controller
             $this->renderTable('OPCache', $this->opcacheRows($opcacheStatus, $opcacheConfig)),
             $this->renderTable('JIT', $this->jitRows($opcacheStatus)),
             $this->renderTable('Extensions', [
-                ['swoole', extension_loaded('swoole') ? 'loaded '.(phpversion('swoole') ?: '') : 'not loaded'],
-                ['openswoole', extension_loaded('openswoole') ? 'loaded '.(phpversion('openswoole') ?: '') : 'not loaded'],
-                ['redis', extension_loaded('redis') ? 'loaded '.(phpversion('redis') ?: '') : 'not loaded'],
+                ['swoole', extension_loaded('swoole') ? 'loaded ' . (phpversion('swoole') ?: '') : 'not loaded'],
+                ['openswoole', extension_loaded('openswoole') ? 'loaded ' . (phpversion('openswoole') ?: '') : 'not loaded'],
+                ['redis', extension_loaded('redis') ? 'loaded ' . (phpversion('redis') ?: '') : 'not loaded'],
                 ['pdo_sqlite', extension_loaded('pdo_sqlite') ? 'loaded' : 'not loaded'],
-                ['opcache', extension_loaded('Zend OPcache') ? 'loaded '.(phpversion('Zend OPcache') ?: '') : 'not loaded'],
+                ['opcache', extension_loaded('Zend OPcache') ? 'loaded ' . (phpversion('Zend OPcache') ?: '') : 'not loaded'],
                 ['intl', extension_loaded('intl') ? 'loaded' : 'not loaded'],
                 ['mbstring', extension_loaded('mbstring') ? 'loaded' : 'not loaded'],
                 ['Total Loaded Extensions', (string) count(get_loaded_extensions())],
@@ -124,9 +123,9 @@ class InsiderDashboardController extends Controller
                 ['Logout', $this->renderActionForm('/logout', 'Logout', $request)],
             ]),
             '<h2>Full Session Dump</h2>',
-            '<pre>'.e(var_export($sessionData, true)).'</pre>',
+            '<pre>' . e(var_export($sessionData, true)) . '</pre>',
             '<h2>Loaded Extensions</h2>',
-            '<pre>'.e(implode(', ', get_loaded_extensions())).'</pre>',
+            '<pre>' . e(implode(', ', get_loaded_extensions())) . '</pre>',
         ];
 
         return $this->renderPage('Insider Runtime Dashboard', implode('', $content));
@@ -216,21 +215,21 @@ class InsiderDashboardController extends Controller
         $content = '';
 
         if (is_string($status) && $status !== '') {
-            $content .= '<p><b>'.e($status).'</b></p>';
+            $content .= '<p><b>' . e($status) . '</b></p>';
         }
 
         if (is_string($error) && $error !== '') {
-            $content .= '<p><b>'.e($error).'</b></p>';
+            $content .= '<p><b>' . e($error) . '</b></p>';
         }
 
         if ($errors instanceof ViewErrorBag && $errors->any()) {
             $items = '';
 
             foreach ($errors->all() as $message) {
-                $items .= '<li>'.e($message).'</li>';
+                $items .= '<li>' . e($message) . '</li>';
             }
 
-            $content .= '<ul>'.$items.'</ul>';
+            $content .= '<ul>' . $items . '</ul>';
         }
 
         return $content;
@@ -290,14 +289,14 @@ class InsiderDashboardController extends Controller
             ['Used Memory', $this->formatBytes((int) ($memoryUsage['used_memory'] ?? 0))],
             ['Free Memory', $this->formatBytes((int) ($memoryUsage['free_memory'] ?? 0))],
             ['Wasted Memory', $this->formatBytes((int) ($memoryUsage['wasted_memory'] ?? 0))],
-            ['Wasted Percentage', (string) round((float) ($memoryUsage['current_wasted_percentage'] ?? 0), 2).' %'],
+            ['Wasted Percentage', (string) round((float) ($memoryUsage['current_wasted_percentage'] ?? 0), 2) . ' %'],
             ['Cached Scripts', (string) ($statistics['num_cached_scripts'] ?? 0)],
             ['Cached Keys', (string) ($statistics['num_cached_keys'] ?? 0)],
             ['Max Cached Keys', (string) ($statistics['max_cached_keys'] ?? 0)],
             ['Hits', (string) ($statistics['hits'] ?? 0)],
             ['Misses', (string) ($statistics['misses'] ?? 0)],
             ['Blacklist Misses', (string) ($statistics['blacklist_misses'] ?? 0)],
-            ['Hit Rate', (string) round((float) ($statistics['opcache_hit_rate'] ?? 0), 2).' %'],
+            ['Hit Rate', (string) round((float) ($statistics['opcache_hit_rate'] ?? 0), 2) . ' %'],
             ['OOM Restarts', (string) ($statistics['oom_restarts'] ?? 0)],
             ['Hash Restarts', (string) ($statistics['hash_restarts'] ?? 0)],
             ['Manual Restarts', (string) ($statistics['manual_restarts'] ?? 0)],
@@ -338,7 +337,7 @@ class InsiderDashboardController extends Controller
     {
         $tableName = (string) config('session.octane_table', 'sessions');
         $configuredTable = Collection::make((array) config('octane.tables', []))
-            ->mapWithKeys(fn (array $columns, string $name): array => [explode(':', $name)[0] => ['key' => $name, 'columns' => $columns]])
+            ->mapWithKeys(fn(array $columns, string $name): array => [explode(':', $name)[0] => ['key' => $name, 'columns' => $columns]])
             ->get($tableName);
 
         $configuredRows = '-';
@@ -366,7 +365,7 @@ class InsiderDashboardController extends Controller
                 'configured_payload_bytes' => (string) $configuredPayloadBytes,
                 'active_rows' => '-',
                 'memory_size' => '-',
-                'status' => 'unavailable: '.$throwable->getMessage(),
+                'status' => 'unavailable: ' . $throwable->getMessage(),
             ];
         }
     }
@@ -374,7 +373,7 @@ class InsiderDashboardController extends Controller
     private function formatBytes(int $bytes): string
     {
         if ($bytes < 1024) {
-            return $bytes.' B';
+            return $bytes . ' B';
         }
 
         $units = ['KB', 'MB', 'GB', 'TB'];
@@ -382,7 +381,7 @@ class InsiderDashboardController extends Controller
 
         foreach ($units as $unit) {
             if ($value < 1024 || $unit === 'TB') {
-                return round($value, 2).' '.$unit;
+                return round($value, 2) . ' ' . $unit;
             }
 
             $value /= 1024;
