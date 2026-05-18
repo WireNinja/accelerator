@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace WireNinja\Accelerator\Database\Casts;
 
 use Brick\Math\BigDecimal;
+use Brick\Math\Exception\MathException;
 use Brick\Math\RoundingMode;
-use Exception;
 use Illuminate\Contracts\Database\Eloquent\CastsAttributes;
 use Illuminate\Database\Eloquent\Model;
 use InvalidArgumentException;
@@ -18,7 +18,7 @@ class BigDecimalCast implements CastsAttributes
 {
     private readonly ?int $scale;
 
-    private RoundingMode $roundingMode;
+    private readonly RoundingMode $roundingMode;
 
     /**
      * Constructor menerima parameter dari definisi cast di Model.
@@ -29,46 +29,8 @@ class BigDecimalCast implements CastsAttributes
         string|int|null $scale = null,
         string|RoundingMode $roundingMode = RoundingMode::HalfUp,
     ) {
-        $this->scale = $scale !== null && $scale !== '' ? (int) $scale : null;
-
-        /*
-    |--------------------------------------------------------------------------
-    | Konversi String → Unit Enum RoundingMode (Safe dengan Fallback)
-    |--------------------------------------------------------------------------
-    |
-    | Jika string yang dikirim tidak valid (typo di definisi cast Model),
-    | kita TIDAK mau crash seluruh request — tapi kita HARUS tahu kejadiannya.
-    |
-    | rescue() menjamin dua hal sekaligus:
-    |   1. Exception tetap dilaporkan ke Laravel Nightwatch / log
-    |   2. Fallback ke HalfUp agar aplikasi tetap berjalan
-    |
-    | Ini lebih baik dari throw langsung di constructor karena Cast dipanggil
-    | saat Model di-instantiate — crash di sini bisa mematikan banyak hal.
-    |
-    */
-        if ($roundingMode instanceof RoundingMode) {
-            $this->roundingMode = $roundingMode;
-        } else {
-            $cases = RoundingMode::cases();
-            $lookup = [];
-            foreach ($cases as $case) {
-                $lookup[strtoupper($case->name)] = $case;
-            }
-            $normalized = strtoupper((string) $roundingMode);
-
-            // @TODO : fix this
-            $this->roundingMode = rescue(
-                fn () => $lookup[$normalized] ?? throw new InvalidArgumentException(
-                    sprintf(
-                        'RoundingMode "%s" tidak valid. Pilihan yang tersedia: %s.',
-                        $roundingMode,
-                        implode(', ', array_column($cases, 'name')),
-                    )
-                ),
-                RoundingMode::HalfUp,
-            );
-        }
+        $this->scale = self::resolveScale($scale);
+        $this->roundingMode = self::resolveRoundingMode($roundingMode);
     }
 
     /**
@@ -77,7 +39,14 @@ class BigDecimalCast implements CastsAttributes
      */
     public static function scale(int $scale, RoundingMode $roundingMode = RoundingMode::HalfUp): string
     {
-        return self::class.sprintf(':%d,%s', $scale, $roundingMode->name);
+        if ($scale < 0) {
+            throw new InvalidArgumentException(sprintf(
+                'BigDecimalCast scale harus >= 0, diterima [%d].',
+                $scale,
+            ));
+        }
+
+        return self::class . sprintf(':%d,%s', $scale, $roundingMode->name);
     }
 
     public function get(Model $model, string $key, mixed $value, array $attributes): ?BigDecimal
@@ -86,16 +55,21 @@ class BigDecimalCast implements CastsAttributes
             return null;
         }
 
-        /*
-    |--------------------------------------------------------------------------
-    | Cast dari DB → BigDecimal
-    |--------------------------------------------------------------------------
-    |
-    | Tidak boleh silent fail. Jika data di DB korup, kita HARUS tahu.
-    | Kembalikan zero diam-diam = data keuangan corrupt tanpa jejak.
-    |
-    */
-        $bigDecimal = BigDecimal::of(strval($value));
+        // Tidak boleh silent fail. Jika data di DB korup, kita HARUS tahu —
+        // mengembalikan zero diam-diam = data keuangan corrupt tanpa jejak.
+        try {
+            $bigDecimal = BigDecimal::of(self::stringify($value));
+        } catch (MathException $exception) {
+            throw new InvalidArgumentException(
+                sprintf(
+                    'Nilai kolom [%s] pada model [%s] tidak bisa di-cast ke BigDecimal: %s',
+                    $key,
+                    $model::class,
+                    $exception->getMessage(),
+                ),
+                previous: $exception,
+            );
+        }
 
         if ($this->scale !== null) {
             return $bigDecimal->toScale($this->scale, $this->roundingMode);
@@ -116,21 +90,104 @@ class BigDecimalCast implements CastsAttributes
         }
 
         try {
-            // Pastikan value menjadi BigDecimal dulu untuk diproses scaling-nya
-            $bigDecimal = ($value instanceof BigDecimal)
+            $bigDecimal = $value instanceof BigDecimal
                 ? $value
-                : BigDecimal::of(strval($value));
+                : BigDecimal::of(self::stringify($value));
 
-            // Terapkan scaling SEBELUM masuk database.
-            // Ini penting agar data di DB sesuai dengan aturan bisnis (misal: max 2 desimal).
+            // Terapkan scaling SEBELUM masuk database supaya data di DB sesuai dengan
+            // aturan bisnis (misal: max 2 desimal).
             if ($this->scale !== null) {
                 $bigDecimal = $bigDecimal->toScale($this->scale, $this->roundingMode);
             }
 
-            // Kembalikan sebagai string agar presisi terjaga di kolom DECIMAL database
+            // Kembalikan sebagai string agar presisi terjaga di kolom DECIMAL database.
             return (string) $bigDecimal;
-        } catch (Exception) {
-            throw new InvalidArgumentException("Value for attribute [$key] must be numeric or BigDecimal.");
+        } catch (MathException $exception) {
+            throw new InvalidArgumentException(
+                sprintf(
+                    'Nilai untuk attribute [%s] harus numeric atau BigDecimal: %s',
+                    $key,
+                    $exception->getMessage(),
+                ),
+                previous: $exception,
+            );
         }
+    }
+
+    private static function resolveScale(string|int|null $scale): ?int
+    {
+        if ($scale === null || $scale === '') {
+            return null;
+        }
+
+        $resolved = (int) $scale;
+
+        if ($resolved < 0) {
+            throw new InvalidArgumentException(sprintf(
+                'BigDecimalCast scale harus >= 0, diterima [%s].',
+                (string) $scale,
+            ));
+        }
+
+        return $resolved;
+    }
+
+    /**
+     * Konversi string -> RoundingMode unit enum.
+     *
+     * Fail loud kalau definisi cast salah ketik. Sebelumnya pakai rescue() ke HalfUp,
+     * tapi itu menyembunyikan bug konfigurasi keuangan yang sangat fatal.
+     */
+    private static function resolveRoundingMode(string|RoundingMode $roundingMode): RoundingMode
+    {
+        if ($roundingMode instanceof RoundingMode) {
+            return $roundingMode;
+        }
+
+        $cases = RoundingMode::cases();
+        $lookup = [];
+
+        foreach ($cases as $case) {
+            $lookup[strtoupper($case->name)] = $case;
+        }
+
+        $normalized = strtoupper($roundingMode);
+
+        if (! array_key_exists($normalized, $lookup)) {
+            throw new InvalidArgumentException(sprintf(
+                'RoundingMode "%s" tidak valid. Pilihan yang tersedia: %s.',
+                $roundingMode,
+                implode(', ', array_column($cases, 'name')),
+            ));
+        }
+
+        return $lookup[$normalized];
+    }
+
+    /**
+     * Konversi nilai mixed -> string yang aman di-feed ke BigDecimal::of().
+     *
+     * Boundary cast eksternal (DB driver string|int|float|object) ke string. Ini salah
+     * satu tempat di mana cast manual masih sah karena memang boundary, BUKAN flow
+     * domain. Untuk flow domain pakai TypeCaster.
+     */
+    private static function stringify(mixed $value): string
+    {
+        if (is_string($value)) {
+            return $value;
+        }
+
+        if (is_int($value) || is_float($value)) {
+            return (string) $value;
+        }
+
+        if (is_object($value) && method_exists($value, '__toString')) {
+            return (string) $value;
+        }
+
+        throw new InvalidArgumentException(sprintf(
+            'BigDecimalCast tidak bisa stringify nilai bertipe [%s].',
+            get_debug_type($value),
+        ));
     }
 }
