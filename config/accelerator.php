@@ -16,6 +16,19 @@ return [
         'trust_local' => env('ACCELERATOR_TRUST_LOCAL_PROXY', true),
     ],
 
+    'middleware' => [
+        'link_preload' => [
+            // Master switch: kalau false, AddLinkHeadersForPreloadedAssets tidak akan
+            // di-append sama sekali (hemat satu middleware untuk seluruh aplikasi).
+            'enabled' => env('ACCELERATOR_LINK_PRELOAD_ENABLED', true),
+
+            // Path prefix yang di-skip walaupun master switch on. Default: /admin/*
+            // Filament admin biasanya pakai Livewire wire-navigate dan tidak butuh
+            // preload header — append-nya cuma menambah noise.
+            'skip_path_prefixes' => ['admin', 'admin/*'],
+        ],
+    ],
+
     'enums' => [
         'role' => RoleEnum::class,
         'resource' => ResourceEnum::class,
