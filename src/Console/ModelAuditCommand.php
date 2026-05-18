@@ -16,7 +16,7 @@ use WireNinja\Accelerator\Console\Concerns\HasBanner;
 
 use function Laravel\Prompts\search;
 
-#[Signature('accelerator:model-audit {model? : The model class name (e.g., User or App\Models\User)}')]
+#[Signature('accelerator:model-audit {model? : The model class name (e.g., User or App\Models\User)} {--json : Output as JSON} {--compact : Compact JSON output}')]
 #[Description('Analyze model for best practices: BigDecimal compliance, immutable dates, and PHPDoc drift')]
 class ModelAuditCommand extends Command
 {
@@ -27,7 +27,11 @@ class ModelAuditCommand extends Command
      */
     public function handle(): int
     {
-        $this->displayBanner();
+        $isJson = (bool) $this->option('json');
+
+        if (! $isJson) {
+            $this->displayBanner();
+        }
 
         $modelInput = $this->argument('model');
 
@@ -42,6 +46,12 @@ class ModelAuditCommand extends Command
         $modelClass = $this->qualifyModel($modelInput);
 
         if (! class_exists($modelClass)) {
+            if ($isJson) {
+                $this->emitJson(['status' => 'ERROR', 'model' => $modelClass, 'error' => 'Model class not found']);
+
+                return 1;
+            }
+
             $this->components->error("Model class [{$modelClass}] not found.");
 
             return 1;
@@ -52,19 +62,47 @@ class ModelAuditCommand extends Command
             $modelInstance = new $modelClass;
             $reflection = new ReflectionClass($modelClass);
 
-            $this->components->info("Auditing Model Architecture: <fg=cyan>{$modelClass}</>");
-            $this->newLine();
+            if (! $isJson) {
+                $this->components->info("Auditing Model Architecture: <fg=cyan>{$modelClass}</>");
+                $this->newLine();
+            }
 
             $auditResults = $this->performanceAudit($modelInstance, $reflection);
 
+            if ($isJson) {
+                $this->emitJson([
+                    'status' => $auditResults['findings'] === [] ? 'OK' : 'WARNING',
+                    'model' => $modelClass,
+                    'summary' => $auditResults['summary'],
+                    'findings' => $auditResults['findings'],
+                ]);
+
+                return $auditResults['findings'] === [] ? 0 : 1;
+            }
+
             $this->displayAuditReport($auditResults);
         } catch (Throwable $e) {
+            if ($isJson) {
+                $this->emitJson(['status' => 'ERROR', 'model' => $modelClass, 'error' => $e->getMessage()]);
+
+                return 1;
+            }
+
             $this->components->error("Audit failed: {$e->getMessage()}");
 
             return 1;
         }
 
         return empty($auditResults['findings']) ? 0 : 1;
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function emitJson(array $payload): void
+    {
+        $flags = ($this->option('compact') ? 0 : JSON_PRETTY_PRINT) | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE;
+        $this->output->writeln(json_encode($payload, $flags));
     }
 
     /**
@@ -112,7 +150,7 @@ class ModelAuditCommand extends Command
                 }
 
                 // Documentation Drift Check
-                if (! str_contains($docComment, '$'.$column)) {
+                if (! str_contains($docComment, '$' . $column)) {
                     $findings[] = [
                         'target' => $column,
                         'issue' => 'Column missing from PHPDoc @property block.',
@@ -128,7 +166,7 @@ class ModelAuditCommand extends Command
         // 2. Relationship Documentation Audit
         $relationships = $this->getRelationshipMethods($model, $reflection);
         foreach ($relationships as $relName) {
-            if (! str_contains($docComment, '$'.$relName)) {
+            if (! str_contains($docComment, '$' . $relName)) {
                 $findings[] = [
                     'target' => "{$relName}()",
                     'issue' => 'Relationship missing from PHPDoc properties.',
@@ -238,14 +276,14 @@ class ModelAuditCommand extends Command
         }
 
         $models = collect(File::allFiles($modelPath))
-            ->map(fn ($file) => str_replace('.php', '', $file->getFilename()))
+            ->map(fn($file) => str_replace('.php', '', $file->getFilename()))
             ->toArray();
 
         return search(
             label: 'Which model would you like to audit?',
-            options: fn (string $value) => array_filter(
+            options: fn(string $value) => array_filter(
                 $models,
-                fn (string $model) => str_contains(strtolower($model), strtolower($value))
+                fn(string $model) => str_contains(strtolower($model), strtolower($value))
             )
         );
     }
