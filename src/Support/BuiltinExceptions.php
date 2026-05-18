@@ -33,6 +33,13 @@ final class BuiltinExceptions
 
     public static function make(Exceptions $exceptions): void
     {
+        // @DONOT-REMOVE dontReportWhen user() === null
+        // Bot trafik (crawler, vulnerability scanner, sniper) sering hit endpoint admin
+        // tanpa otentikasi dan men-trigger AuthenticationException + 404. Kalau direport
+        // ke APM (Nightwatch/Sentry/Bugsnag), cost ingestion melonjak dan signal-to-noise
+        // jelek. CLI tetap di-report karena scheduler/queue tidak punya `user()`.
+        // Pertimbangkan whitelist endpoint kritis (e.g. /webhook) di masa depan, BUKAN
+        // cabut policy ini.
         $exceptions->dontReportWhen(function () {
             if (app()->runningInConsole()) {
                 return false;

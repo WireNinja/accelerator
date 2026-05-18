@@ -32,6 +32,14 @@ trait InteractsWithApplication
 {
     /**
      * Bootstrap Eloquent best practices.
+     *
+     * @DONOT-REMOVE Model::unguard()
+     * Filament v5 nested form (Repeater::relationship, HasMany sync via Schema)
+     * meneruskan payload tanpa fillable check di sebagian path. Mengganggu unguard global
+     * akan menimbulkan SilentlyDiscardedAttributesException pada banyak resource yang
+     * memang sengaja menerima nested attribute. Validasi tetap dilakukan via Filament
+     * schema, FormRequest, atau policy. Jangan ubah ini ke opt-in tanpa migrasi
+     * menyeluruh ke fillable explicit di seluruh model userland.
      */
     protected function bootEloquentBestPractices(): void
     {
