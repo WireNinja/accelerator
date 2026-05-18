@@ -114,7 +114,7 @@ final class PanelPreset
                 // TrackOnlineStatus::class,
             ])
             ->databaseNotifications()
-            ->broadcasting(fn () => config('broadcasting.default') === 'reverb')
+            ->broadcasting(fn() => config('broadcasting.default') === 'reverb')
             ->spa()
             ->topbar(false)
             ->globalSearch(false)
@@ -123,11 +123,10 @@ final class PanelPreset
             ->collapsibleNavigationGroups()
             ->sidebarFullyCollapsibleOnDesktop()
             ->databaseTransactions()
-            ->unsavedChangesAlerts(fn () => resolve('app')->isProduction())
-            ->strictAuthorization(fn () => resolve('app')->isLocal())
+            ->unsavedChangesAlerts(fn() => resolve('app')->isProduction())
+            ->strictAuthorization(fn() => resolve('app')->isLocal())
             ->profile(ManageProfile::class, isSimple: false)
             ->revealablePasswords()
-            ->defaultThemeMode(ThemeMode::Light)
             ->resourceCreatePageRedirect('index')
             ->resourceEditPageRedirect('index')
             ->errorNotifications()
@@ -135,37 +134,37 @@ final class PanelPreset
             ->lazyLoadedDatabaseNotifications()
             ->renderHook(
                 PanelsRenderHook::AUTH_LOGIN_FORM_AFTER,
-                fn () => config('services.google.client_id') ? view('accelerator::filament.auth.google-login') : ''
+                fn() => config('services.google.client_id') ? view('accelerator::filament.auth.google-login') : ''
             )
             ->renderHook(
                 PanelsRenderHook::SIDEBAR_NAV_START,
-                fn () => view('accelerator::partials.pwa.notice')
+                fn() => view('accelerator::partials.pwa.notice')
             )
             ->renderHook(
                 PanelsRenderHook::SIDEBAR_NAV_END,
-                fn () => view('accelerator::filament.sidebar.support')
+                fn() => view('accelerator::filament.sidebar.support')
             )
             ->renderHook(
                 PanelsRenderHook::PAGE_START,
-                fn () => view('accelerator::filament.sidebar.toggle')
+                fn() => view('accelerator::filament.sidebar.toggle')
             )
             ->renderHook(
                 PanelsRenderHook::HEAD_END,
-                fn () => view('accelerator::partials.pwa.head')
+                fn() => view('accelerator::partials.pwa.head')
             )
             ->renderHook(
                 PanelsRenderHook::BODY_END,
-                fn () => view('accelerator::filament.business-exception-handler', BuiltinExceptions::getFilamentBusinessExceptionViewData())
+                fn() => view('accelerator::filament.business-exception-handler', BuiltinExceptions::getFilamentBusinessExceptionViewData())
             )
             ->userMenuItems([
                 Action::make('whatsapp_support')
                     ->label('Whatsapp Support')
-                    ->url(fn () => sprintf('https://wa.me/%s', Profile::DEVELOPER_WHATSAPP))
+                    ->url(fn() => sprintf('https://wa.me/%s', Profile::DEVELOPER_WHATSAPP))
                     ->openUrlInNewTab()
                     ->icon('lucide-phone-outgoing'),
                 Action::make('telegram_support')
                     ->label('Telegram Support')
-                    ->url(fn () => sprintf('https://t.me/%s', Profile::DEVELOPER_TELEGRAM))
+                    ->url(fn() => sprintf('https://t.me/%s', Profile::DEVELOPER_TELEGRAM))
                     ->openUrlInNewTab()
                     ->icon('lucide-send'),
             ])
@@ -188,6 +187,24 @@ final class PanelPreset
             });
     }
 
+    /**
+     * @DONOT-REMOVE setRenderHook helper
+     *
+     * Internal development tool: ketika dipanggil dari `configure()` (uncomment baris
+     * `// self::setRenderHook($panel);`), method ini meng-overlay setiap render hook
+     * Filament (panel, table, widget) dengan kotak merah berisi nama hook. Berguna saat
+     * mendesain custom view / extension untuk tahu posisi hook tertentu.
+     *
+     * Sengaja TIDAK dipanggil di production. Jangan hapus, jangan jadikan public.
+     * Kalau next agent menghapus karena terlihat "dead code", developer akan kehilangan
+     * cara cepat memetakan render hooks tanpa baca dokumentasi Filament.
+     *
+     * Cara pakai:
+     *   - Uncomment `self::setRenderHook($panel);` di awal `configure()`.
+     *   - Buka panel admin di browser.
+     *   - Lihat label hook bertepi merah di setiap titik render.
+     *   - Setelah selesai, comment kembali baris pemanggilnya.
+     */
     private static function setRenderHook(Panel $panel)
     {
         $panelHooks = new ReflectionClass(PanelsRenderHook::class);
