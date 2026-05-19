@@ -115,6 +115,70 @@
      * the operator can bypass the down() page during the migrate window.
      */
     $maintenanceSecret = bin2hex(random_bytes(16));
+
+    /*
+     * Bootstrap stub paths — used by `bootstrap-nginx` / `bootstrap-supervisor`
+     * to render initial /etc/nginx + /etc/supervisor config.
+     *
+     * The stubs ship with the accelerator package; resolve from vendor first,
+     * fall back to the in-tree path when running from the package itself.
+     */
+    $nginxStub = $root.'/vendor/wireninja/accelerator/stubs/vps/nginx-vhost.conf.stub';
+    if (! is_file($nginxStub)) {
+        $nginxStub = $root.'/packages/accelerator/stubs/vps/nginx-vhost.conf.stub';
+    }
+    $supervisorStub = $root.'/vendor/wireninja/accelerator/stubs/vps/supervisor.conf.stub';
+    if (! is_file($supervisorStub)) {
+        $supervisorStub = $root.'/packages/accelerator/stubs/vps/supervisor.conf.stub';
+    }
+
+    $reverbPort = $value($envoy, "OPS_DEPLOY_{$stageKey}_REVERB_PORT", '0');
+    $sslEmail = $value($envoy, 'OPS_DEPLOY_SSL_EMAIL', 'admin@'.$domain);
+    $runtime = $value($envoy, "OPS_DEPLOY_{$stageKey}_RUNTIME", 'swoole');
+
+    /*
+     * Render bootstrap stubs locally so we can scp the rendered output to the
+     * VPS. Pure str_replace — keeps stubs framework-free and reviewable.
+     */
+    $renderStub = function (string $stubPath, array $vars): string {
+        if (! is_file($stubPath)) {
+            throw new RuntimeException("Bootstrap stub not found: {$stubPath}");
+        }
+
+        $content = file_get_contents($stubPath);
+        foreach ($vars as $key => $value) {
+            $content = str_replace('{{ '.$key.' }}', (string) $value, $content);
+        }
+
+        return $content;
+    };
+
+    $stubVars = [
+        'group' => $group,
+        'domain' => $domain,
+        'root' => $deployRoot,
+        'run_user' => $runUser,
+        'php_bin' => $phpBin,
+        'octane_port' => $octanePort,
+        'reverb_port' => $reverbPort,
+        'runtime' => $runtime,
+        'ssl_email' => $sslEmail,
+    ];
+
+    $renderedNginxConf = is_file($nginxStub) ? $renderStub($nginxStub, $stubVars) : '';
+    $renderedSupervisorConf = is_file($supervisorStub) ? $renderStub($supervisorStub, $stubVars) : '';
+
+    $localTmp = sys_get_temp_dir().'/accelerator-bootstrap-'.bin2hex(random_bytes(4));
+    $localNginx = $localTmp.'-nginx.conf';
+    $localSupervisor = $localTmp.'-supervisor.conf';
+    if ($renderedNginxConf !== '') {
+        @mkdir(dirname($localNginx), 0700, true);
+        file_put_contents($localNginx, $renderedNginxConf);
+    }
+    if ($renderedSupervisorConf !== '') {
+        @mkdir(dirname($localSupervisor), 0700, true);
+        file_put_contents($localSupervisor, $renderedSupervisorConf);
+    }
 @endsetup
 
 {{-- ════════════════════════════════════════════════════════════════════
@@ -192,6 +256,11 @@
 
 @story('releases')
     list-releases
+@endstory
+
+@story('bootstrap')
+    bootstrap-nginx
+    bootstrap-supervisor
 @endstory
 
 {{-- ════════════════════════════════════════════════════════════════════
@@ -512,4 +581,55 @@
     fi
     mv {{ $rollbackSymlink }} {{ $currentPath }}
     echo "[rollback] current -> $(basename "$target")"
+@endtask
+
+
+{{-- ════════════════════════════════════════════════════════════════════
+     One-shot VPS bootstrap: nginx vhost + supervisor conf
+     ──────────────────────────────────────────────────────────────────── --}}
+
+@task('bootstrap-nginx', ['on' => 'localhost'])
+    set -euo pipefail
+    test -s {{ $localNginx }}
+    echo "[bootstrap-nginx] uploading rendered vhost to {{ $sshHost }}…"
+    scp {{ $localNginx }} {{ $sshHost }}:/tmp/{{ $domain }}.conf
+    ssh {{ $sshHost }} 'set -euo pipefail
+        sudo mkdir -p /etc/nginx/sites-available /etc/nginx/sites-enabled
+        # Archive existing config (steering: archive-replaced-before-overwrite)
+        if [ -f /etc/nginx/sites-available/{{ $domain }}.conf ]; then
+            sudo mkdir -p {{ $archivePath }}
+            sudo cp /etc/nginx/sites-available/{{ $domain }}.conf {{ $archivePath }}/nginx-{{ $domain }}.conf.before-bootstrap-$(date +%Y-%m-%d_%H-%M-%S)
+        fi
+        sudo mv /tmp/{{ $domain }}.conf /etc/nginx/sites-available/{{ $domain }}.conf
+        sudo chown root:root /etc/nginx/sites-available/{{ $domain }}.conf
+        sudo chmod 644 /etc/nginx/sites-available/{{ $domain }}.conf
+        sudo ln -sfn /etc/nginx/sites-available/{{ $domain }}.conf /etc/nginx/sites-enabled/{{ $domain }}.conf
+        sudo nginx -t
+        sudo systemctl reload nginx
+        echo "[bootstrap-nginx] HTTP-only vhost live for {{ $domain }}. Run certbot for SSL:"
+        echo "  sudo certbot --nginx -d {{ $domain }} -m {{ $sslEmail }} --agree-tos --redirect"
+    '
+    rm -f {{ $localNginx }}
+@endtask
+
+@task('bootstrap-supervisor', ['on' => 'localhost'])
+    set -euo pipefail
+    test -s {{ $localSupervisor }}
+    echo "[bootstrap-supervisor] uploading rendered conf to {{ $sshHost }}…"
+    scp {{ $localSupervisor }} {{ $sshHost }}:/tmp/{{ $group }}.conf
+    ssh {{ $sshHost }} 'set -euo pipefail
+        sudo mkdir -p /etc/supervisor/conf.d
+        if [ -f /etc/supervisor/conf.d/{{ $group }}.conf ]; then
+            sudo mkdir -p {{ $archivePath }}
+            sudo cp /etc/supervisor/conf.d/{{ $group }}.conf {{ $archivePath }}/supervisor-{{ $group }}.conf.before-bootstrap-$(date +%Y-%m-%d_%H-%M-%S)
+        fi
+        sudo mv /tmp/{{ $group }}.conf /etc/supervisor/conf.d/{{ $group }}.conf
+        sudo chown root:root /etc/supervisor/conf.d/{{ $group }}.conf
+        sudo chmod 644 /etc/supervisor/conf.d/{{ $group }}.conf
+        sudo supervisorctl reread
+        sudo supervisorctl update
+        echo "[bootstrap-supervisor] {{ $group }} group registered. Programs:"
+        sudo supervisorctl status {{ $group }}:* || true
+    '
+    rm -f {{ $localSupervisor }}
 @endtask
