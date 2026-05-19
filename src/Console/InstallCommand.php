@@ -160,6 +160,7 @@ class InstallCommand extends Command
                 'settings.php',
                 'activitylog.php',
                 'backup.php',
+                'backup_predeploy.php',
                 'blade-icons.php',
                 'horizon.php',
                 'pennant.php',
