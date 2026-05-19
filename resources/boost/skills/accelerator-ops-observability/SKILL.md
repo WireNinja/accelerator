@@ -1,13 +1,13 @@
 ---
 name: accelerator-ops-observability
-description: Inspect Accelerator runtime state, logs, backup status, OPcache, Horizon, Nightwatch, Reverb, Supervisor, and Nginx without touching unrelated services.
+description: Inspect Accelerator runtime state, logs, backup status, OPcache, Horizon, Nightwatch, Reverb, Supervisor, and Nginx — including JSON output for AI agents — without touching unrelated services.
 ---
 
 # Accelerator Ops Observability
 
 ## When To Use
 
-Use this skill when debugging deployment health, runtime services, OPcache state, logs, backup status, Horizon, Nightwatch, Reverb, Octane, Supervisor, or Nginx in an Accelerator project.
+Debugging deployment health, runtime services, OPcache state, logs, backup status, Horizon, Nightwatch, Reverb, Octane, Supervisor, or Nginx in an Accelerator project.
 
 ## Primary Checks
 
@@ -15,6 +15,7 @@ Use Envoy for deploy/service state:
 
 ```bash
 vendor/bin/envoy run status --stage=test
+vendor/bin/envoy run releases --stage=test
 vendor/bin/envoy run logs --stage=test --service=octane
 vendor/bin/envoy run restart --stage=test --service=all
 ```
@@ -23,15 +24,63 @@ Use `--stage=prod` only after confirming production is the intended target.
 
 ## Backup Status
 
-Use:
-
 ```bash
-php artisan vps:backup-status
+php artisan vps:backup-status                # human-readable table
+php artisan vps:backup-status --json         # JSON pretty
+php artisan vps:backup-status --json --compact  # JSON single-line for piping
 ```
 
-## Server Checks
+JSON shape:
 
-For SSH diagnostics:
+```json
+{
+  "status": "OK",
+  "disk": "local",
+  "app_name": "WSS - Local",
+  "physical_path": "...",
+  "summary": {
+    "total_files": 14,
+    "total_size_bytes": 1234567890,
+    "total_size_human": "1.15 GB",
+    "last_backup_at": "2026-05-19T03:00:12+00:00",
+    "last_file": "2026-05-19-03-00-12.zip"
+  },
+  "files": [...]
+}
+```
+
+The command uses `$disk->files()` (top-level) by design — Spatie zips are flat in `{APP_NAME}/`. No deep traversal.
+
+## Pre-Deploy Backup
+
+Pre-deploy DB backups land in a separate Spatie profile:
+
+```bash
+ls storage/app/private/{APP_NAME}-predeploy/
+```
+
+Filename prefix: `predeploy-`. Aggressive retention (2 days). Notifications disabled. To restore manually:
+
+```bash
+unzip -p storage/app/private/{APP_NAME}-predeploy/2026-05-19-...zip db-dumps/database.sql | mysql -u {user} -p{pwd} {db}
+```
+
+Adjust extraction path / db client per environment. There is no automated `db-restore` task by design.
+
+## Comprehensive Audit
+
+```bash
+php artisan agent:audit                      # 7-section table
+php artisan agent:audit --json --compact     # JSON for AI / CI
+```
+
+Sections: PHP Core, Resource Limits, Extensions, Performance (OPCache + JIT), Build Tools, Accelerator Integration, Environment.
+
+When `App\Models\User` or `App\Providers\Filament\AdminPanelProvider` is missing, the audit emits an actionable warning telling the operator to run `accelerator:install --component=filament-core`.
+
+## Server Checks (SSH)
+
+Scope every command to the configured root, domain, supervisor group:
 
 ```bash
 readlink -f {root}/current
@@ -39,13 +88,12 @@ sudo nginx -t
 sudo supervisorctl status {group}:*
 ss -ltnp
 curl -I -L https://{domain}
+curl -s -o /dev/null -w "%{http_code}" -H "Host: {domain}" http://127.0.0.1:{octane_port}/up
 ```
 
-Keep all commands scoped to the configured root, domain, and Supervisor group.
+The last command mirrors the Envoy `health-check` task — useful for manual verification post-rollback.
 
 ## Reaudit After Cleanup
-
-Check for old deployment residue with scoped commands:
 
 ```bash
 sudo supervisorctl status | grep '{group}'
@@ -67,17 +115,60 @@ Expected clean state:
 
 ## OPcache
 
-- Prefer per-release `opcache_invalidate()` during deploy.
-- Do not use global `opcache_reset()` as the default because it can affect unrelated PHP applications sharing the same OPcache process.
-- Healthy deploy state should have `restart_pending=false` after the deploy settles.
-- If `validate_timestamps=false`, changed PHP files require deploy invalidation and service restart to be reflected.
+- Per-release `opcache_invalidate()` during deploy.
+- Do NOT use global `opcache_reset()` as the default — OPcache may be shared with unrelated PHP apps.
+- Healthy deploy state has `restart_pending=false` after the deploy settles.
+- If `validate_timestamps=false`, changed PHP files require deploy invalidation + service restart.
 
 ## Nightwatch
 
-- Nightwatch is opt-in.
-- Use explicit host and port.
-- Do not assume the Nightwatch port is free. Check listeners before enabling it.
+- Opt-in. Use explicit host and port via `.env.envoy` per-stage Nightwatch keys.
+- Do not assume the Nightwatch port is free — check listeners before enabling.
 
 ## Static Asset 404s
 
 For Livewire, Filament, or dynamic package JavaScript 404s behind Nginx, check whether a static asset location is intercepting `.js` requests before Laravel/Octane can handle route-backed assets.
+
+## Shield Regeneration
+
+Idempotent — safe to run repeatedly:
+
+```bash
+php artisan shield:safe-regenerate
+php artisan shield:safe-regenerate --panel=admin
+php artisan shield:safe-regenerate --json --compact
+```
+
+JSON shape:
+
+```json
+{
+  "status": "OK",
+  "panel": "admin",
+  "shield_exit_code": 0
+}
+```
+
+`--panel=` defaults to `admin`. Provide explicit panel ID for multi-panel projects. The wrapper propagates `shield:generate` exit code (was previously discarded).
+
+## Model Audit
+
+```bash
+php artisan accelerator:model-audit User                    # interactive
+php artisan accelerator:model-audit User --json --compact   # for AI / CI
+```
+
+JSON shape:
+
+```json
+{
+  "status": "WARNING",
+  "model": "App\\Models\\User",
+  "summary": {"columns": 27, "relationships": 18},
+  "findings": [
+    {"target": "...", "issue": "...", "severity": "critical|warning|info", "suggestion": "..."}
+  ]
+}
+```
+
+Checks: BigDecimalCast on financial columns, immutable date casts, PHPDoc drift.

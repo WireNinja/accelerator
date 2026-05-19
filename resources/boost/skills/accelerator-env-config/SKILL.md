@@ -1,47 +1,140 @@
 ---
 name: accelerator-env-config
-description: Work with WireNinja Accelerator env files, config defaults, EnvReader, and Envoy deploy env without bypassing Laravel config.
+description: Work with WireNinja Accelerator env files, config defaults, EnvReader, link-preload middleware, and Envoy deploy env without bypassing Laravel config.
 ---
 
 # Accelerator Env And Config
 
 ## When To Use
 
-Use this skill when adding or reviewing Accelerator config keys, `.env.example`, `.base-env.example`, `.env.envoy`, `accelerator:env`, or any code that reads deployment/runtime settings.
+Adding or reviewing Accelerator config keys, `.env.example`, `.base-env.example`, `.env.envoy`, `accelerator:env`, ConditionalLinkPreload toggle, or any code that reads deployment/runtime settings.
 
 ## Rules
 
 - Read runtime behavior from `config('accelerator.*')`.
-- Do not call `env()` directly outside config files.
+- Do NOT call `env()` directly outside config files — `env()` returns null after `config:cache`.
 - Keep package config env-driven so applications can update the package without republishing config.
 - Add new env keys to `packages/accelerator/.base-env.example`.
 - Add project-specific env keys to the application `.env.example` only when the project needs concrete values.
 - Treat `.env` as local/server runtime state. Do not print secrets in responses.
-- Use `WireNinja\Accelerator\Support\EnvReader` or existing Artisan commands for env inspection when available.
+- Use `WireNinja\Accelerator\Support\EnvReader` or existing Artisan commands for env inspection.
 - Keep `.env`, `.env.staging`, `.env.production`, `.env.example`, and `.base-env.example` key-compatible for runtime application keys.
 - Do not put `OPS_DEPLOY_*` keys in runtime env files or examples. Those keys belong only in `.env.envoy`.
 - Keep `.env.envoy` limited to `OPS_DEPLOY_*` keys and formatted into readable sections.
-- Do not use nested references for `VITE_*` keys, such as `VITE_REVERB_APP_KEY="${REVERB_APP_KEY}"`. Vite may expose the literal string to the browser. Use explicit frontend-safe values instead.
+- Do not use nested references for `VITE_*` keys (e.g. `VITE_REVERB_APP_KEY="${REVERB_APP_KEY}"`). Vite may expose the literal string. Use explicit frontend-safe values.
+
+## Accelerator Config Keys
+
+`config/accelerator.php` (env-driven, not published unless customised):
+
+```php
+return [
+    'runtime' => env('SERVER_RUNTIME', 'fpm'),
+
+    'infra' => [
+        'hosting' => env('INFRA_HOSTING', 'dedicated'),
+    ],
+
+    'proxy' => [
+        'trust_local' => env('ACCELERATOR_TRUST_LOCAL_PROXY', true),
+    ],
+
+    'middleware' => [
+        'link_preload' => [
+            // Master switch. False -> AddLinkHeadersForPreloadedAssets never appended.
+            'enabled' => env('ACCELERATOR_LINK_PRELOAD_ENABLED', true),
+
+            // Path patterns skipped even when enabled. Default skips Filament admin.
+            'skip_path_prefixes' => ['admin', 'admin/*'],
+        ],
+    ],
+
+    'enums' => [
+        'role' => RoleEnum::class,
+        'resource' => ResourceEnum::class,
+        'panel' => PanelEnum::class,
+        'launcher' => LauncherEnum::class,
+    ],
+
+    'cache' => [
+        'allow_swoole' => env('ACCELERATOR_CACHE_ALLOW_SWOOLE', true),
+        'allow_redis' => env('ACCELERATOR_CACHE_ALLOW_REDIS', true),
+        'allow_database' => env('ACCELERATOR_CACHE_ALLOW_DATABASE', true),
+    ],
+
+    'horizon' => [
+        'auto_register' => true,
+        'email_to' => env('HORIZON_EMAIL_TO'),
+    ],
+
+    'dev' => [
+        'login_default' => env('DEV_LOGIN', null),
+        'password_default' => env('DEV_PASSWORD', null),
+    ],
+];
+```
+
+### Conditional Link Preload
+
+`AddLinkHeadersForPreloadedAssets` is wrapped by `WireNinja\Accelerator\Http\Middleware\ConditionalLinkPreload`:
+
+- Skips Filament admin paths by default (`admin`, `admin/*`).
+- Globally toggleable via `ACCELERATOR_LINK_PRELOAD_ENABLED=false`.
+- The middleware reads `accelerator.middleware.link_preload.*` via `config()` — never via `env()` directly.
+
+To override per-project, edit `config/accelerator.php` after publishing, or set the env key in `.env`.
+
+## EnvReader
+
+`WireNinja\Accelerator\Support\EnvReader::redacted()` returns an associative array with sensitive values masked. Token-based matching (split on `_`) covers:
+
+- `key`, `secret`, `password`, `token`, `auth`, `pass`, `crypt`, `salt`, `vapid`, `private`, `access`
+- `webhook`, `signature`, `cipher`, `bearer`, `cred`, `credential`, `dsn`
+
+Whitelist tokens: `id`, `public` un-mark sensitive **unless** `secret` or `private` is also present.
+
+Example outputs:
+
+| Key | Output |
+|---|---|
+| `DB_PASSWORD` | `[REDACTED]` |
+| `GOOGLE_CLIENT_ID` | actual value (id token wins) |
+| `OPENID_TOKEN` | `[REDACTED]` (token-based, no false negative) |
+| `VAPID_PUBLIC_KEY` | actual value (public + key, public wins) |
+| `PRIVATE_KEY_ID` | `[REDACTED]` (private overrides id) |
+| `STRIPE_WEBHOOK_SECRET` | `[REDACTED]` |
+| `SENTRY_DSN` | `[REDACTED]` |
+| empty value | `[EMPTY]` (literal `0` is preserved as `0`, not `[EMPTY]`) |
+| missing key | `[MISSING]` |
+
+JSON output for AI agents:
+
+```bash
+php artisan accelerator:env --json --compact
+```
+
+Returns `{status, summary{total,redacted,empty,missing,set}, values}`.
 
 ## Checks
-
-Use these commands before changing deploy/runtime env behavior:
 
 ```bash
 php artisan config:show accelerator
 php artisan accelerator:env
+php artisan accelerator:env --json --compact
 ```
 
 When comparing env files, compare keys first. Values may intentionally differ between the package base example, project example, local `.env`, and server `shared/.env`.
 
-## Expected `.env.envoy` Shape
+## `.env.envoy` Shape
 
-Envoy deploy config should support:
+`.env.envoy` carries deploy wiring. Required:
 
 - `OPS_DEPLOY_DEFAULT_STAGE`
-- shared deploy defaults such as repo, branch, PHP binary, run user, and SSL email
-- stage-specific `TEST` and `PROD` domain/root/group/runtime
-- stage-specific Octane, Reverb, and Nightwatch ports
-- stage-specific service enable flags when needed
+- shared deploy defaults (repo, branch, PHP/Bun bin, run user, SSL email, KEEP_RELEASES)
+- per-stage `TEST` / `PROD` domain, root, group, runtime
+- per-stage Octane / Reverb / Nightwatch ports
+- per-stage enable flags
 
-Do not make runtime `SERVER_RUNTIME` override deploy stage runtime accidentally. Use explicit `OPS_DEPLOY_{STAGE}_RUNTIME` in `.env.envoy`.
+Per-stage `OPS_DEPLOY_{STAGE}_OCTANE_PORT` is REQUIRED — Envoy `health-check` curls Octane directly using that port.
+
+Do not let runtime `SERVER_RUNTIME` accidentally override deploy-stage runtime. Use explicit `OPS_DEPLOY_{STAGE}_RUNTIME` in `.env.envoy`.

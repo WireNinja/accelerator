@@ -1,13 +1,13 @@
 ---
 name: accelerator-deployment
-description: Deploy Laravel apps with WireNinja Accelerator Envoy release flow, first-time VPS setup, shared env seeding, larahelp, Supervisor, Nginx, OPcache, rollback, and cleanup.
+description: Deploy Laravel apps with WireNinja Accelerator Envoy release flow — first-time init, continuous deploy with maintenance window, db backup, health check, prune-releases, rollback validation, and Supervisor / Nginx safety.
 ---
 
 # Accelerator Deployment
 
 ## When To Use
 
-Use this skill for first deployment, continuous deployment, deployment cleanup, Envoy release folders, `.env.envoy`, `.env.staging`, `.env.production`, Nginx, Supervisor, Octane, Reverb, Horizon, Scheduler, Nightwatch, OPcache, `larahelp`, or `setfacl` work in a WireNinja Accelerator Laravel project.
+First deployment, continuous deployment, deployment cleanup, Envoy release folders, `.env.envoy` / `.env.staging` / `.env.production`, Nginx, Supervisor, Octane, Reverb, Horizon, Scheduler, Nightwatch, OPcache, `larahelp`, `setfacl`, db backup, maintenance mode, health checks, release prune, rollback.
 
 ## Non-Negotiable Rules
 
@@ -15,16 +15,29 @@ Use this skill for first deployment, continuous deployment, deployment cleanup, 
 - Do not bootstrap Laravel config from Envoy.
 - Envoy reads deploy config directly from project-root `.env.envoy`.
 - `OPS_DEPLOY_*` keys belong only in `.env.envoy`, never in `.env`, `.env.staging`, `.env.production`, `.env.example`, or `.base-env.example`.
-- Runtime env seeding comes from `.env.staging` for `test` and `.env.production` for `prod`.
-- Envoy syncs the selected runtime env seed to `{root}/shared/.env` on every deploy.
+- Runtime env seeding comes from `.env.staging` (test stage) or `.env.production` (prod stage).
+- Envoy syncs the selected runtime env seed to `{root}/shared/.env` on every deploy and archives the old shared env first.
 - Use `larahelp --reoptimize` and `larahelp --setfacl` directly. Do not add fallback abstractions.
 - Scope every SSH command to the configured domain, root, group, and ports.
 - Never touch unrelated domains, Nginx files, Supervisor groups, `/var/www` roots, ports, or services.
 - Do not serve Laravel from legacy `{root}/html/public`; Nginx must serve `{root}/current/public`.
+- Envoy does NOT generate Nginx vhost or Supervisor config. Operator writes those manually once per VPS, then continuous deploy just restarts/reloads.
+
+## Stories Cheatsheet
+
+| Story | When | What it runs |
+|---|---|---|
+| `init` | first deploy on a fresh VPS root | layout setup + tooling check + clone + build + harden + prepare-laravel + switch + opcache + restart + health-check |
+| `deploy` | continuous full deploy | tooling + sync-env + clone + build + harden + db-backup + maintenance-on + prepare-laravel + switch + opcache + restart + health-check + maintenance-off + prune |
+| `deploy-slim` | hot patch backend only (no JS/CSS rebuild) | same as deploy minus build-release |
+| `rollback` | switch back to previous valid release | rollback-release + opcache + restart + health-check (NO maintenance window — speed prioritised) |
+| `releases` | list release history + prune target | tabular output |
+| `status` | quick state check | readlink current + supervisor status |
+| `restart` / `logs` | targeted service operation | supervisorctl / tail |
+
+`init` SKIPS db-backup, maintenance, and prune by design — the first deploy has no `current` symlink, no DB rows worth backing up, and no old releases to remove.
 
 ## Minimal Project Files
-
-Project userland should stay thin:
 
 ```text
 Envoy.blade.php
@@ -33,7 +46,7 @@ Envoy.blade.php
 .env.production
 ```
 
-`Envoy.blade.php` should only define server aliases and import the package Envoy file:
+`Envoy.blade.php` only defines server aliases and imports the package bridge:
 
 ```blade
 @servers(['vps' => ['onidel'], 'localhost' => '127.0.0.1'])
@@ -43,53 +56,50 @@ Envoy.blade.php
 
 Do not copy deployment shell scripts into the project.
 
-## Required Local Inputs
+## Required `.env.envoy` Keys
 
-`.env.envoy` contains deployment wiring:
+Per stage (TEST and PROD), `_OCTANE_PORT` is REQUIRED. Health check curls Octane directly.
 
-- `OPS_DEPLOY_DEFAULT_STAGE`
-- `OPS_DEPLOY_PROJECT`
-- `OPS_DEPLOY_SSH_HOST`
-- `OPS_DEPLOY_REPO`
-- `OPS_DEPLOY_BRANCH`
-- `OPS_DEPLOY_PHP_BIN`
-- `OPS_DEPLOY_BUN_BIN`
-- `OPS_DEPLOY_RUN_USER`
+Global keys:
+
+- `OPS_DEPLOY_DEFAULT_STAGE`, `OPS_DEPLOY_PROJECT`, `OPS_DEPLOY_SSH_HOST`
+- `OPS_DEPLOY_REPO`, `OPS_DEPLOY_BRANCH`
+- `OPS_DEPLOY_KEEP_RELEASES` (default 5)
+- `OPS_DEPLOY_PHP_BIN`, `OPS_DEPLOY_BUN_BIN`
+- `OPS_DEPLOY_RUN_USER` (default `www-data`)
 - `OPS_DEPLOY_SSL_EMAIL`
-- per-stage enabled flag
-- per-stage domain
-- per-stage root
-- per-stage Supervisor group
-- per-stage runtime
-- per-stage Octane port
-- per-stage Reverb port
-- per-stage Nightwatch port
-- per-stage Nightwatch enabled flag
 
-`.env.staging` and `.env.production` contain runtime application secrets and must be key-compatible with `.env`.
+Per stage (`TEST` / `PROD`):
 
-For SQLite deployments, the database file must be shared across releases:
+- `OPS_DEPLOY_{STAGE}_ENABLED`
+- `OPS_DEPLOY_{STAGE}_DOMAIN`, `OPS_DEPLOY_{STAGE}_ROOT`
+- `OPS_DEPLOY_{STAGE}_GROUP` (Supervisor group, stage-scoped)
+- `OPS_DEPLOY_{STAGE}_RUNTIME` (`swoole` etc.)
+- `OPS_DEPLOY_{STAGE}_OCTANE_PORT` **REQUIRED**
+- `OPS_DEPLOY_{STAGE}_REVERB_PORT`
+- `OPS_DEPLOY_{STAGE}_NIGHTWATCH_PORT`
+- `OPS_DEPLOY_{STAGE}_NIGHTWATCH_ENABLED`
+
+`.env.staging` and `.env.production` carry runtime application keys, key-compatible with `.env`.
+
+For SQLite, share the database file across releases:
 
 ```dotenv
 DB_CONNECTION=sqlite
 DB_DATABASE=/var/www/example.com/shared/database/database.sqlite
 ```
 
-Create `{root}/shared/database` on first deploy and seed or move the live SQLite file there before switching traffic. Do not leave SQLite at `database/database.sqlite` inside a release.
-
 ## Server Layout
-
-Expected root:
 
 ```text
 {root}/archive
-{root}/current -> {root}/releases/{release}
-{root}/releases/{release}
+{root}/current -> {root}/releases/{releaseId}
+{root}/releases/{releaseId}
 {root}/shared/.env
 {root}/shared/storage
 ```
 
-Shared Laravel-derived links:
+Per-release symlinks managed by Envoy:
 
 ```text
 release/.env            -> {root}/shared/.env
@@ -97,38 +107,21 @@ release/storage         -> {root}/shared/storage
 release/public/storage  -> {root}/shared/storage/app/public
 ```
 
-Release folder format:
-
-```text
-YYYY-MM-DD_HH-MM-SS_shortsha
-```
-
-Example:
-
-```text
-2026-05-16_23-02-01_a4383d3
-```
+Release folder format: `YYYY-MM-DD_HH-MM-SS_shortsha`.
 
 ## Service Naming
 
-Supervisor group comes from `.env.envoy`:
-
-```text
-OPS_DEPLOY_TEST_GROUP=wss_test
-OPS_DEPLOY_PROD_GROUP=wss_prod
-```
-
-Programs are group-prefixed:
+Programs MUST be group-prefixed to avoid cross-project Supervisor collisions.
 
 ```text
 {group}_octane
 {group}_horizon
 {group}_reverb
 {group}_scheduler
-{group}_nightwatch
+{group}_nightwatch  (only when stage explicitly enables it)
 ```
 
-Examples:
+Examples for `wss_test`:
 
 ```text
 wss_test:wss_test_octane
@@ -137,103 +130,170 @@ wss_test:wss_test_reverb
 wss_test:wss_test_scheduler
 ```
 
-Nightwatch is opt-in. Do not create or run it unless stage config explicitly enables it.
+Nightwatch is opt-in. Do not add it unless the stage flag enables it.
+
+## DB Backup During Deploy
+
+Envoy's `db-backup` task runs:
+
+```bash
+php artisan backup:run --config=backup_predeploy --only-db --disable-notifications --no-interaction --ansi
+```
+
+The `backup_predeploy` profile (shipped via Accelerator stub):
+
+- Folder: `{APP_NAME}-predeploy/` (separate from scheduled backup pool).
+- Filename prefix: `predeploy-`.
+- Notifications: disabled (every deploy would otherwise spam).
+- Retention: aggressive — `keep_all_backups_for_days=2`, weekly/monthly/yearly = 0, `delete_oldest_when > 1000MB`.
+
+Restore is **manual by design**. Locate the latest zip under `storage/app/private/{APP_NAME}-predeploy/`, unzip, feed dump to native `mysql` / `psql` / `sqlite3`. There is no Envoy `db-restore` task.
+
+## Maintenance Window
+
+Continuous `deploy` runs `php artisan down --secret={random per deploy} --redirect=/` between sandbox build and the migrate/switch zone. Envoy prints the secret URL once:
+
+```
+Maintenance bypass URL: https://{domain}/{secret}
+```
+
+Visit ONCE in your browser to set the bypass cookie, then preview while deploy continues. After health-check passes, `php artisan up` removes maintenance.
+
+If the deploy fails between `maintenance-on` and `maintenance-off` (e.g. health-check returns non-200), the app stays in maintenance until the operator runs `php artisan up` manually or rolls back. This is intentional — better to keep traffic blocked than to expose a broken release.
+
+`rollback` does NOT use a maintenance window. Octane restart < 5s; nginx queues requests during restart. Adding maintenance overlay just slows down the emergency path.
+
+## Health Check
+
+`health-check` curls Octane directly (NOT through Nginx) so the assertion is "app booted", not "proxy still serves cached page":
+
+```bash
+curl -s -o /dev/null -w "%{http_code}" --max-time 5 \
+    -H "Host: {domain}" \
+    http://127.0.0.1:{OCTANE_PORT}/up
+```
+
+Expected 200. Anything else fails the deploy and leaves the app in maintenance for operator intervention.
+
+`/up` is Laravel's default health endpoint, configured via `bootstrap/app.php` `health: '/up'`.
+
+## Prune-releases
+
+Runs after a successful health-check + `maintenance-off`. Keeps `OPS_DEPLOY_KEEP_RELEASES` newest releases. Always preserves `current` even if it would have fallen off the list. Does NOT touch `archive/` (that's rollback evidence).
 
 ## First-Time Deploy Checklist
 
 Before touching the VPS:
 
-1. Read `.env.envoy` and identify the exact stage.
-2. Confirm domain, root, group, ports, repo, branch, PHP binary, Bun binary, and run user.
-3. Confirm `.env.staging` or `.env.production` exists and is non-empty.
-4. Confirm runtime env files have no `OPS_DEPLOY_*` keys.
-5. Confirm ports are not used by another project by running `ss -ltnp` on the VPS.
-6. Confirm the target root belongs to the intended project.
-7. Confirm `.env`, `.env.staging`, and `.env.production` have compatible keys.
-8. Confirm database-specific keys are intentional. For SQLite, keep `DB_SOCKET`, `DB_HOST`, `DB_PORT`, `DB_USERNAME`, and `DB_PASSWORD` commented or empty.
+1. Read `.env.envoy` — confirm domain, root, group, ports, repo, branch, PHP/Bun binaries, run user.
+2. Confirm `.env.staging` / `.env.production` exists, is non-empty, and key-compatible with `.env`.
+3. Confirm runtime env files have NO `OPS_DEPLOY_*` keys.
+4. Confirm `OPS_DEPLOY_{STAGE}_OCTANE_PORT` is set (required).
+5. Confirm ports are not used by another project on the VPS:
 
-On the VPS:
+   ```bash
+   ssh onidel 'ss -ltnp'
+   ```
+6. For SQLite, keep `DB_SOCKET`, `DB_HOST`, `DB_PORT`, `DB_USERNAME`, `DB_PASSWORD` commented or empty.
 
-1. Create `{root}`, `{root}/releases`, `{root}/shared`, `{root}/archive`, and `{root}/shared/storage`.
-2. Prepare Nginx for the domain and point it to `{root}/current/public`.
-3. Prepare Supervisor config with stage-scoped names.
-4. Run `sudo nginx -t` before reload.
-5. Run `sudo supervisorctl reread` and `sudo supervisorctl update` after Supervisor config changes.
-6. Run `vendor/bin/envoy run init --stage=test`.
-7. Run `vendor/bin/envoy run status --stage=test`.
-8. Verify HTTPS, Livewire/Filament dynamic assets, Reverb websocket routes, OPcache state, and service logs.
+On the VPS (manual prep — Envoy does NOT generate these):
 
-Initial deploy still needs human-owned secrets in runtime env seed files. Do not invent production secrets.
+1. Operator creates `/etc/nginx/sites-available/{domain}.conf` pointing to `{root}/current/public`. Run `sudo nginx -t` then reload.
+2. Operator creates `/etc/supervisor/conf.d/{group}.conf` with stage-scoped program names. Run `sudo supervisorctl reread && sudo supervisorctl update`.
+3. Confirm `larahelp` is in `/usr/local/bin/larahelp`.
+4. Confirm SSH key on the VPS can clone from GitHub (test once with `ssh -T git@github.com`).
 
-Port assignment is human/agent-owned. `.env.envoy` stores the selected values, but it does not know what the VPS already uses. Pick a contiguous project range only after checking the VPS:
+Then run from local:
 
 ```bash
-ssh onidel 'ss -ltnp'
+vendor/bin/envoy run init --stage=test
+vendor/bin/envoy run status --stage=test
 ```
 
-Example:
-
-```dotenv
-OPS_DEPLOY_PROD_OCTANE_PORT=9020
-OPS_DEPLOY_PROD_REVERB_PORT=9021
-OPS_DEPLOY_PROD_NIGHTWATCH_PORT=2420
-```
+Verify HTTPS, Livewire/Filament dynamic assets, Reverb websocket routes, OPcache state, and service logs.
 
 ## Continuous Deploy Checklist
 
-Use:
+Pre-flight (auto-checked, but operator should know):
+
+- `current` symlink valid (`readlink -f current` returns a release path)
+- `shared/.env` exists
+- Octane port still listening
+- Disk space free for at least 1 release + 1 backup
+
+Run:
 
 ```bash
 vendor/bin/envoy run deploy --stage=test
-```
-
-Use slim deploy only when frontend assets do not need rebuilding:
-
-```bash
+# Hot patch (no JS/CSS rebuild):
 vendor/bin/envoy run deploy-slim --stage=test
 ```
 
-Deploy flow:
+Flow (sandbox to risky zone):
 
-1. Verify local `.env.envoy`.
-2. Resolve remote Git SHA.
-3. Verify required tools on VPS: `git`, Composer, configured PHP, configured Bun, `larahelp`, `setfacl`.
-4. Sync `.env.staging` or `.env.production` to `{root}/shared/.env`.
-5. Clone release folder.
-6. Link shared `.env`, `storage`, and `public/storage`.
-7. Install Composer dependencies.
-8. Build frontend unless slim deploy.
-9. Harden permissions.
-10. Run `larahelp --reoptimize`.
-11. Run `larahelp --setfacl`.
-12. Run migrations.
-13. Switch `{root}/current`.
-14. Invalidate OPcache per PHP file in the new release.
-15. Restart Supervisor group.
+1. `ensure-deploy-tools` — verify git/composer/php/bun/larahelp/setfacl/curl exist.
+2. `sync-env` — scp `.env.{stage}` to `{root}/shared/.env`, archive previous shared.
+3. `clone-release` — git clone `--depth 1 --single-branch`, `git reset --hard {sha}`.
+4. `link-shared` — symlink `.env`, `storage`, `public/storage`.
+5. `build-release` — composer install + bun install + bun run build.
+6. `harden-release` — chmod (excludes vendor for speed).
 
-The selected runtime seed is synced every deploy:
+   *— production state from this point —*
+7. `db-backup` — Spatie pre-deploy profile.
+8. `maintenance-on` — `php artisan down --secret={random}`.
+9. `prepare-laravel` — `larahelp --reoptimize`, `larahelp --setfacl`, `migrate --force`.
+10. `switch-current` — atomic symlink swap, archive previous.
+11. `invalidate-opcache` — per-file opcache invalidate on the new release.
+12. `restart-service` — supervisor restart + sleep 2 + grep FATAL fail-fast.
+13. `health-check` — curl Octane `/up`, fail if not 200.
+14. `maintenance-off` — `php artisan up`.
+15. `prune-releases` — keep N latest, preserve current.
 
-```text
-.env.staging    -> {root}/shared/.env for test
-.env.production -> {root}/shared/.env for prod
+## Rollback
+
+```bash
+vendor/bin/envoy run rollback --stage=test
 ```
 
-After adopting this flow, do not treat remote `{root}/shared/.env` as the source of truth. Edit the local seed and deploy again.
+Picks the newest release (excluding current) that has `vendor/autoload.php` AND a `.env` symlink. Skips incomplete releases (e.g. failed mid-build). Performs symlink swap + opcache invalidate + supervisor restart + health-check.
+
+If no valid previous release exists, rollback aborts with a clear message — operator must restore from a backup zip manually.
+
+## Releases Listing
+
+```bash
+vendor/bin/envoy run releases --stage=test
+```
+
+Output shape:
+
+```
+RELEASE                                      SIZE       AGE    STATUS
+2026-05-19_10-45-12_a4383d3                  312M       2h     CURRENT
+2026-05-19_08-12-34_8c9b1f0                  308M       5h     kept
+...
+2026-05-18_09-04-22_d8f3210                  295M       1d     will-prune
+
+OPS_DEPLOY_KEEP_RELEASES=5
+```
+
+Use this before manual rollback or to confirm prune behaviour.
 
 ## Nginx Requirements
 
-The active Nginx config should:
+The active Nginx vhost should:
 
-- use `server_name {domain}`
-- set `root {root}/current/public`
-- redirect HTTP to HTTPS once SSL is ready
-- support HTTP/2 and HTTP/3 when the server supports it
+- `server_name {domain}`
+- `root {root}/current/public`
+- HTTPS redirect once SSL is ready
+- HTTP/2 + HTTP/3 when supported
 - proxy normal Laravel requests to Octane on the stage Octane port
 - proxy Reverb websocket endpoints to the stage Reverb port
-- avoid blocking dynamic route-backed assets such as Livewire JavaScript
+- send `X-Forwarded-Host`, `X-Forwarded-Proto`, `X-Forwarded-Port`, `X-Forwarded-For`, `Host` headers
+- avoid blocking dynamic route-backed assets (Livewire, Filament JS)
 - log to domain-specific access/error files
 
-Verify dynamic assets that are generated or served by Laravel packages:
+Verify dynamic assets:
 
 ```text
 /livewire/livewire.min.js
@@ -241,46 +301,30 @@ Verify dynamic assets that are generated or served by Laravel packages:
 /sw.js
 ```
 
-Never point Nginx to:
-
-```text
-{root}/html/public
-```
+Never point Nginx to `{root}/html/public` after migrating to release layout.
 
 ## Supervisor Requirements
 
-Supervisor config should:
-
-- live under `/etc/supervisor/conf.d/{group}.conf`
-- run commands from `{root}/current`
-- log to `{root}/shared/storage/logs/{service}.log`
-- use `www-data` or the configured run user
-- include one group containing only this stage's programs
-- avoid generic names like `octane`, `horizon`, or `reverb`
+- One file: `/etc/supervisor/conf.d/{group}.conf`
+- Run commands from `{root}/current`
+- Log to `{root}/shared/storage/logs/{service}.log`
+- Run as `www-data` (or configured run user)
+- One group containing only this stage's programs
+- NEVER use generic names (`octane`, `horizon`, `reverb`)
 
 ## OPcache
 
-- Invalidate OPcache per PHP file in the new release.
-- Do not use global `opcache_reset()` as the default because OPcache may be shared with unrelated apps.
-- If `opcache.validate_timestamps=false`, code changes require per-release invalidation plus service restart.
+- Per-release `opcache_invalidate()` during deploy (already done in `invalidate-opcache`).
+- Do NOT use global `opcache_reset()` as a deploy default — OPcache may be shared with unrelated apps.
+- If `opcache.validate_timestamps=false`, code changes require deploy invalidation + service restart.
 
-## Rollback
-
-Use:
-
-```bash
-vendor/bin/envoy run rollback --stage=test
-```
-
-Rollback changes the `current` symlink, invalidates OPcache for current, and restarts the Supervisor group.
-
-## Cleanup
+## Cleanup Safety
 
 Only clean inside the configured project root.
 
 Safe after verification:
 
-- old non-current releases
+- old non-current releases (auto-handled by `prune-releases`)
 - legacy `{root}/html`
 - legacy deploy runner folders
 - stale env backups
@@ -294,19 +338,19 @@ Preserve or snapshot before deleting:
 - current release
 - shared `.env`
 - shared storage
+- `archive/` snapshots until rollback verified
 
-Never delete shared app uploads casually. Check `{root}/shared/storage/app` before removing anything.
+Never delete shared app uploads casually. Check `{root}/shared/storage/app` first.
 
 ## Audit Checklist
 
 Local:
 
-- `.env.envoy` has the required stage keys
+- `.env.envoy` has the stage keys including OCTANE_PORT
 - target stage is enabled
 - runtime seed exists and has no `OPS_DEPLOY_*`
-- `.env`, `.env.staging`, and `.env.production` have compatible key sets
+- `.env`, `.env.staging`, `.env.production` have compatible key sets
 - `DB_SOCKET` is not active for SQLite
-- Reverb bind keys are intentional
 
 Remote:
 
@@ -314,44 +358,26 @@ Remote:
 - Nginx root is `{root}/current/public`
 - stage ports are owned only by this project after deploy
 - Supervisor group names are stage-scoped
-- `{root}/current` points to an existing release
+- `{root}/current` points to an existing release with `vendor/autoload.php` and `.env` symlink
 - `{root}/shared/.env` exists and has no `OPS_DEPLOY_*`
 - SQLite DB, if used, is under `{root}/shared/database`
 - dynamic package assets return HTTP 200
-
-Preferred future machine-readable audit shape:
-
-```json
-{
-  "status": "pass",
-  "checks": [
-    {
-      "id": "remote.current.exists",
-      "severity": "error",
-      "status": "pass",
-      "message": "current points to an existing release."
-    }
-  ]
-}
-```
 
 ## Verification Commands
 
 ```bash
 vendor/bin/envoy tasks
 vendor/bin/envoy run status --stage=test
+vendor/bin/envoy run releases --stage=test
 ssh <host> 'sudo nginx -t'
 ssh <host> 'sudo supervisorctl status {group}:*'
 ssh <host> 'readlink -f {root}/current'
-ssh <host> 'ss -ltnp | grep -E ":(octane|reverb|nightwatch ports)\b"'
+ssh <host> "ss -ltnp | grep -E ':(9012|9013|2412)\b'"
 curl -I -L https://{domain}
 ```
 
-Expected:
+Backup status JSON for AI agents:
 
-- `vps:backup-status` may exist
-- Nginx points to `{root}/current/public`
-- only intended stage services are running
-- current release exists
-- shared env has no `OPS_DEPLOY_*` keys
-- Livewire/Filament dynamic assets return HTTP 200
+```bash
+php artisan vps:backup-status --json --compact
+```
