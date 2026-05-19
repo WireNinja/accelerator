@@ -21,21 +21,22 @@ First deployment, continuous deployment, deployment cleanup, Envoy release folde
 - Scope every SSH command to the configured domain, root, group, and ports.
 - Never touch unrelated domains, Nginx files, Supervisor groups, `/var/www` roots, ports, or services.
 - Do not serve Laravel from legacy `{root}/html/public`; Nginx must serve `{root}/current/public`.
-- Envoy does NOT generate Nginx vhost or Supervisor config. Operator writes those manually once per VPS, then continuous deploy just restarts/reloads.
+- Envoy does NOT auto-generate Nginx vhost or Supervisor config on every deploy. Run the one-shot `bootstrap` story per VPS to write them once (operator can edit later); continuous deploy just restarts/reloads.
 
 ## Stories Cheatsheet
 
 | Story | When | What it runs |
 |---|---|---|
+| `bootstrap` | one-shot per VPS to write Nginx vhost + Supervisor conf | bootstrap-nginx + bootstrap-supervisor |
 | `init` | first deploy on a fresh VPS root | layout setup + tooling check + clone + build + harden + prepare-laravel + switch + opcache + restart + health-check |
-| `deploy` | continuous full deploy | tooling + sync-env + clone + build + harden + db-backup + maintenance-on + prepare-laravel + switch + opcache + restart + health-check + maintenance-off + prune |
+| `deploy` | continuous full deploy | tooling + sync-env + clone + build + harden + migration-safety + db-backup + maintenance-on + prepare-laravel + switch + opcache + restart + health-check + maintenance-off + prune |
 | `deploy-slim` | hot patch backend only (no JS/CSS rebuild) | same as deploy minus build-release |
 | `rollback` | switch back to previous valid release | rollback-release + opcache + restart + health-check (NO maintenance window — speed prioritised) |
 | `releases` | list release history + prune target | tabular output |
 | `status` | quick state check | readlink current + supervisor status |
 | `restart` / `logs` | targeted service operation | supervisorctl / tail |
 
-`init` SKIPS db-backup, maintenance, and prune by design — the first deploy has no `current` symlink, no DB rows worth backing up, and no old releases to remove.
+`init` SKIPS db-backup, maintenance, prune, and migration-safety by design — the first deploy has no `current` symlink, no DB rows worth backing up, and no old releases to remove.
 
 ## Minimal Project Files
 
@@ -163,6 +164,26 @@ If the deploy fails between `maintenance-on` and `maintenance-off` (e.g. health-
 
 `rollback` does NOT use a maintenance window. Octane restart < 5s; nginx queues requests during restart. Adding maintenance overlay just slows down the emergency path.
 
+## Migration Safety
+
+Envoy `migration-safety` task scans new migration files (those present in the new release but not in `current/database/migrations`) for destructive ops: `dropColumn`, `dropTable`, `renameColumn`, `Schema::drop`, `Schema::dropIfExists`, `Schema::rename`.
+
+If any destructive op is found, the deploy aborts with the file list. Safety is bypassed by setting `MIGRATION_SAFETY_ALLOW=1` in `{root}/shared/.env` (NOT `.env.envoy` — this is a per-stage runtime gate, sticky between deploys until the operator removes it).
+
+Bypass workflow:
+
+```bash
+ssh onidel 'echo MIGRATION_SAFETY_ALLOW=1 >> /var/www/{domain}/shared/.env'
+vendor/bin/envoy run deploy --stage=test
+ssh onidel 'sed -i /^MIGRATION_SAFETY_ALLOW=/d /var/www/{domain}/shared/.env'
+```
+
+Or set permanently in `.env.staging` / `.env.production` for projects that routinely run destructive migrations (rare).
+
+The scan is heuristic — it greps source code, not parsed schema. False positives possible (e.g. comments mentioning `dropColumn`); review the flagged file before bypassing.
+
+`init` story SKIPS migration-safety because there is no `current` to diff against.
+
 ## Health Check
 
 `health-check` curls Octane directly (NOT through Nginx) so the assertion is "app booted", not "proxy still serves cached page":
@@ -196,12 +217,19 @@ Before touching the VPS:
    ```
 6. For SQLite, keep `DB_SOCKET`, `DB_HOST`, `DB_PORT`, `DB_USERNAME`, `DB_PASSWORD` commented or empty.
 
-On the VPS (manual prep — Envoy does NOT generate these):
+VPS-side, one-shot bootstrap (rendered from `.env.envoy`):
 
-1. Operator creates `/etc/nginx/sites-available/{domain}.conf` pointing to `{root}/current/public`. Run `sudo nginx -t` then reload.
-2. Operator creates `/etc/supervisor/conf.d/{group}.conf` with stage-scoped program names. Run `sudo supervisorctl reread && sudo supervisorctl update`.
-3. Confirm `larahelp` is in `/usr/local/bin/larahelp`.
-4. Confirm SSH key on the VPS can clone from GitHub (test once with `ssh -T git@github.com`).
+```bash
+vendor/bin/envoy run bootstrap --stage=test
+```
+
+This writes `/etc/nginx/sites-available/{domain}.conf` (HTTP-only Octane upstream + Reverb proxy + static asset locations) and `/etc/supervisor/conf.d/{group}.conf` (stage-scoped programs), validates `nginx -t`, runs `supervisorctl reread && update`. Existing files are archived under `{root}/archive/` first.
+
+Manual operator follow-ups (one-time):
+
+1. Run certbot for SSL: `sudo certbot --nginx -d {domain} -m {OPS_DEPLOY_SSL_EMAIL} --agree-tos --redirect`.
+2. Confirm `larahelp` is in `/usr/local/bin/larahelp`.
+3. Confirm SSH key on the VPS can clone from GitHub (test once with `ssh -T git@github.com`).
 
 Then run from local:
 
@@ -239,15 +267,16 @@ Flow (sandbox to risky zone):
 6. `harden-release` — chmod (excludes vendor for speed).
 
    *— production state from this point —*
-7. `db-backup` — Spatie pre-deploy profile.
-8. `maintenance-on` — `php artisan down --secret={random}`.
-9. `prepare-laravel` — `larahelp --reoptimize`, `larahelp --setfacl`, `migrate --force`.
-10. `switch-current` — atomic symlink swap, archive previous.
-11. `invalidate-opcache` — per-file opcache invalidate on the new release.
-12. `restart-service` — supervisor restart + sleep 2 + grep FATAL fail-fast.
-13. `health-check` — curl Octane `/up`, fail if not 200.
-14. `maintenance-off` — `php artisan up`.
-15. `prune-releases` — keep N latest, preserve current.
+7. `migration-safety` — grep new migration files for `dropColumn` / `dropTable` / `renameColumn`. Aborts unless `MIGRATION_SAFETY_ALLOW=1` is set in shared `.env`.
+8. `db-backup` — Spatie pre-deploy profile.
+9. `maintenance-on` — `php artisan down --secret={random}`.
+10. `prepare-laravel` — `larahelp --reoptimize`, `larahelp --setfacl`, `migrate --force`.
+11. `switch-current` — atomic symlink swap, archive previous.
+12. `invalidate-opcache` — per-file opcache invalidate on the new release.
+13. `restart-service` — supervisor restart + sleep 2 + grep FATAL fail-fast.
+14. `health-check` — curl Octane `/up`, fail if not 200.
+15. `maintenance-off` — `php artisan up`.
+16. `prune-releases` — keep N latest, preserve current.
 
 ## Rollback
 

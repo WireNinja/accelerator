@@ -36,7 +36,7 @@ class Login extends BaseLogin
         $panelId = Filament::getCurrentOrDefaultPanel()?->getId() ?? 'default';
         $login = Str::lower(trim((string) ($this->data['login'] ?? 'unknown')));
 
-        return 'lrl:' . sha1($panelId . '|' . $component . '|' . $method . '|' . $login . '|' . (request()->ip() ?? 'unknown'));
+        return 'lrl:'.sha1($panelId.'|'.$component.'|'.$method.'|'.$login.'|'.(request()->ip() ?? 'unknown'));
     }
 
     protected function getEmailFormComponent(): Component

@@ -91,19 +91,22 @@ Use `ResourceEnum::getResourcesPermissions()` to declare custom abilities ONLY w
 
 ### Mandatory steps when adding a resource
 
-1. Register in `ResourceEnum` (case, label, resource, navigation icon `lucide-*`, navigation group, panel group, permissions).
-2. Review the generated policy in `app/Policies/`.
-3. Run `php artisan shield:safe-regenerate` (idempotent, safe to repeat).
-4. Use strict namespaces: `Filament\Schemas\Components\Utilities\Get` / `Set`, `Filament\Schemas\Components\Tabs\Tab`. Never the legacy `Filament\Forms\Get`.
-5. All static Eloquent calls must start with `->query()` (e.g. `Location::query()->whereIn(...)`) for strict analysis.
-6. Add discovery annotations:
-   - Resource: `#[DiscoverAsResource(key: 'user', form: UserForm::class, table: UsersTable::class)]`
+1. `php artisan make:filament-resource {Name}` — Filament native generator. Do NOT wrap or replace.
+2. **Inject the trait** in the generated `{Name}Resource.php`: `use WireNinja\Accelerator\Filament\Traits\BetterResource;` then `use BetterResource;` inside the class body.
+3. **Add the discovery attribute** above the class: `#[DiscoverAsResource(key: '{camelKey}', form: {Name}Form::class, table: {Names}Table::class)]`. Imports as needed: `WireNinja\Accelerator\Filament\Attributes\DiscoverAsResource`.
+4. Register in `ResourceEnum` (case, label, resource, navigation icon `lucide-*`, navigation group, panel group, permissions).
+5. Review the generated form/table/policy in `app/Filament/...` and `app/Policies/`.
+6. Run `php artisan shield:safe-regenerate` (idempotent, safe to repeat).
+7. Use strict namespaces: `Filament\Schemas\Components\Utilities\Get` / `Set`, `Filament\Schemas\Components\Tabs\Tab`. Never the legacy `Filament\Forms\Get`.
+8. All static Eloquent calls must start with `->query()` (e.g. `Location::query()->whereIn(...)`) for strict analysis.
+9. Add discovery annotations on companion classes:
    - Form: `#[DiscoverAsForm(resource: UserResource::class)]`
    - Table: `#[DiscoverAsTable(resource: UserResource::class)]`
    - Relation Manager: `#[DiscoverAsRelationManager(resource: ProductResource::class, relationship: 'unitConversions')]`
    - Widget: `#[DiscoverAsWidget(resource: UserResource::class, key: 'total_user_statistic')]`
    - For oversized classes: `#[DiscoverShouldMinify('reason')]`. This affects only the `accelerator:resource-context` payload, not Filament runtime. Use `--expand` when you need full detail.
-7. Final response when touching a resource MUST start with a markdown checklist (see "Resource Verification Checklist" below). Trigger the checklist whenever the user mentions `FILAMENT.md`, asks you to audit a resource, or you modify Filament code.
+10. **Anti-bullshit closing gate** — run `php artisan accelerator:verify-resource {key} --json --compact`. PASS exit 0 means the resource satisfies the critical conventions (BetterResource trait, DiscoverAsResource attribute, no bulk actions, policy registered, pages declared). Do NOT claim "selesai" without a clean PASS.
+11. Final response when touching a resource MUST start with the markdown checklist below. Trigger the checklist whenever the user mentions `FILAMENT.md`, asks you to audit a resource, or you modify Filament code.
 
 `accelerator:resource-context` payload is the primary summary. It must surface model, pages, relation managers, widgets, actions, and authorization (string ability or default policy hint). Bulk actions appearing in the payload are violations to clean, not capabilities to keep.
 
@@ -374,7 +377,7 @@ VerticalWizard::make([
 
 ## Resource Verification Checklist
 
-When you finish or audit a resource (or the user mentions `FILAMENT.md`), the response MUST start with this markdown checklist (boxes marked done/not-done with reasons):
+When you finish or audit a resource (or the user mentions `FILAMENT.md`), the response MUST start with this markdown checklist (boxes marked done/not-done with reasons), AND end with a `accelerator:verify-resource` JSON output (anti-bullshit gate):
 
 ```markdown
 ✅ Registrasi di `ResourceEnum` (NavigationGroup, dsb)
@@ -393,10 +396,13 @@ When you finish or audit a resource (or the user mentions `FILAMENT.md`), the re
 ✅ Row actions dibungkus `ActionGroup`
 ✅ `emptyStateActions([ CreateAction::make() ])` (+ icon/heading/description sesuai)
 ✅ Smoke test `php artisan accelerator:resource-context {resource} --compact`
+✅ **Hard gate** `php artisan accelerator:verify-resource {resource} --json --compact` → status PASS
 ✅ Polishing: `vendor/bin/pint --format agent` + shield jika perlu
 ```
 
 For unchecked items, write a clear, specific reason. Last line of the message MUST ask: *"Apakah saya (atau Anda) sudah mengikuti seluruh standar dan aturan di file `FILAMENT.md` ini termasuk `ResourceEnum` dan menjalankan regenerasi Shield?"*
+
+If `accelerator:verify-resource` returned FAIL or WARNING, the response MUST list the findings and explain how each is being addressed before claiming completion.
 
 ---
 

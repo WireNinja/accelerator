@@ -29,7 +29,7 @@ class BackupStatusCommand extends Command
             // Spatie backup default tidak nested -> top-level files() cukup, hindari
             // allFiles() yang traversal full tree (mahal kalau banyak retensi).
             $files = $disk->files($appName);
-            $zipFiles = array_values(array_filter($files, static fn(string $f): bool => str_ends_with($f, '.zip')));
+            $zipFiles = array_values(array_filter($files, static fn (string $f): bool => str_ends_with($f, '.zip')));
 
             $totalSize = 0;
             $lastTime = 0;
@@ -84,7 +84,7 @@ class BackupStatusCommand extends Command
             $this->line('---------------------------------------------------------');
 
             if ($zipFiles === []) {
-                $this->warn('⚠️  No backup files found in: ' . $disk->path($appName));
+                $this->warn('⚠️  No backup files found in: '.$disk->path($appName));
 
                 return 1;
             }
@@ -92,7 +92,7 @@ class BackupStatusCommand extends Command
             $this->table(
                 ['Metric', 'Value'],
                 [
-                    ['Total Backup Files', count($zipFiles) . ' files'],
+                    ['Total Backup Files', count($zipFiles).' files'],
                     ['Total Storage Used', $this->formatBytes($totalSize)],
                     ['Last Backup Date', date('Y-m-d H:i:s', $lastTime)],
                     ['Last File Name', basename($lastFile)],
@@ -115,7 +115,7 @@ class BackupStatusCommand extends Command
                 return 1;
             }
 
-            $this->error('❌ Error auditing storage: ' . $exception->getMessage());
+            $this->error('❌ Error auditing storage: '.$exception->getMessage());
 
             return 1;
         }
@@ -129,6 +129,6 @@ class BackupStatusCommand extends Command
         $pow = (int) min($pow, count($units) - 1);
         $bytes /= (1 << (10 * $pow));
 
-        return round($bytes, $precision) . ' ' . $units[$pow];
+        return round($bytes, $precision).' '.$units[$pow];
     }
 }

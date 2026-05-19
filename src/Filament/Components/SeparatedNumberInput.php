@@ -50,12 +50,12 @@ final class SeparatedNumberInput
 
             // Gantinya, kita format manual state-nya agar BigDecimal jadi String
             ->formatStateUsing(
-                fn($state) => $state instanceof BigDecimal ? $state->__toString() : $state
+                fn ($state) => $state instanceof BigDecimal ? $state->__toString() : $state
             )
 
             // Tambahkan validasi manual karena ->numeric() dihapus
             ->rules(['numeric'])
-            ->rule('decimal:0,' . $precision)
+            ->rule('decimal:0,'.$precision)
 
             ->step(self::precisionToStep($precision))
             ->default(0);
@@ -65,6 +65,6 @@ final class SeparatedNumberInput
     {
         return $precision <= 0
             ? '1'
-            : '0.' . str_repeat('0', $precision - 1) . '1';
+            : '0.'.str_repeat('0', $precision - 1).'1';
     }
 }

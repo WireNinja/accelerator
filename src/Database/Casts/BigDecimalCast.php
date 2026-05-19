@@ -46,7 +46,7 @@ class BigDecimalCast implements CastsAttributes
             ));
         }
 
-        return self::class . sprintf(':%d,%s', $scale, $roundingMode->name);
+        return self::class.sprintf(':%d,%s', $scale, $roundingMode->name);
     }
 
     public function get(Model $model, string $key, mixed $value, array $attributes): ?BigDecimal

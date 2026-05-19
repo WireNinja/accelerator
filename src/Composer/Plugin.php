@@ -47,7 +47,7 @@ class Plugin implements EventSubscriberInterface, PluginInterface
     {
         $vendorPath = $event->getComposer()->getConfig()->get('vendor-dir');
         $rootPath = dirname($vendorPath);
-        $svgPath = $rootPath . '/resources/svg';
+        $svgPath = $rootPath.'/resources/svg';
 
         if (! is_dir($svgPath)) {
             if (mkdir($svgPath, 0755, true)) {

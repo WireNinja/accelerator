@@ -119,7 +119,7 @@ class EnvReader
      */
     protected static function tokenize(string $key): array
     {
-        return array_values(array_filter(explode('_', strtolower($key)), fn(string $token): bool => $token !== ''));
+        return array_values(array_filter(explode('_', strtolower($key)), fn (string $token): bool => $token !== ''));
     }
 
     protected static function readFromEnvFile(): array

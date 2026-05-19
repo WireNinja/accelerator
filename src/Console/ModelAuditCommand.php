@@ -150,7 +150,7 @@ class ModelAuditCommand extends Command
                 }
 
                 // Documentation Drift Check
-                if (! str_contains($docComment, '$' . $column)) {
+                if (! str_contains($docComment, '$'.$column)) {
                     $findings[] = [
                         'target' => $column,
                         'issue' => 'Column missing from PHPDoc @property block.',
@@ -166,7 +166,7 @@ class ModelAuditCommand extends Command
         // 2. Relationship Documentation Audit
         $relationships = $this->getRelationshipMethods($model, $reflection);
         foreach ($relationships as $relName) {
-            if (! str_contains($docComment, '$' . $relName)) {
+            if (! str_contains($docComment, '$'.$relName)) {
                 $findings[] = [
                     'target' => "{$relName}()",
                     'issue' => 'Relationship missing from PHPDoc properties.',
@@ -276,14 +276,14 @@ class ModelAuditCommand extends Command
         }
 
         $models = collect(File::allFiles($modelPath))
-            ->map(fn($file) => str_replace('.php', '', $file->getFilename()))
+            ->map(fn ($file) => str_replace('.php', '', $file->getFilename()))
             ->toArray();
 
         return search(
             label: 'Which model would you like to audit?',
-            options: fn(string $value) => array_filter(
+            options: fn (string $value) => array_filter(
                 $models,
-                fn(string $model) => str_contains(strtolower($model), strtolower($value))
+                fn (string $model) => str_contains(strtolower($model), strtolower($value))
             )
         );
     }

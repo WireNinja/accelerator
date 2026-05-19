@@ -191,8 +191,8 @@ class AuditCommand extends Command
         $opcacheInfo = [];
         if ($opcacheEnabled) {
             $opcacheInfo = [
-                'Memory: Used ' . round($opcacheStatus['memory_usage']['used_memory'] / 1024 / 1024, 2) . ' MB / Free ' . round($opcacheStatus['memory_usage']['free_memory'] / 1024 / 1024, 2) . ' MB',
-                'Hits: ' . $opcacheStatus['opcache_statistics']['hits'] . ' (Rate: ' . round($opcacheStatus['opcache_statistics']['opcache_hit_rate'], 2) . '%)',
+                'Memory: Used '.round($opcacheStatus['memory_usage']['used_memory'] / 1024 / 1024, 2).' MB / Free '.round($opcacheStatus['memory_usage']['free_memory'] / 1024 / 1024, 2).' MB',
+                'Hits: '.$opcacheStatus['opcache_statistics']['hits'].' (Rate: '.round($opcacheStatus['opcache_statistics']['opcache_hit_rate'], 2).'%)',
             ];
         }
 
@@ -200,9 +200,9 @@ class AuditCommand extends Command
         if ($jitEnabled) {
             $jitStatus = $opcacheStatus['jit'] ?? [];
             $jitInfo = [
-                'JIT Strategy: ' . ini_get('opcache.jit'),
+                'JIT Strategy: '.ini_get('opcache.jit'),
                 isset($jitStatus['buffer_size'])
-                    ? 'JIT Buffer: Used ' . round(($jitStatus['buffer_size'] - $jitStatus['buffer_free']) / 1024 / 1024, 2) . ' MB / Max ' . round($jitStatus['buffer_size'] / 1024 / 1024, 2) . ' MB'
+                    ? 'JIT Buffer: Used '.round(($jitStatus['buffer_size'] - $jitStatus['buffer_free']) / 1024 / 1024, 2).' MB / Max '.round($jitStatus['buffer_size'] / 1024 / 1024, 2).' MB'
                     : 'JIT Buffer: N/A',
             ];
         }
@@ -292,8 +292,8 @@ class AuditCommand extends Command
             if (! $exists) {
                 $warnings[] = "Mandatory enum '{$enumFile}' is missing. Run 'php artisan accelerator:install'.";
             }
-            $rows[] = ['Enum: ' . basename($enumFile), $exists ? '<fg=green>OK</>' : '<fg=red>MISSING</>'];
-            $integrationStatus['enum_' . basename($enumFile, '.php')] = $exists;
+            $rows[] = ['Enum: '.basename($enumFile), $exists ? '<fg=green>OK</>' : '<fg=red>MISSING</>'];
+            $integrationStatus['enum_'.basename($enumFile, '.php')] = $exists;
         }
 
         // 8. Check Essential Files & Folders
@@ -349,7 +349,7 @@ class AuditCommand extends Command
                     $warnings[] = "{$name} is not registered in bootstrap/providers.php.";
                 }
                 $rows[] = ["Provider: {$name}", $exists ? '<fg=green>OK</>' : '<fg=red>MISSING</>'];
-                $integrationStatus['provider_' . $name] = $exists;
+                $integrationStatus['provider_'.$name] = $exists;
             }
         }
 
@@ -388,7 +388,7 @@ class AuditCommand extends Command
                     $warnings[] = "BuiltinSystemSchedule::{$name} is not registered in routes/console.php.";
                 }
                 $rows[] = ["Schedule: {$name}", $exists ? '<fg=green>OK</>' : '<fg=red>MISSING</>'];
-                $integrationStatus['schedule_' . $name] = $exists;
+                $integrationStatus['schedule_'.$name] = $exists;
             }
         }
 
@@ -432,7 +432,7 @@ class AuditCommand extends Command
         } else {
             $this->components->error('SYSTEM WARNINGS DETECTED:');
             foreach ($warnings as $index => $warning) {
-                $this->line('  <fg=red>' . ($index + 1) . ".</> $warning");
+                $this->line('  <fg=red>'.($index + 1).".</> $warning");
             }
         }
         $this->newLine();

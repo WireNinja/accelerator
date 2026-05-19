@@ -207,6 +207,7 @@
     link-shared
     build-release
     harden-release
+    migration-safety
     db-backup
     maintenance-on
     prepare-laravel
@@ -224,6 +225,7 @@
     clone-release
     link-shared
     harden-release
+    migration-safety
     db-backup
     maintenance-on
     prepare-laravel
@@ -368,6 +370,51 @@
         --disable-notifications \
         --no-interaction \
         --ansi
+@endtask
+
+@task('migration-safety', ['on' => 'vps'])
+    set -euo pipefail
+    # Pre-flight scan for destructive migration ops in the NEW release vs current.
+    # Runs before db-backup so the operator can abort cheaply.
+    # Heuristic-only: greps for dropColumn / dropTable / renameColumn / drop( in
+    # migration files modified or added since the current release's git SHA.
+    new_dir={{ $releasePath }}
+    cur_dir="$(readlink -f {{ $currentPath }} 2>/dev/null || true)"
+    if [ -z "$cur_dir" ] || [ ! -d "$cur_dir/database/migrations" ]; then
+        echo "[migration-safety] no current symlink — skip (init flow)"
+        exit 0
+    fi
+    # Diff migration filenames; if a migration file is in NEW but not in CURRENT, scan it.
+    new_files=$(ls -1 "$new_dir/database/migrations" 2>/dev/null || true)
+    cur_files=$(ls -1 "$cur_dir/database/migrations" 2>/dev/null || true)
+    added=$(comm -23 <(echo "$new_files" | sort) <(echo "$cur_files" | sort) || true)
+    if [ -z "$added" ]; then
+        echo "[migration-safety] no new migrations vs current — pass"
+        exit 0
+    fi
+    flagged=0
+    while IFS= read -r f; do
+        [ -z "$f" ] && continue
+        path="$new_dir/database/migrations/$f"
+        # Match exact destructive APIs only — avoid false positives like "dropdown".
+        if grep -E '->\s*(dropColumn|dropTable|renameColumn|drop)\b|Schema::\s*(drop|dropIfExists|rename)\b' "$path" >/dev/null 2>&1; then
+            echo "[migration-safety] DESTRUCTIVE op in $f"
+            grep -nE '->\s*(dropColumn|dropTable|renameColumn|drop)\b|Schema::\s*(drop|dropIfExists|rename)\b' "$path" || true
+            flagged=$((flagged+1))
+        fi
+    done <<< "$added"
+    if [ "$flagged" -gt 0 ]; then
+        echo "[migration-safety] $flagged new migration(s) contain destructive ops."
+        echo "[migration-safety] Pre-deploy backup will run next, but review before letting it through."
+        echo "[migration-safety] Set MIGRATION_SAFETY_ALLOW=1 in .env.envoy to ack and proceed."
+        if ! grep -E '^MIGRATION_SAFETY_ALLOW=(1|true|yes|on)' {{ $sharedPath }}/.env >/dev/null 2>&1; then
+            cd_envoy="$(grep -E '^MIGRATION_SAFETY_ALLOW' {{ $sharedPath }}/.env 2>/dev/null || true)"
+            echo "[migration-safety] aborted (current env: ${cd_envoy:-unset})"
+            exit 1
+        fi
+        echo "[migration-safety] MIGRATION_SAFETY_ALLOW set — proceeding."
+    fi
+    echo "[migration-safety] scanned $(echo "$added" | wc -l) new migration(s) — pass"
 @endtask
 
 @task('maintenance-on', ['on' => 'vps'])

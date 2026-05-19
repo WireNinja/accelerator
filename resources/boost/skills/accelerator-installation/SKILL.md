@@ -270,3 +270,22 @@ accelerator-model-outline
 accelerator-ops-observability
 accelerator-pwa-development
 ```
+
+## CI / Git Hooks (optional)
+
+```bash
+php artisan accelerator:install --no-interaction --preset=none --with-ci --with-hooks --force
+```
+
+`--with-ci` writes `.github/workflows/deploy.yml` — tag-triggered (or `workflow_dispatch`) Envoy deploy job. Required GitHub secrets:
+
+| Secret | Purpose |
+|---|---|
+| `DEPLOY_SSH_PRIVATE_KEY` | SSH key with VPS access |
+| `DEPLOY_SSH_HOST` | VPS hostname / IP |
+| `DEPLOY_SSH_USER` | VPS deploy user |
+| `ENV_ENVOY` | full content of `.env.envoy` |
+| `ENV_PRODUCTION` | full content of `.env.production` seed |
+| `ENV_STAGING` | full content of `.env.staging` seed |
+
+`--with-hooks` writes `.git/hooks/pre-commit`. Runs Pint on staged PHP (auto re-stage) + PHPStan on the project. Bypass per-commit: `SKIP_HOOK=1 git commit ...`. Skipped when `.git` is missing or hook already exists (use `--force` to overwrite).

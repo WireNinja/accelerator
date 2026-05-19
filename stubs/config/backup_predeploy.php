@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Spatie\Backup\Notifications\Notifiable;
 use Spatie\Backup\Tasks\Cleanup\Strategies\DefaultStrategy;
 
 /**
@@ -22,7 +23,7 @@ use Spatie\Backup\Tasks\Cleanup\Strategies\DefaultStrategy;
 return [
 
     'backup' => [
-        'name' => env('APP_NAME', 'laravel-backup') . '-predeploy',
+        'name' => env('APP_NAME', 'laravel-backup').'-predeploy',
 
         'source' => [
             'files' => [
@@ -67,7 +68,7 @@ return [
      */
     'notifications' => [
         'notifications' => [],
-        'notifiable' => Spatie\Backup\Notifications\Notifiable::class,
+        'notifiable' => Notifiable::class,
         'mail' => [
             'to' => 'your@example.com',
             'from' => [
