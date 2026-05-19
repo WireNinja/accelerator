@@ -105,7 +105,7 @@ Use `ResourceEnum::getResourcesPermissions()` to declare custom abilities ONLY w
    - Relation Manager: `#[DiscoverAsRelationManager(resource: ProductResource::class, relationship: 'unitConversions')]`
    - Widget: `#[DiscoverAsWidget(resource: UserResource::class, key: 'total_user_statistic')]`
    - For oversized classes: `#[DiscoverShouldMinify('reason')]`. This affects only the `accelerator:resource-context` payload, not Filament runtime. Use `--expand` when you need full detail.
-10. **Anti-bullshit closing gate** — run `php artisan accelerator:verify-resource {key} --json --compact`. PASS exit 0 means the resource satisfies the critical conventions (BetterResource trait, DiscoverAsResource attribute, no bulk actions, policy registered, pages declared). Do NOT claim "selesai" without a clean PASS.
+10. **Anti-bullshit closing gate** — run `php artisan accelerator:verify-resource {key} --compact`. Exit 0 + `"status":"PASS"` is the only acceptable signal. Critical checks: `BetterResource` trait, `#[DiscoverAsResource]` attribute, no bulk action leak, policy registered. Do NOT claim "selesai" without a clean PASS.
 11. Final response when touching a resource MUST start with the markdown checklist below. Trigger the checklist whenever the user mentions `FILAMENT.md`, asks you to audit a resource, or you modify Filament code.
 
 `accelerator:resource-context` payload is the primary summary. It must surface model, pages, relation managers, widgets, actions, and authorization (string ability or default policy hint). Bulk actions appearing in the payload are violations to clean, not capabilities to keep.
@@ -377,32 +377,24 @@ VerticalWizard::make([
 
 ## Resource Verification Checklist
 
-When you finish or audit a resource (or the user mentions `FILAMENT.md`), the response MUST start with this markdown checklist (boxes marked done/not-done with reasons), AND end with a `accelerator:verify-resource` JSON output (anti-bullshit gate):
+When you finish or audit a resource (or the user mentions `FILAMENT.md`), the response MUST end with the `accelerator:verify-resource` JSON output:
 
-```markdown
-✅ Registrasi di `ResourceEnum` (NavigationGroup, dsb)
-✅ Trait `BetterResource` di kelas Resource utama
-✅ Annotation discovery (DiscoverAsResource/Form/Table; relevan: RelationManager/Widget)
-✅ Schema Form dipisah ke file terpisah
-✅ Table dipisah ke file terpisah
-✅ `->columns(12)` di root schema Form (BUKAN Grid wrapper)
-✅ Concentrated Section (max `columnSpan(8)`) untuk form memanjang
-✅ `BooleanCard` (bukan Toggle) untuk pilihan boolean
-✅ Localization Bahasa Indonesia (label input + column)
-✅ `static fn` di seluruh closure Filament
-✅ `@svg` (bukan blade component) untuk komponen custom
-✅ TIDAK ada `toolbarActions([ BulkActionGroup ])` di Table
-✅ TIDAK ada `->label('Edit')` / `->label('Hapus')` di Edit/Delete
-✅ Row actions dibungkus `ActionGroup`
-✅ `emptyStateActions([ CreateAction::make() ])` (+ icon/heading/description sesuai)
-✅ Smoke test `php artisan accelerator:resource-context {resource} --compact`
-✅ **Hard gate** `php artisan accelerator:verify-resource {resource} --json --compact` → status PASS
-✅ Polishing: `vendor/bin/pint --format agent` + shield jika perlu
+```bash
+php artisan accelerator:verify-resource {key} --compact
 ```
 
-For unchecked items, write a clear, specific reason. Last line of the message MUST ask: *"Apakah saya (atau Anda) sudah mengikuti seluruh standar dan aturan di file `FILAMENT.md` ini termasuk `ResourceEnum` dan menjalankan regenerasi Shield?"*
+Exit 0 + `"status":"PASS"` is the only acceptable signal of completion. If FAIL, list the findings and explain how each is being addressed before claiming completion.
 
-If `accelerator:verify-resource` returned FAIL or WARNING, the response MUST list the findings and explain how each is being addressed before claiming completion.
+The command checks the four critical, non-negotiable rules from this skill:
+
+1. `BetterResource` trait used on the resource class
+2. `#[DiscoverAsResource]` attribute present
+3. No bulk action API leak (`BulkAction` / `BulkActionGroup` / `toolbarActions`)
+4. Policy class registered (run `shield:safe-regenerate` after `ResourceEnum` registration)
+
+Best-practice items — split form/table classes, empty state actions, BooleanCard over Toggle, `static fn`, Bahasa Indonesia labels, action label removal — are reviewed in code, not gated by the command. They remain mandatory by skill, but they are not part of the JSON gate.
+
+Last line of the response MUST ask: *"Apakah saya (atau Anda) sudah mengikuti seluruh standar dan aturan di file `FILAMENT.md` ini termasuk `ResourceEnum` dan menjalankan regenerasi Shield?"*
 
 ---
 

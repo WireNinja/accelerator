@@ -175,25 +175,16 @@ Checks: BigDecimalCast on financial columns, immutable date casts, PHPDoc drift.
 
 ## Resource Verification (anti-bullshit gate)
 
-Hard pass/fail JSON gate that scans a Filament resource against `FILAMENT.md` conventions and emits PASS / FAIL / WARNING with findings:
+Hard pass/fail JSON gate for Filament resources. Critical-only checks:
 
 ```bash
-php artisan accelerator:verify-resource user --json --compact
-php artisan accelerator:verify-resource App\\Filament\\Resources\\Users\\UserResource --json
+php artisan accelerator:verify-resource user --compact
 ```
 
-Exit codes: `0=PASS`, `1=FAIL`, `2=WARNING`.
-
-JSON shape:
+Exit codes: `0=PASS`, `1=FAIL`. Output:
 
 ```json
-{
-  "status": "PASS",
-  "resource": "user",
-  "class": "App\\Filament\\Resources\\Users\\UserResource",
-  "findings": [],
-  "summary": {"total": 0, "critical": 0, "warnings": 0}
-}
+{"status":"PASS","resource":"user","class":"App\\Filament\\Resources\\Users\\UserResource","findings":[]}
 ```
 
-Critical checks: `BetterResource` trait, `#[DiscoverAsResource]` attribute, no bulk action API leak, policy registered. Warnings: form/table not split, missing `emptyState`, no pages discovered. AI agents must run this before claiming "selesai".
+Critical checks: `BetterResource` trait, `#[DiscoverAsResource]` attribute, no bulk action API leak (read from scanner's `table.violations`), policy registered. Best-practice items (form/table split, empty state) are reviewed in code, not in the gate. AI agents must produce a PASS before claiming "selesai".
