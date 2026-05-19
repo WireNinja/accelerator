@@ -16,12 +16,19 @@ use function Laravel\Prompts\multiselect;
 #[Signature('accelerator:install
     {--force : Overwrite existing files}
     {--dry : Run without making actual changes}
+    {--check : Verify Accelerator integration without modifying anything (re-uses agent:audit)}
+    {--list-components : Print available wizard component keys/labels and exit}
     {--preset=full : Component preset: full, app, or none}
     {--component=* : Component key to install; can be repeated}
     {--without=* : Component key to exclude from the preset}
+    {--no-migrate : Skip the final migrate / storage:link / webpush:vapid finalisation step}
     {--with-deploy : Generate Envoy deployment files}
     {--with-pwa : Install the Laravel PWA Vite package with Bun}
     {--with-boost : Refresh Laravel Boost resources}
+    {--with-shield : Run shield:safe-regenerate after component install (default: on when filament-core or app-config is selected)}
+    {--without-shield : Force-skip shield:safe-regenerate even if filament-core or app-config is selected}
+    {--with-pint : Run vendor/bin/pint --format=agent after install (default: on when vendor/bin/pint exists)}
+    {--without-pint : Force-skip pint formatting}
     {--stage-mode=dual : Deployment stage mode: dual or single}
     {--default-stage=test : Default deployment stage}
     {--project= : Deployment project name}
@@ -42,6 +49,35 @@ use function Laravel\Prompts\multiselect;
 class InstallCommand extends Command
 {
     use HasBanner;
+
+    /**
+     * Runtime env seed keys yang harus DI-KOSONGKAN (bukan dihapus) saat generate
+     * .env.staging / .env.production dari local .env developer.
+     *
+     * Tujuannya supaya credential lokal developer tidak ter-copy ke seed file
+     * yang nantinya di-scp ke VPS. Key tetap ada agar shape file kompatibel.
+     *
+     * Sebelumnya stripOpsDeployKeys() hanya strip OPS_DEPLOY_*. Daftar di sini
+     * meng-cover credential umum yang biasanya project-specific.
+     */
+    protected array $sensitiveSeedKeys = [
+        'APP_KEY',
+        'DB_PASSWORD',
+        'REDIS_PASSWORD',
+        'MAIL_PASSWORD',
+        'PUSHER_APP_SECRET',
+        'REVERB_APP_SECRET',
+        'AWS_ACCESS_KEY_ID',
+        'AWS_SECRET_ACCESS_KEY',
+        'GOOGLE_CLIENT_SECRET',
+        'STRIPE_SECRET',
+        'MEILISEARCH_KEY',
+        'NIGHTWATCH_TOKEN',
+        'TELEGRAM_BOT_TOKEN',
+        'VAPID_PRIVATE_KEY',
+        'SENTRY_DSN',
+        'SENTRY_LARAVEL_DSN',
+    ];
 
     protected array $allowedOverwrites = [];
     protected bool $envOverwritten = false;
@@ -148,6 +184,20 @@ class InstallCommand extends Command
     {
         $this->displayBanner();
 
+        if ($this->option('list-components')) {
+            $this->listComponents();
+
+            return;
+        }
+
+        if ($this->option('check')) {
+            $this->components->info('Running Accelerator integration check (re-using agent:audit)...');
+            $this->newLine();
+            $this->call('agent:audit');
+
+            return;
+        }
+
         if ($this->option('dry')) {
             $this->components->warn('DRY RUN MODE ENABLED. No actual changes will be made.');
         }
@@ -171,6 +221,34 @@ class InstallCommand extends Command
         $this->syncBoostResources();
 
         $this->finalizeInstallation();
+        $this->runPostInstallShield($selected);
+        $this->runPostInstallPint();
+        $this->printPostInstallSummary();
+    }
+
+    /**
+     * Print a compact list of available wizard components and exit.
+     */
+    protected function listComponents(): void
+    {
+        $rows = [];
+
+        foreach ($this->wizardComponents as $key => $component) {
+            $rows[] = [
+                $key,
+                $component['label'] ?? '-',
+                count($component['stubs'] ?? []),
+                count($component['configs'] ?? []),
+                count($component['commands'] ?? []),
+            ];
+        }
+
+        $this->table(
+            ['Key', 'Label', '# Stubs', '# Configs', '# Commands'],
+            $rows,
+        );
+
+        $this->components->info('Use --component=<key> (repeatable) or --preset=<full|app|none> to select.');
     }
 
     protected function hasAddonWork(): bool
@@ -432,25 +510,29 @@ class InstallCommand extends Command
             $commands[] = ['php', 'artisan', 'key:generate', '--force'];
         }
 
-        // Ensure sqlite database exists if needed
-        if (config('database.default') === 'sqlite' || $this->envFileValue('.env', 'DB_CONNECTION') === 'sqlite') {
-            $dbPath = database_path('database.sqlite');
-            if (! File::exists($dbPath)) {
-                if ($this->option('dry')) {
-                    $this->components->info('Would create missing database/database.sqlite file');
-                } else {
-                    File::ensureDirectoryExists(dirname($dbPath));
-                    File::put($dbPath, '');
+        if ($this->option('no-migrate')) {
+            $this->components->warn('--no-migrate enabled: skipping migrate, storage:link, and webpush:vapid finalisation.');
+        } else {
+            // Ensure sqlite database exists if needed
+            if (config('database.default') === 'sqlite' || $this->envFileValue('.env', 'DB_CONNECTION') === 'sqlite') {
+                $dbPath = database_path('database.sqlite');
+                if (! File::exists($dbPath)) {
+                    if ($this->option('dry')) {
+                        $this->components->info('Would create missing database/database.sqlite file');
+                    } else {
+                        File::ensureDirectoryExists(dirname($dbPath));
+                        File::put($dbPath, '');
+                    }
                 }
             }
-        }
 
-        $commands = array_merge($commands, [
-            ['php', 'artisan', 'migrate', '--force'],
-            ['php', 'artisan', 'storage:unlink'],
-            ['php', 'artisan', 'storage:link', '--force'],
-            ['php', 'artisan', 'webpush:vapid', '--force'],
-        ]);
+            $commands = array_merge($commands, [
+                ['php', 'artisan', 'migrate', '--force'],
+                ['php', 'artisan', 'storage:unlink'],
+                ['php', 'artisan', 'storage:link', '--force'],
+                ['php', 'artisan', 'webpush:vapid', '--force'],
+            ]);
+        }
 
         foreach ($commands as $cmd) {
             if ($this->option('dry')) {
@@ -467,6 +549,112 @@ class InstallCommand extends Command
             $this->components->success('Accelerator Installation Complete!');
         }
         $this->newLine();
+    }
+
+    /**
+     * Run shield:safe-regenerate after install when filament-core or app-config
+     * components were selected. Idempotent — safe to run repeatedly.
+     *
+     * @param  array<int, string>  $selected
+     */
+    protected function runPostInstallShield(array $selected): void
+    {
+        if ($this->option('without-shield')) {
+            return;
+        }
+
+        $shouldRun = $this->option('with-shield')
+            || in_array('filament-core', $selected, true)
+            || in_array('app-config', $selected, true);
+
+        if (! $shouldRun) {
+            return;
+        }
+
+        if (! class_exists(\BezhanSalleh\FilamentShield\Commands\SetupCommand::class)) {
+            $this->components->warn('Filament Shield not installed (skipping shield:safe-regenerate).');
+
+            return;
+        }
+
+        if ($this->option('dry')) {
+            $this->components->info('Would run command: php artisan shield:safe-regenerate');
+
+            return;
+        }
+
+        $this->components->info('Running shield:safe-regenerate (idempotent)...');
+        $this->call('shield:safe-regenerate');
+    }
+
+    /**
+     * Run vendor/bin/pint --format=agent after install. Default ON if pint binary
+     * exists. --without-pint forces skip.
+     */
+    protected function runPostInstallPint(): void
+    {
+        if ($this->option('without-pint')) {
+            return;
+        }
+
+        $pintBin = base_path('vendor/bin/pint');
+
+        $shouldRun = $this->option('with-pint') || File::exists($pintBin);
+
+        if (! $shouldRun) {
+            return;
+        }
+
+        if (! File::exists($pintBin)) {
+            $this->components->warn('vendor/bin/pint not found (skipping pint formatting).');
+
+            return;
+        }
+
+        if ($this->option('dry')) {
+            $this->components->info('Would run command: vendor/bin/pint --format=agent');
+
+            return;
+        }
+
+        $this->components->info('Running vendor/bin/pint --format=agent...');
+        $this->runProcess([$pintBin, '--format=agent'], failOnError: false);
+    }
+
+    /**
+     * After install, print a redacted env summary so the operator can quickly see
+     * which keys are still missing/empty.
+     */
+    protected function printPostInstallSummary(): void
+    {
+        if ($this->option('dry')) {
+            return;
+        }
+
+        try {
+            $redacted = \WireNinja\Accelerator\Support\EnvReader::redacted();
+        } catch (\Throwable $e) {
+            $this->components->warn('Could not generate env summary: ' . $e->getMessage());
+
+            return;
+        }
+
+        if ($redacted === []) {
+            return;
+        }
+
+        $missing = array_keys(array_filter($redacted, static fn($v): bool => $v === '[EMPTY]' || $v === '[MISSING]'));
+
+        $this->newLine();
+        $this->components->info(sprintf(
+            'Env summary: %d keys total, %d still empty/missing.',
+            count($redacted),
+            count($missing),
+        ));
+
+        if ($missing !== []) {
+            $this->components->warn('Empty/missing keys (review .env): ' . implode(', ', array_slice($missing, 0, 20)) . (count($missing) > 20 ? ', ...' : ''));
+        }
     }
 
     protected function syncDeploymentFiles(): void
@@ -486,8 +674,47 @@ class InstallCommand extends Command
                 '.env.production',
             ]);
 
+            $this->warnSeedCredentialLeak();
+
             return true;
         });
+    }
+
+    /**
+     * Warn the operator if local .env contains credentials that are sensitive
+     * and were copied (with values blanked) into .env.staging / .env.production.
+     */
+    protected function warnSeedCredentialLeak(): void
+    {
+        $localEnv = base_path('.env');
+
+        if (! File::exists($localEnv)) {
+            return;
+        }
+
+        $populated = [];
+        foreach (File::lines($localEnv) as $line) {
+            $line = trim($line);
+            if ($line === '' || str_starts_with($line, '#') || ! str_contains($line, '=')) {
+                continue;
+            }
+            [$key, $value] = explode('=', $line, 2);
+            $key = trim($key);
+            $value = trim($value, " \t\n\r\0\x0B\"'");
+            if ($value !== '' && in_array($key, $this->sensitiveSeedKeys, true)) {
+                $populated[] = $key;
+            }
+        }
+
+        if ($populated === []) {
+            return;
+        }
+
+        $this->components->warn(
+            'Sensitive keys detected in local .env (blanked in seed files): '
+                . implode(', ', $populated)
+                . '. Review .env.staging and .env.production before scp / deploy.'
+        );
     }
 
     protected function installPwaPackage(): void
@@ -525,6 +752,15 @@ class InstallCommand extends Command
 
         $this->components->task('Refreshing Laravel Boost resources', function () {
             $this->mergeBoostPackageConfig();
+
+            // Cek `laravel/boost` ter-install. Kalau tidak, `boost:update` tidak ada
+            // dan runProcess fail-silent (failOnError: false). Kasih warn agar
+            // operator tahu.
+            if (! \Illuminate\Support\Facades\Artisan::has('boost:update')) {
+                $this->components->warn('laravel/boost package is not installed (composer require laravel/boost). Skipping boost:update.');
+
+                return true;
+            }
 
             if ($this->option('dry')) {
                 $this->components->info('Would run command: php artisan boost:update --ansi');
@@ -655,11 +891,37 @@ ENV . PHP_EOL;
         $source = File::exists(base_path('.env')) ? base_path('.env') : __DIR__ . '/../../.base-env.example';
         $content = File::get($source);
 
+        $content = $this->stripOpsDeployKeys($content);
+        $content = $this->blankSensitiveSeedKeys($content);
+
         return str_replace(
             ['APP_ENV=local', 'APP_ENV=production', 'APP_DEBUG=true'],
             ['APP_ENV=' . ($environment === 'production' ? 'production' : 'staging'), 'APP_ENV=' . ($environment === 'production' ? 'production' : 'staging'), 'APP_DEBUG=' . ($environment === 'production' ? 'false' : 'true')],
-            $this->stripOpsDeployKeys($content),
+            $content,
         );
+    }
+
+    /**
+     * Blank values for keys listed in $sensitiveSeedKeys, keeping shape intact.
+     * Operator must fill them manually before scp.
+     */
+    protected function blankSensitiveSeedKeys(string $content): string
+    {
+        $lines = preg_split('/\R/', $content) ?: [];
+
+        foreach ($lines as $i => $line) {
+            $trimmed = trim($line);
+            if ($trimmed === '' || str_starts_with($trimmed, '#') || ! str_contains($trimmed, '=')) {
+                continue;
+            }
+            [$key] = explode('=', $trimmed, 2);
+            $key = trim($key);
+            if (in_array($key, $this->sensitiveSeedKeys, true)) {
+                $lines[$i] = $key . '=';
+            }
+        }
+
+        return rtrim(implode(PHP_EOL, $lines)) . PHP_EOL;
     }
 
     protected function stripOpsDeployKeys(string $content): string
