@@ -99,14 +99,8 @@ Use `ResourceEnum::getResourcesPermissions()` to declare custom abilities ONLY w
 6. Run `php artisan shield:safe-regenerate` (idempotent, safe to repeat).
 7. Use strict namespaces: `Filament\Schemas\Components\Utilities\Get` / `Set`, `Filament\Schemas\Components\Tabs\Tab`. Never the legacy `Filament\Forms\Get`.
 8. All static Eloquent calls must start with `->query()` (e.g. `Location::query()->whereIn(...)`) for strict analysis.
-9. Add discovery annotations on companion classes:
-   - Form: `#[DiscoverAsForm(resource: UserResource::class)]`
-   - Table: `#[DiscoverAsTable(resource: UserResource::class)]`
-   - Relation Manager: `#[DiscoverAsRelationManager(resource: ProductResource::class, relationship: 'unitConversions')]`
-   - Widget: `#[DiscoverAsWidget(resource: UserResource::class, key: 'total_user_statistic')]`
-   - For oversized classes: `#[DiscoverShouldMinify('reason')]`. This affects only the `accelerator:resource-context` payload, not Filament runtime. Use `--expand` when you need full detail.
-10. **Anti-bullshit closing gate** — run `php artisan accelerator:verify-resource {key} --compact`. Exit 0 + `"status":"PASS"` is the only acceptable signal. Critical checks: `BetterResource` trait, `#[DiscoverAsResource]` attribute, no bulk action leak, policy registered. Do NOT claim "selesai" without a clean PASS.
-11. Final response when touching a resource MUST start with the markdown checklist below. Trigger the checklist whenever the user mentions `FILAMENT.md`, asks you to audit a resource, or you modify Filament code.
+9. **Anti-bullshit closing gate** — run `php artisan accelerator:verify-resource {key} --compact`. Exit 0 + `"status":"PASS"` is the only acceptable signal. Critical checks: `BetterResource` trait, `#[DiscoverAsResource]` attribute, no bulk action leak, policy registered. Do NOT claim "selesai" without a clean PASS.
+10. Final response when touching a resource MUST start with the markdown checklist below. Trigger the checklist whenever the user mentions `FILAMENT.md`, asks you to audit a resource, or you modify Filament code.
 
 `accelerator:resource-context` payload is the primary summary. It must surface model, pages, relation managers, widgets, actions, and authorization (string ability or default policy hint). Bulk actions appearing in the payload are violations to clean, not capabilities to keep.
 
