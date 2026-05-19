@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# Accelerator pre-commit hook
+# ---------------------------
+# Runs Pint (format) on staged PHP files and PHPStan on the project.
+# Skip for a single commit with: SKIP_HOOK=1 git commit ...
+
+set -e
+
+if [ "${SKIP_HOOK:-0}" = "1" ]; then
+    echo "[pre-commit] SKIP_HOOK=1 — skipping accelerator pre-commit hook."
+    exit 0
+fi
+
+# Collect staged PHP files (Added/Copied/Modified). Nothing to do if none.
+mapfile -t STAGED_PHP < <(git diff --cached --name-only --diff-filter=ACM | grep -E '\.php$' || true)
+
+if [ ${#STAGED_PHP[@]} -gt 0 ] && [ -x vendor/bin/pint ]; then
+    echo "[pre-commit] Pint on ${#STAGED_PHP[@]} staged PHP file(s)…"
+    vendor/bin/pint --format=agent "${STAGED_PHP[@]}" >/dev/null
+    git add "${STAGED_PHP[@]}"
+fi
+
+if [ -x vendor/bin/phpstan ]; then
+    echo "[pre-commit] PHPStan…"
+    vendor/bin/phpstan analyse --no-progress --memory-limit=2G || {
+        echo "[pre-commit] PHPStan failed. Fix the issues or commit with SKIP_HOOK=1 to bypass."
+        exit 1
+    }
+fi
+
+exit 0

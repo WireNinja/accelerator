@@ -1,0 +1,84 @@
+name: Deploy
+
+# Trigger on tag push (e.g. release-2026.05.19) OR manual workflow_dispatch.
+# Adjust the trigger to match your release flow.
+on:
+  push:
+    tags:
+      - 'release-*'
+  workflow_dispatch:
+    inputs:
+      stage:
+        description: 'Deploy stage (test or prod)'
+        required: true
+        default: 'test'
+        type: choice
+        options:
+          - test
+          - prod
+
+jobs:
+  deploy:
+    name: Envoy Deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.5'
+          tools: composer:v2
+          coverage: none
+
+      - name: Install Composer dependencies
+        run: composer install --no-dev --no-interaction --no-progress --prefer-dist
+
+      - name: Configure SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+          SSH_HOST: ${{ secrets.DEPLOY_SSH_HOST }}
+          SSH_USER: ${{ secrets.DEPLOY_SSH_USER }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "$SSH_HOST" >> ~/.ssh/known_hosts
+          cat >> ~/.ssh/config <<EOF
+          Host onidel
+            HostName $SSH_HOST
+            User $SSH_USER
+            IdentityFile ~/.ssh/id_ed25519
+            StrictHostKeyChecking yes
+          EOF
+
+      - name: Materialise .env.envoy
+        env:
+          ENV_ENVOY: ${{ secrets.ENV_ENVOY }}
+        run: printf '%s' "$ENV_ENVOY" > .env.envoy
+
+      - name: Materialise .env.production seed
+        if: github.event.inputs.stage == 'prod' || startsWith(github.ref, 'refs/tags/')
+        env:
+          ENV_PRODUCTION: ${{ secrets.ENV_PRODUCTION }}
+        run: printf '%s' "$ENV_PRODUCTION" > .env.production
+
+      - name: Materialise .env.staging seed
+        if: github.event.inputs.stage == 'test'
+        env:
+          ENV_STAGING: ${{ secrets.ENV_STAGING }}
+        run: printf '%s' "$ENV_STAGING" > .env.staging
+
+      - name: Run Envoy deploy
+        run: vendor/bin/envoy run deploy --stage=${{ github.event.inputs.stage || 'prod' }}
+
+# Required GitHub repository secrets:
+#   DEPLOY_SSH_PRIVATE_KEY  — private key with VPS access
+#   DEPLOY_SSH_HOST         — VPS hostname / IP
+#   DEPLOY_SSH_USER         — VPS deploy user
+#   ENV_ENVOY               — full content of .env.envoy
+#   ENV_PRODUCTION          — full content of .env.production seed
+#   ENV_STAGING             — full content of .env.staging seed

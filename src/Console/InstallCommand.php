@@ -2,14 +2,18 @@
 
 namespace WireNinja\Accelerator\Console;
 
+use BezhanSalleh\FilamentShield\Commands\SetupCommand;
 use Exception;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\File;
 use RuntimeException;
 use Symfony\Component\Process\Process;
+use Throwable;
 use WireNinja\Accelerator\Console\Concerns\HasBanner;
+use WireNinja\Accelerator\Support\EnvReader;
 
 use function Laravel\Prompts\multiselect;
 
@@ -25,6 +29,8 @@ use function Laravel\Prompts\multiselect;
     {--with-deploy : Generate Envoy deployment files}
     {--with-pwa : Install the Laravel PWA Vite package with Bun}
     {--with-boost : Refresh Laravel Boost resources}
+    {--with-ci : Generate .github/workflows/deploy.yml stub for Envoy deploy}
+    {--with-hooks : Install .git/hooks/pre-commit (Pint + PHPStan on staged files)}
     {--with-shield : Run shield:safe-regenerate after component install (default: on when filament-core or app-config is selected)}
     {--without-shield : Force-skip shield:safe-regenerate even if filament-core or app-config is selected}
     {--with-pint : Run vendor/bin/pint --format=agent after install (default: on when vendor/bin/pint exists)}
@@ -80,6 +86,7 @@ class InstallCommand extends Command
     ];
 
     protected array $allowedOverwrites = [];
+
     protected bool $envOverwritten = false;
 
     /**
@@ -220,6 +227,8 @@ class InstallCommand extends Command
         $this->syncDeploymentFiles();
         $this->installPwaPackage();
         $this->syncBoostResources();
+        $this->syncCiWorkflow();
+        $this->installGitHooks();
 
         $this->finalizeInstallation();
         $this->runPostInstallShield($selected);
@@ -254,7 +263,7 @@ class InstallCommand extends Command
 
     protected function hasAddonWork(): bool
     {
-        return (bool) ($this->option('with-deploy') || $this->option('with-pwa') || $this->option('with-boost'));
+        return (bool) ($this->option('with-deploy') || $this->option('with-pwa') || $this->option('with-boost') || $this->option('with-ci') || $this->option('with-hooks'));
     }
 
     protected function resolveConflicts(array $selectedComponents): void
@@ -276,7 +285,7 @@ class InstallCommand extends Command
         // pilih satu komponen.
         $configsForSelection = $this->configsForComponents($selectedComponents);
         foreach ($configsForSelection as $configFile) {
-            $targetFile = 'config/' . $configFile;
+            $targetFile = 'config/'.$configFile;
             if (File::exists(base_path($targetFile))) {
                 $conflicts[] = $targetFile;
             }
@@ -290,8 +299,9 @@ class InstallCommand extends Command
                 if (File::exists($dest)) {
                     if ($targetPath === 'app/Models/User.php') {
                         $content = File::get($dest);
-                        if (str_contains($content, 'extends Authenticatable') && !str_contains($content, 'AcceleratedUser')) {
+                        if (str_contains($content, 'extends Authenticatable') && ! str_contains($content, 'AcceleratedUser')) {
                             $this->allowedOverwrites[] = $targetPath;
+
                             continue; // Auto-overwrite fresh User model
                         }
                     }
@@ -327,7 +337,7 @@ class InstallCommand extends Command
     protected function syncEnvironment(): void
     {
         $this->components->task('Synchronizing environment from .base-env.example', function () {
-            $baseEnvPath = __DIR__ . '/../../.base-env.example';
+            $baseEnvPath = __DIR__.'/../../.base-env.example';
             $examplePath = base_path('.env.example');
             $envPath = base_path('.env');
 
@@ -337,7 +347,7 @@ class InstallCommand extends Command
 
             if (! File::exists($examplePath) || $this->option('force') || in_array('.env.example', $this->allowedOverwrites)) {
                 if (File::exists($examplePath)) {
-                    $backupPath = base_path('.env.example.backup_' . now()->format('Y_m_d_His'));
+                    $backupPath = base_path('.env.example.backup_'.now()->format('Y_m_d_His'));
                     if ($this->option('dry')) {
                         $this->components->info("Would backup existing .env.example to {$backupPath}");
                     } else {
@@ -380,7 +390,7 @@ class InstallCommand extends Command
             ];
 
             foreach ($defaults as $file) {
-                $path = $migrationsPath . '/' . $file;
+                $path = $migrationsPath.'/'.$file;
                 if (File::exists($path)) {
                     if ($this->option('dry')) {
                         $this->components->info("Would delete default migration: {$file}");
@@ -406,7 +416,7 @@ class InstallCommand extends Command
 
         $selected = multiselect(
             label: 'Which components would you like to install?',
-            options: array_map(fn($c) => $c['label'], $this->wizardComponents),
+            options: array_map(fn ($c) => $c['label'], $this->wizardComponents),
             default: array_keys($this->wizardComponents),
             hint: 'Use space to toggle select, enter to confirm'
         );
@@ -437,7 +447,7 @@ class InstallCommand extends Command
 
         foreach ([...$selected, ...$without] as $component) {
             if (! in_array($component, $valid, true)) {
-                throw new RuntimeException("Unknown Accelerator install component [{$component}]. Valid components: " . implode(', ', $valid));
+                throw new RuntimeException("Unknown Accelerator install component [{$component}]. Valid components: ".implode(', ', $valid));
             }
         }
 
@@ -462,28 +472,30 @@ class InstallCommand extends Command
                     }
 
                     if ($this->option('dry')) {
-                        $this->components->info('Would run command: ' . implode(' ', $cmd));
+                        $this->components->info('Would run command: '.implode(' ', $cmd));
                     } else {
                         $this->runProcess($cmd, failOnError: false);
                     }
                 }
 
                 foreach ($component['stubs'] as $stubPath => $targetPath) {
-                    $source = __DIR__ . '/../../stubs/' . $stubPath;
+                    $source = __DIR__.'/../../stubs/'.$stubPath;
                     $dest = base_path($targetPath);
 
-                    if (!File::exists($source)) {
+                    if (! File::exists($source)) {
                         continue;
                     }
 
                     if (File::exists($dest) && ! $this->option('force') && ! in_array($targetPath, $this->allowedOverwrites)) {
                         $this->components->warn("Target {$targetPath} already exists. Skipped.");
+
                         continue;
                     }
 
                     if ($this->option('dry')) {
                         $action = File::exists($dest) ? 'overwrite existing' : 'create new';
                         $this->components->info("Would {$action}: {$targetPath}");
+
                         continue;
                     }
 
@@ -537,7 +549,7 @@ class InstallCommand extends Command
 
         foreach ($commands as $cmd) {
             if ($this->option('dry')) {
-                $this->components->info('Would run command: ' . implode(' ', $cmd));
+                $this->components->info('Would run command: '.implode(' ', $cmd));
             } else {
                 $this->runProcess($cmd, failOnError: false);
             }
@@ -572,7 +584,7 @@ class InstallCommand extends Command
             return;
         }
 
-        if (! class_exists(\BezhanSalleh\FilamentShield\Commands\SetupCommand::class)) {
+        if (! class_exists(SetupCommand::class)) {
             $this->components->warn('Filament Shield not installed (skipping shield:safe-regenerate).');
 
             return;
@@ -633,9 +645,9 @@ class InstallCommand extends Command
         }
 
         try {
-            $redacted = \WireNinja\Accelerator\Support\EnvReader::redacted();
-        } catch (\Throwable $e) {
-            $this->components->warn('Could not generate env summary: ' . $e->getMessage());
+            $redacted = EnvReader::redacted();
+        } catch (Throwable $e) {
+            $this->components->warn('Could not generate env summary: '.$e->getMessage());
 
             return;
         }
@@ -644,7 +656,7 @@ class InstallCommand extends Command
             return;
         }
 
-        $missing = array_keys(array_filter($redacted, static fn($v): bool => $v === '[EMPTY]' || $v === '[MISSING]'));
+        $missing = array_keys(array_filter($redacted, static fn ($v): bool => $v === '[EMPTY]' || $v === '[MISSING]'));
 
         $this->newLine();
         $this->components->info(sprintf(
@@ -654,7 +666,7 @@ class InstallCommand extends Command
         ));
 
         if ($missing !== []) {
-            $this->components->warn('Empty/missing keys (review .env): ' . implode(', ', array_slice($missing, 0, 20)) . (count($missing) > 20 ? ', ...' : ''));
+            $this->components->warn('Empty/missing keys (review .env): '.implode(', ', array_slice($missing, 0, 20)).(count($missing) > 20 ? ', ...' : ''));
         }
     }
 
@@ -713,8 +725,8 @@ class InstallCommand extends Command
 
         $this->components->warn(
             'Sensitive keys detected in local .env (blanked in seed files): '
-                . implode(', ', $populated)
-                . '. Review .env.staging and .env.production before scp / deploy.'
+                .implode(', ', $populated)
+                .'. Review .env.staging and .env.production before scp / deploy.'
         );
     }
 
@@ -757,7 +769,7 @@ class InstallCommand extends Command
             // Cek `laravel/boost` ter-install. Kalau tidak, `boost:update` tidak ada
             // dan runProcess fail-silent (failOnError: false). Kasih warn agar
             // operator tahu.
-            if (! \Illuminate\Support\Facades\Artisan::has('boost:update')) {
+            if (! Artisan::has('boost:update')) {
                 $this->components->warn('laravel/boost package is not installed (composer require laravel/boost). Skipping boost:update.');
 
                 return true;
@@ -770,6 +782,95 @@ class InstallCommand extends Command
             }
 
             $this->runProcess(['php', 'artisan', 'boost:update', '--ansi'], failOnError: false);
+
+            return true;
+        });
+    }
+
+    /**
+     * Copy stubs/.github/workflows/deploy.yml into the application root.
+     * Operator must populate the GitHub repo secrets listed in the file footer.
+     */
+    protected function syncCiWorkflow(): void
+    {
+        if (! $this->option('with-ci')) {
+            return;
+        }
+
+        $this->components->task('Generating .github/workflows/deploy.yml', function (): bool {
+            $stub = __DIR__.'/../../stubs/.github/workflows/deploy.yml';
+            $target = base_path('.github/workflows/deploy.yml');
+
+            if (! is_file($stub)) {
+                $this->components->warn('CI workflow stub not found in package. Skipping.');
+
+                return true;
+            }
+
+            if (File::exists($target) && ! $this->option('force')) {
+                $this->components->warn('.github/workflows/deploy.yml already exists. Re-run with --force to overwrite.');
+
+                return true;
+            }
+
+            if ($this->option('dry')) {
+                $this->components->info("Would write {$target} from package stub.");
+
+                return true;
+            }
+
+            File::ensureDirectoryExists(dirname($target));
+            File::copy($stub, $target);
+
+            $this->components->info('Wrote .github/workflows/deploy.yml. Set required GitHub secrets (DEPLOY_SSH_PRIVATE_KEY, DEPLOY_SSH_HOST, DEPLOY_SSH_USER, ENV_ENVOY, ENV_PRODUCTION, ENV_STAGING).');
+
+            return true;
+        });
+    }
+
+    /**
+     * Install the package pre-commit hook at .git/hooks/pre-commit.
+     * Plain-bash, runs Pint on staged files + PHPStan on the project.
+     * Bypassable per-commit via SKIP_HOOK=1.
+     */
+    protected function installGitHooks(): void
+    {
+        if (! $this->option('with-hooks')) {
+            return;
+        }
+
+        $this->components->task('Installing git pre-commit hook', function (): bool {
+            $stub = __DIR__.'/../../stubs/git-hooks/pre-commit';
+            $target = base_path('.git/hooks/pre-commit');
+
+            if (! is_file($stub)) {
+                $this->components->warn('pre-commit stub not found in package. Skipping.');
+
+                return true;
+            }
+
+            if (! is_dir(base_path('.git'))) {
+                $this->components->warn('Project is not a git repository (.git missing). Skipping hook install.');
+
+                return true;
+            }
+
+            if (File::exists($target) && ! $this->option('force')) {
+                $this->components->warn('.git/hooks/pre-commit already exists. Re-run with --force to overwrite.');
+
+                return true;
+            }
+
+            if ($this->option('dry')) {
+                $this->components->info("Would write {$target} from package stub.");
+
+                return true;
+            }
+
+            File::copy($stub, $target);
+            chmod($target, 0o755);
+
+            $this->components->info('Wrote .git/hooks/pre-commit (Pint + PHPStan). Bypass per-commit with SKIP_HOOK=1 git commit ...');
 
             return true;
         });
@@ -806,7 +907,7 @@ class InstallCommand extends Command
             return;
         }
 
-        File::put($path, json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . PHP_EOL);
+        File::put($path, json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES).PHP_EOL);
     }
 
     protected function envoyBridgeContent(): string
@@ -817,7 +918,7 @@ class InstallCommand extends Command
 @servers(['vps' => ['{$sshHost}'], 'localhost' => '127.0.0.1'])
 
 @import('vendor/wireninja/accelerator/resources/envoy/Envoy.blade.php')
-BLADE . PHP_EOL;
+BLADE.PHP_EOL;
     }
 
     protected function envoyEnvContent(): string
@@ -884,12 +985,12 @@ OPS_DEPLOY_PROD_OCTANE_PORT={$octanePort}
 OPS_DEPLOY_PROD_REVERB_PORT={$reverbPort}
 OPS_DEPLOY_PROD_NIGHTWATCH_PORT={$nightwatchPort}
 OPS_DEPLOY_PROD_NIGHTWATCH_ENABLED=false
-ENV . PHP_EOL;
+ENV.PHP_EOL;
     }
 
     protected function runtimeEnvSeedContent(string $environment): string
     {
-        $source = File::exists(base_path('.env')) ? base_path('.env') : __DIR__ . '/../../.base-env.example';
+        $source = File::exists(base_path('.env')) ? base_path('.env') : __DIR__.'/../../.base-env.example';
         $content = File::get($source);
 
         $content = $this->stripOpsDeployKeys($content);
@@ -897,7 +998,7 @@ ENV . PHP_EOL;
 
         return str_replace(
             ['APP_ENV=local', 'APP_ENV=production', 'APP_DEBUG=true'],
-            ['APP_ENV=' . ($environment === 'production' ? 'production' : 'staging'), 'APP_ENV=' . ($environment === 'production' ? 'production' : 'staging'), 'APP_DEBUG=' . ($environment === 'production' ? 'false' : 'true')],
+            ['APP_ENV='.($environment === 'production' ? 'production' : 'staging'), 'APP_ENV='.($environment === 'production' ? 'production' : 'staging'), 'APP_DEBUG='.($environment === 'production' ? 'false' : 'true')],
             $content,
         );
     }
@@ -918,19 +1019,19 @@ ENV . PHP_EOL;
             [$key] = explode('=', $trimmed, 2);
             $key = trim($key);
             if (in_array($key, $this->sensitiveSeedKeys, true)) {
-                $lines[$i] = $key . '=';
+                $lines[$i] = $key.'=';
             }
         }
 
-        return rtrim(implode(PHP_EOL, $lines)) . PHP_EOL;
+        return rtrim(implode(PHP_EOL, $lines)).PHP_EOL;
     }
 
     protected function stripOpsDeployKeys(string $content): string
     {
         $lines = preg_split('/\R/', $content) ?: [];
-        $kept = array_filter($lines, fn(string $line): bool => ! str_starts_with(trim($line), 'OPS_DEPLOY_'));
+        $kept = array_filter($lines, fn (string $line): bool => ! str_starts_with(trim($line), 'OPS_DEPLOY_'));
 
-        return rtrim(implode(PHP_EOL, $kept)) . PHP_EOL;
+        return rtrim(implode(PHP_EOL, $kept)).PHP_EOL;
     }
 
     protected function ensureGitignoreEntries(array $entries): void
@@ -951,7 +1052,7 @@ ENV . PHP_EOL;
             return;
         }
 
-        File::put($path, rtrim(implode(PHP_EOL, $lines)) . PHP_EOL);
+        File::put($path, rtrim(implode(PHP_EOL, $lines)).PHP_EOL);
     }
 
     protected function writeFile(string $relativePath, string $content, bool $overwrite): void
@@ -1020,7 +1121,7 @@ ENV . PHP_EOL;
         }
 
         $this->components->task('Publishing internal configurations', function () use ($configsToPublish) {
-            $source = __DIR__ . '/../../stubs/config';
+            $source = __DIR__.'/../../stubs/config';
             $dest = base_path('config');
 
             if (! File::isDirectory($source)) {
@@ -1028,21 +1129,21 @@ ENV . PHP_EOL;
             }
 
             foreach ($configsToPublish as $configFile) {
-                $sourceFile = $source . '/' . $configFile;
+                $sourceFile = $source.'/'.$configFile;
 
                 if (! File::exists($sourceFile)) {
                     continue;
                 }
 
-                $targetFile = $dest . '/' . $configFile;
+                $targetFile = $dest.'/'.$configFile;
 
-                if (File::exists($targetFile) && ! $this->option('force') && ! in_array('config/' . $configFile, $this->allowedOverwrites)) {
+                if (File::exists($targetFile) && ! $this->option('force') && ! in_array('config/'.$configFile, $this->allowedOverwrites)) {
                     continue;
                 }
 
                 if ($this->option('dry')) {
                     $action = File::exists($targetFile) ? 'overwrite existing' : 'create new';
-                    $this->components->info("Would {$action} config file: config/" . $configFile);
+                    $this->components->info("Would {$action} config file: config/".$configFile);
 
                     continue;
                 }
