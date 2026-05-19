@@ -110,7 +110,7 @@ class ModelOutlineCommand extends Command
         $mergedContent = '';
 
         foreach ($models as $modelName) {
-            $modelClass = 'App\Models\\'.$modelName;
+            $modelClass = 'App\Models\\' . $modelName;
 
             if (! class_exists($modelClass)) {
                 continue;
@@ -127,7 +127,7 @@ class ModelOutlineCommand extends Command
             $content = $this->captureOutline($modelClass, $modelInstance, $reflection);
 
             if ($this->option('merge')) {
-                $mergedContent .= $content."\n\n".str_repeat('=', 80)."\n\n";
+                $mergedContent .= $content . "\n\n" . str_repeat('=', 80) . "\n\n";
             } else {
                 $this->saveOutline($modelClass, $content);
             }
@@ -164,27 +164,31 @@ class ModelOutlineCommand extends Command
         // Re-initialize components to use the buffered output
         $this->components = new Factory($newOutput);
 
-        $this->displayGeneralInfo($model);
-        $this->displayColumns($model);
-        $this->displayRelationships($model, $reflection);
-        $this->displayCasts($model);
-        $this->displayHidden($model);
+        try {
+            $this->displayGeneralInfo($model);
+            $this->displayColumns($model);
+            $this->displayRelationships($model, $reflection);
+            $this->displayCasts($model);
+            $this->displayHidden($model);
 
-        $content = $bufferedOutput->fetch();
-
-        // Restore original output and components
-        $this->output = $originalOutput;
-        $this->components = $originalComponents;
+            $content = $bufferedOutput->fetch();
+        } finally {
+            // Restore original output and components even if an exception bubbled up.
+            // Without try-finally, an exception inside displayColumns() etc would leak the
+            // BufferedOutput swap into the next interactive command.
+            $this->output = $originalOutput;
+            $this->components = $originalComponents;
+        }
 
         // Build the final clean output with a header
         $header = sprintf('Model: %s%s', $modelClass, PHP_EOL);
-        $header .= 'Table: '.$model->getTable()."\n";
-        $header .= str_repeat('-', 50)."\n\n";
+        $header .= 'Table: ' . $model->getTable() . "\n";
+        $header .= str_repeat('-', 50) . "\n\n";
 
         // Strip ANSI escape codes
         $cleanContent = preg_replace('#\x1b[[][^A-Za-z]*[A-Za-z]#', '', $content);
 
-        return $header.$cleanContent;
+        return $header . $cleanContent;
     }
 
     /**
@@ -197,7 +201,7 @@ class ModelOutlineCommand extends Command
             File::makeDirectory($dir, 0755, true);
         }
 
-        $filename = (str_contains($name, '\\') ? (new ReflectionClass($name))->getShortName() : $name).'.txt';
+        $filename = (str_contains($name, '\\') ? (new ReflectionClass($name))->getShortName() : $name) . '.txt';
         $path = sprintf('%s/%s', $dir, $filename);
 
         File::put($path, $content);
@@ -218,9 +222,9 @@ class ModelOutlineCommand extends Command
 
         return search(
             label: 'Which model would you like to outline?',
-            options: fn (string $value): array => array_filter(
+            options: fn(string $value): array => array_filter(
                 $models,
-                fn (string $model): bool => str_contains(strtolower($model), strtolower($value))
+                fn(string $model): bool => str_contains(strtolower($model), strtolower($value))
             ),
             placeholder: 'Search for a model...'
         );
@@ -238,7 +242,7 @@ class ModelOutlineCommand extends Command
         }
 
         return collect(File::allFiles($modelPath))
-            ->map(fn ($file): string => str_replace('.php', '', $file->getFilename()))
+            ->map(fn($file): string => str_replace('.php', '', $file->getFilename()))
             ->sort()
             ->values()
             ->toArray();
@@ -253,7 +257,7 @@ class ModelOutlineCommand extends Command
             return $model;
         }
 
-        return 'App\Models\\'.$model;
+        return 'App\Models\\' . $model;
     }
 
     /**

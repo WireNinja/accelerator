@@ -158,14 +158,4 @@ trait InteractsWithApplication
                 ->displayFormat('H:i');
         });
     }
-
-    // protected function bootOpenTelemetry(): void
-    // {
-    //     OpenTelemetry::user(fn (AcceleratedUser $user): array => [
-    //         'user.id' => $user->getAuthIdentifier(),
-    //         'user.email' => $user->email,
-    //         'user.name' => $user->name,
-    //         'user.role' => $user->getRoleNames()->implode(','),
-    //     ]);
-    // }
 }

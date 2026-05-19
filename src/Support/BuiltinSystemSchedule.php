@@ -20,17 +20,17 @@ final class BuiltinSystemSchedule
 
     public static function dbBackup(): Event
     {
-        return Schedule::command('backup:run --only-db')->dailyAt('01:00');
+        return Schedule::command('backup:run --only-db')->dailyAt('01:00')->withoutOverlapping();
     }
 
     public static function filesBackup(): Event
     {
-        return Schedule::command('backup:run --only-files')->dailyAt('02:00');
+        return Schedule::command('backup:run --only-files')->dailyAt('02:00')->withoutOverlapping();
     }
 
     public static function fullBackup(): Event
     {
-        return Schedule::command('backup:run')->dailyAt('03:00');
+        return Schedule::command('backup:run')->dailyAt('03:00')->withoutOverlapping();
     }
 
     public static function ticketNotifyOverdue(): Event
