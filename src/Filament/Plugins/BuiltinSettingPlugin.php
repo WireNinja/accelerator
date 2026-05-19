@@ -6,7 +6,7 @@ namespace WireNinja\Accelerator\Filament\Plugins;
 
 use Filament\Contracts\Plugin as FilamentPlugin;
 use Filament\Panel;
-use WireNinja\Accelerator\Filament\Pages\ManageAppSettings;
+use WireNinja\Accelerator\Filament\Pages\ManageSystemSettings;
 
 class BuiltinSettingPlugin implements FilamentPlugin
 {
@@ -31,7 +31,7 @@ class BuiltinSettingPlugin implements FilamentPlugin
     public function register(Panel $panel): void
     {
         $panel->pages([
-            ManageAppSettings::class,
+            ManageSystemSettings::class,
         ]);
     }
 

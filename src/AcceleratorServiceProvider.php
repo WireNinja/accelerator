@@ -24,13 +24,19 @@ use WireNinja\Accelerator\Console\NotifyOverdueTicketsCommand;
 use WireNinja\Accelerator\Console\Shield\SafeRegenerateCommand;
 use WireNinja\Accelerator\Console\Vps\BackupStatusCommand;
 use WireNinja\Accelerator\Livewire\Synthesizers\BigDecimalSynth;
+use WireNinja\Accelerator\Providers\Filament\SupportPanelProvider;
+use WireNinja\Accelerator\Providers\Filament\SystemPanelProvider;
 
 class AcceleratorServiceProvider extends ServiceProvider
 {
     use InteractsWithApplication;
 
     #[Override]
-    public function register(): void {}
+    public function register(): void
+    {
+        $this->app->register(SupportPanelProvider::class);
+        $this->app->register(SystemPanelProvider::class);
+    }
 
     public function boot(): void
     {

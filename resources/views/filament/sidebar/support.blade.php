@@ -1,7 +1,9 @@
 @php
 use \WireNinja\Accelerator\Constant\Profile;
+$supportEnabled = rescue(fn() => resolve(\WireNinja\Accelerator\Settings\SystemSettings::class)->support_enabled, true);
 @endphp
 
+@if($supportEnabled)
 <div>
     <x-filament::callout
         color="primary">
@@ -36,3 +38,4 @@ use \WireNinja\Accelerator\Constant\Profile;
         </x-slot>
     </x-filament::callout>
 </div>
+@endif

@@ -136,7 +136,7 @@ final class PanelPreset
             )
             ->renderHook(
                 PanelsRenderHook::SIDEBAR_NAV_START,
-                fn () => view('accelerator::partials.pwa.notice')
+                fn () => view('accelerator::filament.sidebar.notice')
             )
             ->renderHook(
                 PanelsRenderHook::SIDEBAR_NAV_END,

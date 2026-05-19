@@ -12,6 +12,7 @@ use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TimePicker;
+use Filament\Schemas\Components\Wizard\Step;
 use Filament\Support\Facades\FilamentTimezone;
 use Filament\Tables\Enums\PaginationMode;
 use Filament\Tables\Table;
@@ -110,7 +111,7 @@ trait InteractsWithApplication
     {
         FilamentTimezone::set(config('app.timezone'));
 
-        Table::configureUsing(function (Table $table): void {
+        Table::configureUsing(static function (Table $table): void {
             $table
                 ->defaultSort('id', 'desc')
                 ->deferLoading()
@@ -132,30 +133,34 @@ trait InteractsWithApplication
                 ->persistSortInSession(false);
         });
 
-        FileUpload::configureUsing(function (FileUpload $fileUpload): void {
+        FileUpload::configureUsing(static function (FileUpload $fileUpload): void {
             $fileUpload
                 ->imageEditor()
                 ->maxParallelUploads(5)
                 ->maxSize(100 * 1024 * 1024);
         });
 
-        Select::configureUsing(function (Select $select): void {
+        Select::configureUsing(static function (Select $select): void {
             $select
                 ->searchable()
                 ->preload()
                 ->native(false);
         });
 
-        DateTimePicker::configureUsing(function (DateTimePicker $dateTimePicker): void {
+        DateTimePicker::configureUsing(static function (DateTimePicker $dateTimePicker): void {
             $dateTimePicker
                 ->native(false)
                 ->displayFormat('j F Y H:i');
         });
 
-        TimePicker::configureUsing(function (TimePicker $timePicker): void {
+        TimePicker::configureUsing(static function (TimePicker $timePicker): void {
             $timePicker
                 ->native(false)
                 ->displayFormat('H:i');
+        });
+
+        Step::configureUsing(static function (Step $step) {
+            $step->completedIcon('lucide-thumbs-up');
         });
     }
 }

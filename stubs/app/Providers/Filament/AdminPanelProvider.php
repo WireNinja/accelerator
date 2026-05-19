@@ -2,11 +2,9 @@
 
 namespace App\Providers\Filament;
 
-use BezhanSalleh\FilamentShield\FilamentShieldPlugin;
 use Filament\Panel;
 use Filament\PanelProvider;
 use WireNinja\Accelerator\Filament\PanelPreset;
-use WireNinja\Accelerator\Filament\Plugins\BuiltinSettingPlugin;
 
 class AdminPanelProvider extends PanelProvider
 {
@@ -15,8 +13,7 @@ class AdminPanelProvider extends PanelProvider
         return PanelPreset::configure($panel, 'admin')
             ->default()
             ->plugins([
-                BuiltinSettingPlugin::make(),
-                FilamentShieldPlugin::make(),
+                //
             ]);
     }
 }
