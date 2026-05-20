@@ -20,14 +20,14 @@ class BackupStatusCommand extends Command
 
         if (! $isJson) {
             $this->info('📊 Fetching Spatie Backup List...');
-            // human mode pakai output verbose dari spatie sebagai konteks tambahan.
+            // Human mode uses verbose Spatie output as additional context.
             $this->call('backup:list');
         }
 
         try {
             $disk = Storage::disk($backupDisk);
-            // Spatie backup default tidak nested -> top-level files() cukup, hindari
-            // allFiles() yang traversal full tree (mahal kalau banyak retensi).
+            // Spatie backup is flat by default — top-level files() is sufficient, avoids
+            // allFiles() full tree traversal (expensive with large retention pools).
             $files = $disk->files($appName);
             $zipFiles = array_values(array_filter($files, static fn (string $f): bool => str_ends_with($f, '.zip')));
 

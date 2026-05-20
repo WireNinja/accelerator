@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use WireNinja\Accelerator\Http\Controllers\Auth\GoogleAuthController;
 use WireNinja\Accelerator\Http\Controllers\Insider\InsiderDashboardController;
+use WireNinja\Accelerator\Http\Controllers\Telemetry\TelemetryController;
 
 Route::middleware(['web'])->group(function () {
     Route::get('/auth/google', [GoogleAuthController::class, 'redirect'])->name('auth.google.redirect');
@@ -75,6 +76,15 @@ Route::middleware(['web'])->group(function () {
 
         Route::get('exception', function () {
             throw new RuntimeException('Test Exception');
+        });
+
+        // Telemetry dashboard (Super Admin only, same auth group as insider)
+        Route::prefix('telemetry')->name('accelerator.telemetry.')->group(function (): void {
+            Route::get('/', [TelemetryController::class, 'index'])->name('index');
+            Route::get('/logs', [TelemetryController::class, 'logs'])->name('logs');
+            Route::get('/{id}', [TelemetryController::class, 'show'])->name('show')->where('id', '[0-9]+');
+            Route::post('/{id}/resolve', [TelemetryController::class, 'resolve'])->name('resolve')->where('id', '[0-9]+');
+            Route::post('/{id}/reopen', [TelemetryController::class, 'reopen'])->name('reopen')->where('id', '[0-9]+');
         });
     });
 

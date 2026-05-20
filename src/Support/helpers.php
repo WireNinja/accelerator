@@ -46,12 +46,22 @@ if (! function_exists('accelerator_setting_migration_path')) {
     }
 }
 
+if (! function_exists('is_swoole_runtime')) {
+    /**
+     * Check if the current runtime is Swoole (Laravel Octane with Swoole server).
+     */
+    function is_swoole_runtime(): bool
+    {
+        return config('accelerator.runtime') === 'swoole';
+    }
+}
+
 if (! function_exists('is_octane_runtime')) {
     /**
-     * Check if the current runtime is Octane.
+     * @deprecated Use is_swoole_runtime() instead. This alias will be removed in v2.0.
      */
     function is_octane_runtime(): bool
     {
-        return config('accelerator.runtime') === 'swoole';
+        return is_swoole_runtime();
     }
 }

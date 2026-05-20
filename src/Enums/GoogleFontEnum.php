@@ -44,7 +44,7 @@ enum GoogleFontEnum: string implements HasDescription, HasLabel
 
     public function getLabel(): string
     {
-        // Menggunakan value agar spasi pada nama font tetap dipertahankan di UI
+        // Using value so that spaces in font names are preserved in the UI
         return $this->value;
     }
 

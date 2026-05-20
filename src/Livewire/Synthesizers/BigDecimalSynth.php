@@ -11,12 +11,12 @@ use Livewire\Mechanisms\HandleComponents\Synthesizers\Synth;
 final class BigDecimalSynth extends Synth
 {
     /**
-     * Key unik untuk mengidentifikasi tipe data ini di metadata Livewire (JSON).
+     * Unique key to identify this data type in Livewire metadata (JSON).
      */
     public static string $key = 'bigdecimal';
 
     /**
-     * Beritahu Livewire object apa yang ditangani synth ini.
+     * Tell Livewire which object this synth handles.
      */
     // @phpstan-ignore-next-line
     public static function match($target): bool
@@ -26,7 +26,7 @@ final class BigDecimalSynth extends Synth
 
     /**
      * SERVER -> BROWSER
-     * Mengubah BigDecimal menjadi format yang bisa dikirim ke JS (String).
+     * Convert BigDecimal to a format that can be sent to JS (String).
      *
      * @param  BigDecimal  $target
      * @param  mixed  $dehydrate
@@ -34,18 +34,18 @@ final class BigDecimalSynth extends Synth
     // @phpstan-ignore-next-line
     public function dehydrate($target, $dehydrate): array
     {
-        // Kita kirim sebagai string agar presisi tidak hilang di JavaScript
+        // Send as string so precision is not lost in JavaScript
         return [(string) $target->__toString(), []];
     }
 
     /**
      * BROWSER -> SERVER
-     * Mengubah input dari form (String/Number) kembali menjadi BigDecimal.
+     * Convert form input (String/Number) back to BigDecimal.
      */
     // @phpstan-ignore-next-line
     public function hydrate($value, $meta, $hydrate): ?BigDecimal
     {
-        // Handle jika input dikosongkan (empty string atau null)
+        // Handle empty input (empty string or null)
         if ($value === null || $value === '') {
             return null;
         }
@@ -53,11 +53,11 @@ final class BigDecimalSynth extends Synth
         try {
             $value = (string) $value;
 
-            // Ubah string dari browser kembali ke object BigDecimal
+            // Convert string from browser back to BigDecimal object
             return BigDecimal::of($value);
         } catch (MathException) {
-            // Jika user mengetik karakter aneh (misal: "abc"), return null.
-            // Biarkan Validation Rule Laravel (misal: 'numeric') yang menangani errornya nanti.
+            // If user types invalid characters (e.g. "abc"), return null.
+            // Let Laravel Validation Rules (e.g. 'numeric') handle the error.
             return null;
         }
     }

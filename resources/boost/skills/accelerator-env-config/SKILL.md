@@ -1,13 +1,13 @@
 ---
 name: accelerator-env-config
-description: Work with WireNinja Accelerator env files, config defaults, EnvReader, link-preload middleware, and Envoy deploy env without bypassing Laravel config.
+description: Work with WireNinja Accelerator env files, config defaults, EnvReader, link-preload middleware alias, and Envoy deploy env without bypassing Laravel config.
 ---
 
 # Accelerator Env And Config
 
 ## When To Use
 
-Adding or reviewing Accelerator config keys, `.env.example`, `.base-env.example`, `.env.envoy`, `accelerator:env`, ConditionalLinkPreload toggle, or any code that reads deployment/runtime settings.
+Adding or reviewing Accelerator config keys, `.env.example`, `.base-env.example`, `.env.envoy`, `accelerator:env`, link-preload middleware alias, or any code that reads deployment/runtime settings.
 
 ## Rules
 
@@ -39,16 +39,6 @@ return [
         'trust_local' => env('ACCELERATOR_TRUST_LOCAL_PROXY', true),
     ],
 
-    'middleware' => [
-        'link_preload' => [
-            // Master switch. False -> AddLinkHeadersForPreloadedAssets never appended.
-            'enabled' => env('ACCELERATOR_LINK_PRELOAD_ENABLED', true),
-
-            // Path patterns skipped even when enabled. Default skips Filament admin.
-            'skip_path_prefixes' => ['admin', 'admin/*'],
-        ],
-    ],
-
     'enums' => [
         'role' => RoleEnum::class,
         'resource' => ResourceEnum::class,
@@ -74,15 +64,17 @@ return [
 ];
 ```
 
-### Conditional Link Preload
+### Link Preload
 
-`AddLinkHeadersForPreloadedAssets` is wrapped by `WireNinja\Accelerator\Http\Middleware\ConditionalLinkPreload`:
+`AddLinkHeadersForPreloadedAssets` is available via the `link_preload` middleware alias. Apply it explicitly on route groups that serve Inertia/Vite assets. It is NOT applied globally — Filament admin uses Livewire wire-navigate and does not benefit from preload headers.
 
-- Skips Filament admin paths by default (`admin`, `admin/*`).
-- Globally toggleable via `ACCELERATOR_LINK_PRELOAD_ENABLED=false`.
-- The middleware reads `accelerator.middleware.link_preload.*` via `config()` — never via `env()` directly.
+Usage in `routes/web.php`:
 
-To override per-project, edit `config/accelerator.php` after publishing, or set the env key in `.env`.
+```php
+Route::middleware(['inertia', 'link_preload'])->group(function () {
+    // Inertia frontend routes
+});
+```
 
 ## EnvReader
 

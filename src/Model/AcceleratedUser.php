@@ -31,11 +31,9 @@ use WireNinja\Accelerator\Services\AcceleratedUserService;
  * @property int|null $suspended_by
  * @property string|null $suspension_reason
  * @property string|null $telegram_chat_id
- * @property bool $receives_product_price_telegram_notifications
  * @property array<string>|null $app_authentication_recovery_codes
  * @property string|null $app_authentication_secret
  * @property bool $has_email_authentication
- * @property CarbonImmutable|null $two_factor_confirmed_at
  */
 #[Table('users')]
 class AcceleratedUser extends Authenticatable implements FilamentUser, HasAppAuthentication, HasAppAuthenticationRecovery, HasAvatar, HasEmailAuthentication
@@ -52,9 +50,7 @@ class AcceleratedUser extends Authenticatable implements FilamentUser, HasAppAut
         return [
             'email_verified_at' => 'immutable_datetime',
             'has_email_authentication' => 'boolean',
-            'receives_product_price_telegram_notifications' => 'boolean',
             'suspended_at' => 'immutable_datetime',
-            'two_factor_confirmed_at' => 'immutable_datetime',
         ];
     }
 

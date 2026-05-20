@@ -188,20 +188,20 @@ final class PanelPreset
     /**
      * @DONOT-REMOVE setRenderHook helper
      *
-     * Internal development tool: ketika dipanggil dari `configure()` (uncomment baris
-     * `// self::setRenderHook($panel);`), method ini meng-overlay setiap render hook
-     * Filament (panel, table, widget) dengan kotak merah berisi nama hook. Berguna saat
-     * mendesain custom view / extension untuk tahu posisi hook tertentu.
+     * Internal development tool: when called from `configure()` (uncomment the
+     * `// self::setRenderHook($panel);` line), this method overlays every Filament
+     * render hook (panel, table, widget) with a red-bordered box showing the hook name.
+     * Useful when designing custom views/extensions to identify hook positions.
      *
-     * Sengaja TIDAK dipanggil di production. Jangan hapus, jangan jadikan public.
-     * Kalau next agent menghapus karena terlihat "dead code", developer akan kehilangan
-     * cara cepat memetakan render hooks tanpa baca dokumentasi Filament.
+     * Intentionally NOT called in production. Do not remove, do not make public.
+     * If a future agent deletes this as "dead code", the developer loses a fast way
+     * to map render hooks without reading Filament documentation.
      *
-     * Cara pakai:
-     *   - Uncomment `self::setRenderHook($panel);` di awal `configure()`.
-     *   - Buka panel admin di browser.
-     *   - Lihat label hook bertepi merah di setiap titik render.
-     *   - Setelah selesai, comment kembali baris pemanggilnya.
+     * Usage:
+     *   - Uncomment `self::setRenderHook($panel);` at the start of `configure()`.
+     *   - Open the admin panel in a browser.
+     *   - See red-bordered hook labels at every render point.
+     *   - When done, comment the line back.
      */
     private static function setRenderHook(Panel $panel)
     {

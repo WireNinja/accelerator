@@ -7,10 +7,10 @@ namespace WireNinja\Accelerator\Support;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Foundation\Http\Middleware\CheckForMaintenanceMode;
 use Illuminate\Foundation\Http\Middleware\PreventRequestsDuringMaintenance;
+use Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets;
 use Spatie\Permission\Middleware\PermissionMiddleware;
 use Spatie\Permission\Middleware\RoleMiddleware;
 use Spatie\Permission\Middleware\RoleOrPermissionMiddleware;
-use WireNinja\Accelerator\Http\Middleware\ConditionalLinkPreload;
 use WireNinja\Accelerator\Http\Middleware\HandleAppearance;
 use WireNinja\Accelerator\Http\Middleware\HandleInertiaRequests;
 
@@ -27,14 +27,14 @@ final class BuiltinMiddleware
 
         $middleware->web(append: [
             HandleAppearance::class,
-            HandleInertiaRequests::class,
-            ConditionalLinkPreload::class,
         ]);
 
         $middleware->alias([
             'role' => RoleMiddleware::class,
             'permission' => PermissionMiddleware::class,
             'role_or_permission' => RoleOrPermissionMiddleware::class,
+            'inertia' => HandleInertiaRequests::class,
+            'link_preload' => AddLinkHeadersForPreloadedAssets::class,
         ]);
     }
 }

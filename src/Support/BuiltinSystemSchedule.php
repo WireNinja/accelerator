@@ -13,9 +13,9 @@ final class BuiltinSystemSchedule
     {
         self::dbBackup();
         self::filesBackup();
-        self::fullBackup();
         self::ticketNotifyOverdue();
         self::snapshotHorizon();
+        self::telemetryPrune();
     }
 
     public static function dbBackup(): Event
@@ -28,11 +28,6 @@ final class BuiltinSystemSchedule
         return Schedule::command('backup:run --only-files')->dailyAt('02:00')->withoutOverlapping();
     }
 
-    public static function fullBackup(): Event
-    {
-        return Schedule::command('backup:run')->dailyAt('03:00')->withoutOverlapping();
-    }
-
     public static function ticketNotifyOverdue(): Event
     {
         return Schedule::command('ticket:notify-overdue')->hourly()->withoutOverlapping();
@@ -42,6 +37,13 @@ final class BuiltinSystemSchedule
     {
         return Schedule::command('horizon:snapshot')
             ->everyFiveMinutes()
+            ->withoutOverlapping();
+    }
+
+    public static function telemetryPrune(): Event
+    {
+        return Schedule::command('telemetry:prune')
+            ->dailyAt('04:00')
             ->withoutOverlapping();
     }
 }

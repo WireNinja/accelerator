@@ -24,13 +24,21 @@ use WireNinja\Accelerator\Console\NotifyOverdueTicketsCommand;
 use WireNinja\Accelerator\Console\Shield\SafeRegenerateCommand;
 use WireNinja\Accelerator\Console\Vps\BackupStatusCommand;
 use WireNinja\Accelerator\Livewire\Synthesizers\BigDecimalSynth;
+use WireNinja\Accelerator\Telemetry\TelemetryDatabase;
+use WireNinja\Accelerator\Telemetry\TelemetryFlusher;
+use WireNinja\Accelerator\Telemetry\TelemetryManager;
+use WireNinja\Accelerator\Telemetry\TelemetryNotifier;
+use WireNinja\Accelerator\Telemetry\TelemetryPruneCommand;
 
 class AcceleratorServiceProvider extends ServiceProvider
 {
     use InteractsWithApplication;
 
     #[Override]
-    public function register(): void {}
+    public function register(): void
+    {
+        $this->registerTelemetry();
+    }
 
     public function boot(): void
     {
@@ -67,6 +75,7 @@ class AcceleratorServiceProvider extends ServiceProvider
                 NotifyOverdueTicketsCommand::class,
                 BackupStatusCommand::class,
                 VerifyResourceCommand::class,
+                TelemetryPruneCommand::class,
             ]);
         }
 
@@ -76,6 +85,7 @@ class AcceleratorServiceProvider extends ServiceProvider
         $this->bootTelegramConfiguration();
         $this->bootShieldDestructiveCommands();
         $this->bootFilamentConfiguration();
+        $this->bootTelemetry();
     }
 
     private function trustLocalProxy(): void
@@ -90,6 +100,52 @@ class AcceleratorServiceProvider extends ServiceProvider
                 | Request::HEADER_X_FORWARDED_HOST
                 | Request::HEADER_X_FORWARDED_PORT
                 | Request::HEADER_X_FORWARDED_PROTO
+        );
+    }
+
+    /**
+     * Register telemetry singletons in the container.
+     */
+    private function registerTelemetry(): void
+    {
+        $this->app->singleton(TelemetryDatabase::class);
+        $this->app->singleton(TelemetryNotifier::class);
+
+        $this->app->singleton(TelemetryFlusher::class, function ($app) {
+            return new TelemetryFlusher(
+                $app->make(TelemetryDatabase::class),
+                $app->make(TelemetryNotifier::class),
+            );
+        });
+
+        $this->app->singleton(TelemetryManager::class, function ($app) {
+            return new TelemetryManager(
+                $app->make(TelemetryDatabase::class),
+                $app->make(TelemetryFlusher::class),
+            );
+        });
+    }
+
+    /**
+     * Boot the telemetry subsystem if runtime supports it.
+     *
+     * Registers the Swoole Timer for periodic flush and resets per-request state
+     * via Octane's RequestReceived event.
+     */
+    private function bootTelemetry(): void
+    {
+        if (! TelemetryManager::isSupported()) {
+            return;
+        }
+
+        /** @var TelemetryManager $manager */
+        $manager = $this->app->make(TelemetryManager::class);
+        $manager->boot();
+
+        // Reset per-request dedup state on each new Octane request.
+        $this->app['events']->listen(
+            \Laravel\Octane\Events\RequestReceived::class,
+            fn () => $manager->resetRequestState(),
         );
     }
 }

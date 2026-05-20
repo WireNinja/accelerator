@@ -26,7 +26,7 @@ class Lookup
     ) {}
 
     /**
-     * Entry point untuk memetik data berdasarkan field 'Get' tertentu.
+     * Entry point for plucking data based on a specific 'Get' field.
      */
     public static function pluck(Get $get, string $field): static
     {
@@ -34,7 +34,7 @@ class Lookup
     }
 
     /**
-     * Menentukan model yang akan diquery.
+     * Set the model to query.
      *
      * @param  class-string<Model>  $model
      */
@@ -46,7 +46,7 @@ class Lookup
     }
 
     /**
-     * Alias untuk method from().
+     * Alias for the from() method.
      *
      * @param  class-string<Model>  $model
      */
@@ -56,7 +56,7 @@ class Lookup
     }
 
     /**
-     * Menentukan kolom label untuk pluck.
+     * Set the label column for pluck.
      */
     public function label(string $label): static
     {
@@ -66,7 +66,7 @@ class Lookup
     }
 
     /**
-     * Menentukan kolom value/key untuk pluck.
+     * Set the value/key column for pluck.
      */
     public function value(string $value): static
     {
@@ -76,7 +76,7 @@ class Lookup
     }
 
     /**
-     * Menambahkan modifikasi query kustom.
+     * Add a custom query modifier.
      */
     public function modifyQuery(Closure $modifyQuery): static
     {
@@ -98,9 +98,9 @@ class Lookup
             return [];
         }
 
-        // TODO(deep-analysis): silent return [] saat model belum di-set bisa membingungkan user
-        // (dropdown tampak kosong tanpa pesan). Pertimbangkan throw RuntimeException kalau
-        // memang minta `model(null)` untuk fail-fast.
+        // TODO(deep-analysis): silent return [] when model is not set could confuse users
+        // (dropdown appears empty without a message). Consider throwing RuntimeException
+        // when model(null) is explicitly passed for fail-fast behavior.
         if ($this->model === null) {
             return [];
         }
@@ -111,9 +111,9 @@ class Lookup
             ($this->modifyQuery)($query);
         }
 
-        // Hardcoded 'id' adalah konvensi proyek: SEMUA model di project ini pakai `id` sebagai
-        // primary key. Bila ada kebutuhan non-`id`, refactor harus dimulai dari standardisasi
-        // primary key, bukan dari helper ini.
+        // Hardcoded 'id' is a project convention: ALL models use `id` as primary key.
+        // If a non-`id` key is ever needed, the refactor must start from standardizing
+        // primary keys, not from this helper.
         return $query->whereIn('id', (array) $ids)
             ->pluck($this->label, $this->value)
             ->toArray();

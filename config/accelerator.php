@@ -16,19 +16,6 @@ return [
         'trust_local' => env('ACCELERATOR_TRUST_LOCAL_PROXY', true),
     ],
 
-    'middleware' => [
-        'link_preload' => [
-            // Master switch: kalau false, AddLinkHeadersForPreloadedAssets tidak akan
-            // di-append sama sekali (hemat satu middleware untuk seluruh aplikasi).
-            'enabled' => env('ACCELERATOR_LINK_PRELOAD_ENABLED', true),
-
-            // Path prefix yang di-skip walaupun master switch on. Default: /admin/*
-            // Filament admin biasanya pakai Livewire wire-navigate dan tidak butuh
-            // preload header — append-nya cuma menambah noise.
-            'skip_path_prefixes' => ['admin', 'admin/*'],
-        ],
-    ],
-
     'enums' => [
         'role' => RoleEnum::class,
         'resource' => ResourceEnum::class,
@@ -50,5 +37,37 @@ return [
     'dev' => [
         'login_default' => env('DEV_LOGIN', null),
         'password_default' => env('DEV_PASSWORD', null),
+    ],
+
+    'telemetry' => [
+        'enabled' => env('ACCELERATOR_TELEMETRY_ENABLED', true),
+        'flush_interval' => env('ACCELERATOR_TELEMETRY_FLUSH_INTERVAL', 5),
+        'buffer_rows' => env('ACCELERATOR_TELEMETRY_BUFFER_ROWS', 128),
+        'buffer_bytes' => env('ACCELERATOR_TELEMETRY_BUFFER_BYTES', 65535),
+        'retention_days' => env('ACCELERATOR_TELEMETRY_RETENTION', 90),
+        'pruning_enabled' => env('ACCELERATOR_TELEMETRY_PRUNING', true),
+        'capture_guests' => env('ACCELERATOR_TELEMETRY_CAPTURE_GUESTS', false),
+        'sample_rate' => env('ACCELERATOR_TELEMETRY_SAMPLE_RATE', 100),
+        'notify' => [
+            'discord_webhook' => env('ACCELERATOR_TELEMETRY_DISCORD_WEBHOOK'),
+            'telegram_chat_id' => env('ACCELERATOR_TELEMETRY_TELEGRAM_CHAT'),
+        ],
+        'throttle_minutes' => env('ACCELERATOR_TELEMETRY_THROTTLE', 60),
+        'capture_headers' => true,
+        'capture_payload' => false,
+        'sensitive_params' => [
+            'password',
+            'password_confirmation',
+            'token',
+            'secret',
+            'credit_card',
+            'cvv',
+            'ssn',
+        ],
+        'sensitive_headers' => [
+            'Authorization',
+            'Cookie',
+            'X-CSRF-TOKEN',
+        ],
     ],
 ];

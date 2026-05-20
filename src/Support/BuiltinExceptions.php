@@ -14,6 +14,8 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Throwable;
 use WireNinja\Accelerator\Exceptions\BusinessException;
+use WireNinja\Accelerator\Telemetry\TelemetryManager;
+use WireNinja\Accelerator\Telemetry\TelemetryRecorder;
 
 final class BuiltinExceptions
 {
@@ -34,18 +36,63 @@ final class BuiltinExceptions
     public static function make(Exceptions $exceptions): void
     {
         // @DONOT-REMOVE dontReportWhen user() === null
-        // Bot trafik (crawler, vulnerability scanner, sniper) sering hit endpoint admin
-        // tanpa otentikasi dan men-trigger AuthenticationException + 404. Kalau direport
-        // ke APM (Nightwatch/Sentry/Bugsnag), cost ingestion melonjak dan signal-to-noise
-        // jelek. CLI tetap di-report karena scheduler/queue tidak punya `user()`.
-        // Pertimbangkan whitelist endpoint kritis (e.g. /webhook) di masa depan, BUKAN
-        // cabut policy ini.
+        //
+        // WHY THIS EXISTS:
+        // Unauthenticated traffic (crawlers, vulnerability scanners, path snipers, SEO bots,
+        // brute-force scripts) constantly hits admin/internal endpoints and triggers exceptions
+        // like AuthenticationException, NotFoundHttpException, MethodNotAllowedHttpException,
+        // ModelNotFoundException, and TokenMismatchException. These are NOT bugs — they are
+        // noise from actors that have no session, no CSRF token, and no legitimate business
+        // on authenticated surfaces.
+        //
+        // If reported to APM (Nightwatch/Sentry/Bugsnag), these inflate ingestion cost with
+        // zero signal-to-noise value. On a single VPS hosting multiple projects, this cost
+        // compounds quickly.
+        //
+        // SCOPE:
+        // - Suppresses ALL exception reporting when the request has no authenticated user.
+        // - CLI/console processes are NEVER suppressed (scheduler, queue workers, commands).
+        // - This is intentional and aggressive by design. The tradeoff is: if a genuine
+        //   guest-facing bug occurs (e.g. a public page 500s), it won't reach APM.
+        //
+        // WHY NOT SURGICAL FILTERING:
+        // Surgical filtering (e.g. suppress only 404/401/419) still leaks scanner noise for
+        // any exception type the scanner manages to trigger (QueryException from SQL injection
+        // attempts, ViewException from path traversal, etc). Every new exception type that
+        // leaks requires a new suppression rule — an infinite maintenance burden. The blanket
+        // approach guarantees zero bot noise regardless of what exceptions they trigger.
+        //
+        // ACCEPTABLE RISK:
+        // All authenticated surfaces (admin panel, API with auth middleware) still report
+        // normally. Public-facing surfaces in this architecture are minimal (login page,
+        // OAuth callback, PWA assets) and are validated through deployment health checks
+        // and uptime monitoring, not exception APM.
+        //
+        // If a project adds significant public guest-facing features (e-commerce storefront,
+        // public API), override this in the application's exception handler to narrow the
+        // suppression scope for those specific routes.
         $exceptions->dontReportWhen(function () {
             if (app()->runningInConsole()) {
                 return false;
             }
 
             return user() === null;
+        });
+
+        // Telemetry: capture every exception into the Swoole Table buffer.
+        // This fires independently of dontReportWhen — telemetry has its own
+        // capture_guests config and sample_rate. The capture is a memory-only
+        // Swoole Table write with zero disk I/O.
+        $exceptions->report(function (Throwable $exception) {
+            if (! TelemetryManager::isSupported()) {
+                return false; // Let default reporting continue.
+            }
+
+            $request = rescue(fn () => request(), null, false);
+
+            TelemetryRecorder::capture($exception, $request);
+
+            return false; // Do not stop default reporting chain.
         });
 
         $exceptions->render(function (BusinessException $exception, Request $request): Response {

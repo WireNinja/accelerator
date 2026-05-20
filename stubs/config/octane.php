@@ -164,6 +164,10 @@ return [
             'payload' => 'string:'.max(1024, (int) env('SESSION_OCTANE_TABLE_BYTES', 65535)),
             'last_activity' => 'int',
         ],
+
+        // Telemetry exception buffer — captures exceptions in shared memory
+        // and flushes to SQLite every N seconds. Zero request latency impact.
+        ...\WireNinja\Accelerator\Telemetry\TelemetryManager::octaneTableConfig(),
     ],
 
     /*

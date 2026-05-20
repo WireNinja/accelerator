@@ -21,9 +21,9 @@ class BigDecimalCast implements CastsAttributes
     private readonly RoundingMode $roundingMode;
 
     /**
-     * Constructor menerima parameter dari definisi cast di Model.
-     * Contoh: BigDecimalCast::class . ':2,DOWN'
-     * Laravel akan mengirim parameter sebagai string.
+     * Constructor accepts parameters from the cast definition in the Model.
+     * Example: BigDecimalCast::class . ':2,DOWN'
+     * Laravel passes parameters as strings.
      */
     public function __construct(
         string|int|null $scale = null,
@@ -34,14 +34,14 @@ class BigDecimalCast implements CastsAttributes
     }
 
     /**
-     * Helper static untuk mempermudah penulisan di Model.
-     * Penggunaan: BigDecimalCast::scale(2, RoundingMode::DOWN)
+     * Static helper for convenient usage in Model cast definitions.
+     * Usage: BigDecimalCast::scale(2, RoundingMode::DOWN)
      */
     public static function scale(int $scale, RoundingMode $roundingMode = RoundingMode::HalfUp): string
     {
         if ($scale < 0) {
             throw new InvalidArgumentException(sprintf(
-                'BigDecimalCast scale harus >= 0, diterima [%d].',
+                'BigDecimalCast scale must be >= 0, received [%d].',
                 $scale,
             ));
         }
@@ -55,14 +55,14 @@ class BigDecimalCast implements CastsAttributes
             return null;
         }
 
-        // Tidak boleh silent fail. Jika data di DB korup, kita HARUS tahu —
-        // mengembalikan zero diam-diam = data keuangan corrupt tanpa jejak.
+        // Must not silent fail. If DB data is corrupt, we MUST know —
+        // returning zero silently = financial data corruption without a trace.
         try {
             $bigDecimal = BigDecimal::of(self::stringify($value));
         } catch (MathException $exception) {
             throw new InvalidArgumentException(
                 sprintf(
-                    'Nilai kolom [%s] pada model [%s] tidak bisa di-cast ke BigDecimal: %s',
+                    'Column [%s] value on model [%s] cannot be cast to BigDecimal: %s',
                     $key,
                     $model::class,
                     $exception->getMessage(),
@@ -79,7 +79,7 @@ class BigDecimalCast implements CastsAttributes
     }
 
     /**
-     * Mengubah object BigDecimal (atau angka biasa) menjadi string untuk disimpan ke Database.
+     * Convert BigDecimal (or plain number) to string for database storage.
      *
      * @param  array<string, mixed>  $attributes
      */
@@ -94,18 +94,18 @@ class BigDecimalCast implements CastsAttributes
                 ? $value
                 : BigDecimal::of(self::stringify($value));
 
-            // Terapkan scaling SEBELUM masuk database supaya data di DB sesuai dengan
-            // aturan bisnis (misal: max 2 desimal).
+            // Apply scaling BEFORE persisting to database so stored data matches
+            // business rules (e.g. max 2 decimal places).
             if ($this->scale !== null) {
                 $bigDecimal = $bigDecimal->toScale($this->scale, $this->roundingMode);
             }
 
-            // Kembalikan sebagai string agar presisi terjaga di kolom DECIMAL database.
+            // Return as string to preserve precision in DECIMAL database columns.
             return (string) $bigDecimal;
         } catch (MathException $exception) {
             throw new InvalidArgumentException(
                 sprintf(
-                    'Nilai untuk attribute [%s] harus numeric atau BigDecimal: %s',
+                    'Value for attribute [%s] must be numeric or BigDecimal: %s',
                     $key,
                     $exception->getMessage(),
                 ),
@@ -124,7 +124,7 @@ class BigDecimalCast implements CastsAttributes
 
         if ($resolved < 0) {
             throw new InvalidArgumentException(sprintf(
-                'BigDecimalCast scale harus >= 0, diterima [%s].',
+                'BigDecimalCast scale must be >= 0, received [%s].',
                 (string) $scale,
             ));
         }
@@ -133,10 +133,10 @@ class BigDecimalCast implements CastsAttributes
     }
 
     /**
-     * Konversi string -> RoundingMode unit enum.
+     * Convert string -> RoundingMode unit enum.
      *
-     * Fail loud kalau definisi cast salah ketik. Sebelumnya pakai rescue() ke HalfUp,
-     * tapi itu menyembunyikan bug konfigurasi keuangan yang sangat fatal.
+     * Fails loud on typos in cast definitions. Previously used rescue() to HalfUp,
+     * but that hides critical financial configuration bugs.
      */
     private static function resolveRoundingMode(string|RoundingMode $roundingMode): RoundingMode
     {
@@ -155,7 +155,7 @@ class BigDecimalCast implements CastsAttributes
 
         if (! array_key_exists($normalized, $lookup)) {
             throw new InvalidArgumentException(sprintf(
-                'RoundingMode "%s" tidak valid. Pilihan yang tersedia: %s.',
+                'RoundingMode "%s" is not valid. Available options: %s.',
                 $roundingMode,
                 implode(', ', array_column($cases, 'name')),
             ));
@@ -165,11 +165,11 @@ class BigDecimalCast implements CastsAttributes
     }
 
     /**
-     * Konversi nilai mixed -> string yang aman di-feed ke BigDecimal::of().
+     * Convert mixed value -> string safe for BigDecimal::of().
      *
-     * Boundary cast eksternal (DB driver string|int|float|object) ke string. Ini salah
-     * satu tempat di mana cast manual masih sah karena memang boundary, BUKAN flow
-     * domain. Untuk flow domain pakai TypeCaster.
+     * Boundary cast from external sources (DB driver string|int|float|object) to string.
+     * This is one of the places where manual casting is valid because it IS a boundary,
+     * NOT domain flow. For domain flow use TypeCaster.
      */
     private static function stringify(mixed $value): string
     {
@@ -186,7 +186,7 @@ class BigDecimalCast implements CastsAttributes
         }
 
         throw new InvalidArgumentException(sprintf(
-            'BigDecimalCast tidak bisa stringify nilai bertipe [%s].',
+            'BigDecimalCast cannot stringify value of type [%s].',
             get_debug_type($value),
         ));
     }

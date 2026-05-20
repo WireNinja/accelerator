@@ -14,7 +14,7 @@ Use this skill when working with Eloquent models, relationships, casts, model do
 Prefer Accelerator inspection commands before manual drilling:
 
 ```bash
-php artisan accelerator:generate-model-outline
+php artisan accelerator:model-outline
 php artisan accelerator:model-audit
 php artisan accelerator:model-doc
 php artisan agent:model-context
