@@ -14,6 +14,7 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TimePicker;
 use Filament\Schemas\Components\Wizard\Step;
 use Filament\Support\Facades\FilamentTimezone;
+use Filament\Tables\Enums\FiltersLayout;
 use Filament\Tables\Enums\PaginationMode;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Model;
@@ -60,20 +61,20 @@ trait InteractsWithApplication
         );
 
         Password::defaults(
-            fn (): ?Password => app()->isProduction()
+            fn(): ?Password => app()->isProduction()
                 ? Password::min(12)
-                    ->mixedCase()
-                    ->letters()
-                    ->numbers()
-                    ->symbols()
-                    ->uncompromised()
+                ->mixedCase()
+                ->letters()
+                ->numbers()
+                ->symbols()
+                ->uncompromised()
                 : null,
         );
     }
 
     protected function bootTelegramConfiguration(): void
     {
-        rescue(fn (): bool => resolve(TelegramBotConfigurator::class)->syncConfig());
+        rescue(fn(): bool => resolve(TelegramBotConfigurator::class)->syncConfig());
     }
 
     /**
@@ -89,7 +90,7 @@ trait InteractsWithApplication
             return;
         }
 
-        Session::extend('octane-table', fn (Application $application): SessionHandlerInterface => new OctaneTableSessionHandler(
+        Session::extend('octane-table', fn(Application $application): SessionHandlerInterface => new OctaneTableSessionHandler(
             minutes: (int) $application['config']->get('session.lifetime'),
             tableName: (string) $application['config']->get('session.octane_table', 'sessions'),
         ));
@@ -123,6 +124,7 @@ trait InteractsWithApplication
                 ->paginationMode(PaginationMode::Cursor)
                 ->defaultNumberLocale('id-ID')
                 ->striped()
+                ->filtersLayout(FiltersLayout::AfterContent)
                 ->emptyStateIcon('lucide-database')
                 ->emptyStateHeading('Belum ada data')
                 ->emptyStateDescription('Anda bisa menambahkan data baru dengan mengklik tombol "Tambah" di pojok kanan atas')
