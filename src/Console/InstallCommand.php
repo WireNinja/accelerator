@@ -155,6 +155,7 @@ class InstallCommand extends Command
             ],
             'configs' => [
                 'app.php',
+                'audit.php',
                 'auth.php',
                 'cache.php',
                 'database.php',

@@ -22,15 +22,14 @@ Use this skill when adding or reviewing activity logging for an Accelerator Lara
 
 Core files:
 
-- `config/audit.php`: per-model audit config.
-- `app/Models/Concerns/HasConfiguredActivity.php`: for `User`-like models that are both subject and causer.
-- `app/Models/Concerns/LogsConfiguredActivity.php`: for normal Eloquent models and custom pivot models.
-- `app/Support/ActivityLog/RelationshipActivityLogger.php`: relationship snapshot/diff logging.
-- `app/Filament/Concerns/LogsResourceRelationshipActivity.php`: Filament create/edit lifecycle hook integration.
-- `app/Filament/RelationManagers/ActivitiesRelationManager.php`: reusable read-only activity relation manager.
-- `app/Filament/RelationManagers/AuditRelationGroup.php`: reusable audit relation group wrapper. Pass relation managers into `AuditRelationGroup::make([...])` so resources stay consistent and relation badges are deferred by default.
-- `app/Policies/ActivityPolicy.php`: policy for `Spatie\Activitylog\Models\Activity`. Strict Filament authorization requires at least `viewAny()` and `view()` because the activity relation manager checks related model access.
-- `app/Providers/AppServiceProvider.php`: manually registers `Gate::policy(Activity::class, ActivityPolicy::class)` for the vendor model.
+- `config/audit.php`: per-model audit config published by the `app-config` installer component.
+- `WireNinja\Accelerator\Model\Concerns\HasConfiguredActivity`: for `User`-like models that are both subject and causer.
+- `WireNinja\Accelerator\Model\Concerns\LogsConfiguredActivity`: for normal Eloquent models and custom pivot models.
+- `WireNinja\Accelerator\Support\ActivityLog\RelationshipActivityLogger`: relationship snapshot/diff logging.
+- `WireNinja\Accelerator\Filament\Concerns\LogsResourceRelationshipActivity`: Filament create/edit lifecycle hook integration.
+- `WireNinja\Accelerator\Filament\RelationManagers\ActivitiesRelationManager`: reusable read-only activity relation manager.
+- `WireNinja\Accelerator\Filament\RelationManagers\AuditRelationGroup`: reusable audit relation group wrapper. Pass relation managers into `AuditRelationGroup::make([...])` so resources stay consistent and relation badges are deferred by default.
+- `WireNinja\Accelerator\Policies\ActivityPolicy`: built-in policy for `Spatie\Activitylog\Models\Activity`. Accelerator registers it when no app policy exists, so strict Filament authorization works out of the box.
 
 ## Add Activity Logging To A Model
 
@@ -39,21 +38,20 @@ Core files:
    - `attributes`: explicit allow-list of columns and direct related attributes using dot notation.
    - `relationships`: optional snapshot declarations like `'roles' => 'roles.name'`.
 2. Add the right trait to the model:
-   - `HasConfiguredActivity` for `App\Models\User`.
-   - `LogsConfiguredActivity` for ordinary models.
-   - `LogsConfiguredActivity` for custom pivot models only when the pivot table has an `id` primary key and the pivot model has `$incrementing = true`.
+   - `WireNinja\Accelerator\Model\Concerns\HasConfiguredActivity` for `App\Models\User`.
+   - `WireNinja\Accelerator\Model\Concerns\LogsConfiguredActivity` for ordinary models.
+   - `WireNinja\Accelerator\Model\Concerns\LogsConfiguredActivity` for custom pivot models only when the pivot table has an `id` primary key and the pivot model has `$incrementing = true`.
 3. Never use `logAll()` for business models unless the user explicitly accepts the sensitive/noisy blast radius.
 
 ## Add Activity Logging To A Filament Resource
 
 1. Ensure the model has an `activities()` relation from `HasConfiguredActivity` or `LogsConfiguredActivity`.
-2. Ensure `Spatie\Activitylog\Models\Activity` has a registered `ActivityPolicy` with `viewAny()` and `view()` before adding the relation manager. Do not rely on non-strict fallback behavior.
-3. Add the audit relation group to the resource `getRelations()` array:
+2. Add the audit relation group to the resource `getRelations()` array:
 
 ```php
-use App\Filament\RelationManagers\ActivitiesRelationManager;
-use App\Filament\RelationManagers\AuditRelationGroup;
 use Filament\Resources\RelationManagers\RelationGroup;
+use WireNinja\Accelerator\Filament\RelationManagers\ActivitiesRelationManager;
+use WireNinja\Accelerator\Filament\RelationManagers\AuditRelationGroup;
 
 /**
  * @return array<int, RelationGroup>
@@ -68,10 +66,12 @@ public static function getRelations(): array
 }
 ```
 
-4. Add `LogsResourceRelationshipActivity` to the Create and Edit resource pages if the resource form saves relationships declared in `config/audit.php`.
-5. For custom table/header actions that manually call `sync()`, `attach()`, `detach()`, or similar relationship writes, wrap the action:
+3. Add `LogsResourceRelationshipActivity` to the Create and Edit resource pages if the resource form saves relationships declared in `config/audit.php`.
+4. For custom table/header actions that manually call `sync()`, `attach()`, `detach()`, or similar relationship writes, wrap the action:
 
 ```php
+use WireNinja\Accelerator\Support\ActivityLog\RelationshipActivityLogger;
+
 $activityLogger = resolve(RelationshipActivityLogger::class);
 $relationshipSnapshot = $activityLogger->snapshot($record);
 
@@ -80,7 +80,7 @@ $relationshipSnapshot = $activityLogger->snapshot($record);
 $activityLogger->logIfChanged($record, $relationshipSnapshot);
 ```
 
-6. Keep activity relation managers read-only. Do not add create/edit/delete actions for activity rows.
+5. Keep activity relation managers read-only. Do not add create/edit/delete actions for activity rows.
 
 ## Verification
 

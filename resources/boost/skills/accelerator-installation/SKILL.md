@@ -101,7 +101,7 @@ Configs (`config/*.php`) are scoped to selected components — installing only `
 | reverb | broadcasting.php, reverb.php |
 | filament-core | filament.php, filament-shield.php, fortify.php, permission.php, livewire.php, media-library.php, query-builder.php |
 | octane | octane.php |
-| app-config | app.php, auth.php, cache.php, database.php, filesystems.php, logging.php, mail.php, queue.php, services.php, session.php, settings.php, activitylog.php, backup.php, **backup_predeploy.php**, blade-icons.php, horizon.php, pennant.php, scout.php, webpush.php, laravel-pdf.php |
+| app-config | app.php, **audit.php**, auth.php, cache.php, database.php, filesystems.php, logging.php, mail.php, queue.php, services.php, session.php, settings.php, activitylog.php, backup.php, **backup_predeploy.php**, blade-icons.php, horizon.php, pennant.php, scout.php, webpush.php, laravel-pdf.php |
 | frontend-core | inertia.php |
 | localization | (none) |
 

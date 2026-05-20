@@ -7,9 +7,11 @@ use Filament\Support\Assets\Js;
 use Filament\Support\Facades\FilamentAsset;
 use Illuminate\Http\Middleware\TrustProxies;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 use Livewire\Livewire;
 use Override;
+use Spatie\Activitylog\Models\Activity;
 use WireNinja\Accelerator\Concerns\InteractsWithApplication;
 use WireNinja\Accelerator\Console\Agent\AuditCommand;
 use WireNinja\Accelerator\Console\Agent\ModelContextCommand;
@@ -24,6 +26,7 @@ use WireNinja\Accelerator\Console\NotifyOverdueTicketsCommand;
 use WireNinja\Accelerator\Console\Shield\SafeRegenerateCommand;
 use WireNinja\Accelerator\Console\Vps\BackupStatusCommand;
 use WireNinja\Accelerator\Livewire\Synthesizers\BigDecimalSynth;
+use WireNinja\Accelerator\Policies\ActivityPolicy;
 use WireNinja\Accelerator\Providers\Filament\SupportPanelProvider;
 use WireNinja\Accelerator\Providers\Filament\SystemPanelProvider;
 
@@ -44,7 +47,9 @@ class AcceleratorServiceProvider extends ServiceProvider
         $this->loadRoutesFrom(__DIR__.'/../routes/web.php');
         $this->loadViewsFrom(__DIR__.'/../resources/views', 'accelerator');
         $this->mergeConfigFrom(__DIR__.'/../config/accelerator.php', 'accelerator');
+        $this->mergeConfigFrom(__DIR__.'/../config/audit.php', 'audit');
         $this->trustLocalProxy();
+        $this->registerActivityPolicy();
 
         FilamentAsset::register([
             Js::make('iconify', 'https://cdn.jsdelivr.net/npm/iconify-icon@2')->loadedOnRequest(),
@@ -82,6 +87,15 @@ class AcceleratorServiceProvider extends ServiceProvider
         $this->bootTelegramConfiguration();
         $this->bootShieldDestructiveCommands();
         $this->bootFilamentConfiguration();
+    }
+
+    private function registerActivityPolicy(): void
+    {
+        if (Gate::getPolicyFor(Activity::class) !== null) {
+            return;
+        }
+
+        Gate::policy(Activity::class, ActivityPolicy::class);
     }
 
     private function trustLocalProxy(): void
