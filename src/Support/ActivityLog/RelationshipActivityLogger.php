@@ -14,7 +14,7 @@ class RelationshipActivityLogger
      */
     public function snapshot(Model $model): array
     {
-        return collect($this->relationshipConfig($model))
+        return collect(AuditConfig::relationships($model))
             ->mapWithKeys(fn (string $path, string $key): array => [$key => $this->snapshotRelationship($model, $path)])
             ->all();
     }
@@ -24,7 +24,7 @@ class RelationshipActivityLogger
      */
     public function emptySnapshot(Model $model): array
     {
-        return collect($this->relationshipConfig($model))
+        return collect(AuditConfig::relationships($model))
             ->mapWithKeys(fn (string $path, string $key): array => [$key => []])
             ->all();
     }
@@ -40,7 +40,7 @@ class RelationshipActivityLogger
             return;
         }
 
-        activity($this->logName($model))
+        activity(AuditConfig::logName($model))
             ->performedOn($model)
             ->causedBy(mustUser())
             ->event('relationships_updated')
@@ -49,18 +49,6 @@ class RelationshipActivityLogger
                 'old' => $old,
             ])
             ->log($description ?? 'Relasi data diperbarui');
-    }
-
-    /**
-     * @return array<string, string>
-     */
-    private function relationshipConfig(Model $model): array
-    {
-        $relationships = config('audit.models.'.get_class($model).'.relationships', []);
-
-        return is_array($relationships)
-            ? array_filter($relationships, is_string(...))
-            : [];
     }
 
     /**
@@ -83,14 +71,5 @@ class RelationshipActivityLogger
             ])
             ->sortKeys()
             ->all();
-    }
-
-    private function logName(Model $model): string
-    {
-        $logName = config('audit.models.'.get_class($model).'.log_name');
-
-        return is_string($logName)
-            ? $logName
-            : str($model->getTable())->singular()->snake()->toString();
     }
 }

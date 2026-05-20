@@ -47,7 +47,6 @@ class AcceleratorServiceProvider extends ServiceProvider
         $this->loadRoutesFrom(__DIR__.'/../routes/web.php');
         $this->loadViewsFrom(__DIR__.'/../resources/views', 'accelerator');
         $this->mergeConfigFrom(__DIR__.'/../config/accelerator.php', 'accelerator');
-        $this->mergeConfigFrom(__DIR__.'/../config/audit.php', 'audit');
         $this->trustLocalProxy();
         $this->registerActivityPolicy();
 

@@ -14,6 +14,8 @@ Use this skill when adding or reviewing activity logging for an Accelerator Lara
   - `Spatie\Activitylog\Models\Concerns\LogsActivity`
   - `Spatie\Activitylog\Support\LogOptions`
 - Do not copy `getActivitylogOptions()` into every model. Use the configured traits and `config/audit.php`.
+- `config/audit.php` is a userland published config. Accelerator ships the publish stub through `app-config`; do not merge `audit` config from the package service provider.
+- Audit metadata is cached per Octane worker by `WireNinja\Accelerator\Support\ActivityLog\AuditConfig`. If a test or tinker session mutates `config('audit.*')` at runtime, call `AuditConfig::flush()` before asserting behavior.
 - Do not log sensitive attributes. Keep secrets in `config('audit.default_except')`.
 - Relationship changes are not automatically captured by normal model events. Use the resource page trait or explicit `RelationshipActivityLogger` around custom actions that sync relationships.
 - Filament discovery uses only `DiscoverAsResource` on the resource class. Do not add companion discovery attributes to pages, relation managers, forms, tables, or widgets.
@@ -23,6 +25,7 @@ Use this skill when adding or reviewing activity logging for an Accelerator Lara
 Core files:
 
 - `config/audit.php`: per-model audit config published by the `app-config` installer component.
+- `WireNinja\Accelerator\Support\ActivityLog\AuditConfig`: static in-memory resolver for normalized audit config. It caches per-model metadata and default exclusions for Octane-friendly reads.
 - `WireNinja\Accelerator\Model\Concerns\HasConfiguredActivity`: for `User`-like models that are both subject and causer.
 - `WireNinja\Accelerator\Model\Concerns\LogsConfiguredActivity`: for normal Eloquent models and custom pivot models.
 - `WireNinja\Accelerator\Support\ActivityLog\RelationshipActivityLogger`: relationship snapshot/diff logging.
