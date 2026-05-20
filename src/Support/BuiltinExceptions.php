@@ -14,6 +14,8 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Throwable;
 use WireNinja\Accelerator\Exceptions\BusinessException;
+use WireNinja\Accelerator\Telemetry\TelemetryManager;
+use WireNinja\Accelerator\Telemetry\TelemetryRecorder;
 
 final class BuiltinExceptions
 {
@@ -75,6 +77,22 @@ final class BuiltinExceptions
             }
 
             return user() === null;
+        });
+
+        // Telemetry: capture every exception into the Swoole Table buffer.
+        // This fires independently of dontReportWhen — telemetry has its own
+        // capture_guests config and sample_rate. The capture is a memory-only
+        // Swoole Table write with zero disk I/O.
+        $exceptions->report(function (Throwable $exception) {
+            if (! TelemetryManager::isSupported()) {
+                return false; // Let default reporting continue.
+            }
+
+            $request = rescue(fn () => request(), null, false);
+
+            TelemetryRecorder::capture($exception, $request);
+
+            return false; // Do not stop default reporting chain.
         });
 
         $exceptions->render(function (BusinessException $exception, Request $request): Response {
