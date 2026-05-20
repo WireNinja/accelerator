@@ -3,98 +3,74 @@
 @section('title', class_basename($group['class']))
 
 @section('content')
-<div class="flex flex-between mb-16">
-    <div>
-        <a href="{{ route('accelerator.telemetry.index') }}">← Back to groups</a>
+<div class="flex flex-col gap-4">
+    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div class="min-w-0">
+            <a href="{{ route('accelerator.telemetry.index') }}" class="text-sm font-medium text-zinc-600 hover:text-zinc-950">Back to groups</a>
+            <div class="mt-2 flex flex-wrap items-center gap-2">
+                <x-accelerator::telemetry.status-badge :status="$group['status']" />
+                <h2 class="truncate text-lg font-semibold text-zinc-950">{{ class_basename($group['class']) }}</h2>
+            </div>
+            <p class="mt-1 truncate font-mono text-xs text-zinc-500">{{ $group['class'] }}</p>
+        </div>
+
+        <x-accelerator::telemetry.group-actions :group="$group" />
     </div>
-    <div class="flex gap-8">
-        @if($group['status'] === 'open')
-            <form method="POST" action="{{ route('accelerator.telemetry.resolve', $group['id']) }}">
-                @csrf
-                <button type="submit" class="btn btn-sm btn-success">Mark Resolved</button>
-            </form>
-        @else
-            <form method="POST" action="{{ route('accelerator.telemetry.reopen', $group['id']) }}">
-                @csrf
-                <button type="submit" class="btn btn-sm btn-danger">Reopen</button>
-            </form>
-        @endif
+
+    <section class="rounded-lg border border-zinc-200 bg-white p-4">
+        <dl class="grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-5">
+            <div class="lg:col-span-2">
+                <dt class="text-xs font-semibold uppercase text-zinc-500">Location</dt>
+                <dd class="mt-1 break-words font-mono text-xs text-zinc-900">{{ str_replace(base_path().'/', '', $group['file']) }}:{{ $group['line'] }}</dd>
+            </div>
+            <div>
+                <dt class="text-xs font-semibold uppercase text-zinc-500">Occurrences</dt>
+                <dd class="mt-1 font-mono text-sm font-semibold text-zinc-900">{{ number_format($group['occurrence_count']) }}</dd>
+            </div>
+            <div>
+                <dt class="text-xs font-semibold uppercase text-zinc-500">First Seen</dt>
+                <dd class="mt-1 font-mono text-xs text-zinc-700">{{ $group['first_seen_at'] }}</dd>
+            </div>
+            <div>
+                <dt class="text-xs font-semibold uppercase text-zinc-500">Last Seen</dt>
+                <dd class="mt-1 font-mono text-xs text-zinc-700">{{ $group['last_seen_at'] }}</dd>
+            </div>
+            <div class="sm:col-span-2 lg:col-span-5">
+                <dt class="text-xs font-semibold uppercase text-zinc-500">Fingerprint</dt>
+                <dd class="mt-1 break-all font-mono text-xs text-zinc-500">{{ $group['fingerprint'] }}</dd>
+            </div>
+        </dl>
+    </section>
+
+    <div class="flex items-center justify-between">
+        <h3 class="text-base font-semibold text-zinc-950">Recent Occurrences</h3>
+        <span class="text-sm text-zinc-500">{{ number_format($occurrences->total()) }} total</span>
     </div>
-</div>
 
-<div class="card mb-16">
-    <h2>
-        <span class="badge badge-{{ $group['status'] }}">{{ $group['status'] }}</span>
-        {{ $group['class'] }}
-    </h2>
-    <table>
-        <tr><th style="width:150px">File</th><td class="mono">{{ str_replace(base_path().'/', '', $group['file']) }}:{{ $group['line'] }}</td></tr>
-        <tr><th>Total Occurrences</th><td>{{ number_format($group['occurrence_count']) }}</td></tr>
-        <tr><th>First Seen</th><td>{{ $group['first_seen_at'] }}</td></tr>
-        <tr><th>Last Seen</th><td>{{ $group['last_seen_at'] }}</td></tr>
-        <tr><th>Fingerprint</th><td class="mono text-muted">{{ $group['fingerprint'] }}</td></tr>
-    </table>
-</div>
+    <div class="flex flex-col gap-3">
+        @foreach($occurrences as $occurrence)
+            <x-accelerator::telemetry.occurrence-card :occurrence="$occurrence" />
+        @endforeach
+    </div>
 
-<h2 class="mb-8">Recent Occurrences</h2>
+    @if($occurrences->hasPages())
+        <div class="flex items-center justify-center gap-2 text-sm">
+            @if($occurrences->onFirstPage())
+                <span class="rounded-md border border-zinc-200 bg-zinc-100 px-3 py-1.5 text-zinc-400">Prev</span>
+            @else
+                <a href="{{ $occurrences->previousPageUrl() }}" class="rounded-md border border-zinc-200 bg-white px-3 py-1.5 font-medium text-zinc-700 hover:bg-zinc-100">Prev</a>
+            @endif
 
-@foreach($occurrences as $occ)
-<div class="card">
-    <div class="flex flex-between mb-8">
-        <div>
-            <strong class="text-sm">{{ $occ['created_at'] }}</strong>
-            @if($occ['user_id'])
-                — User #{{ $occ['user_id'] }}
+            <span class="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-zinc-500">
+                Page {{ $occurrences->currentPage() }} of {{ $occurrences->lastPage() }}
+            </span>
+
+            @if($occurrences->hasMorePages())
+                <a href="{{ $occurrences->nextPageUrl() }}" class="rounded-md border border-zinc-200 bg-white px-3 py-1.5 font-medium text-zinc-700 hover:bg-zinc-100">Next</a>
+            @else
+                <span class="rounded-md border border-zinc-200 bg-zinc-100 px-3 py-1.5 text-zinc-400">Next</span>
             @endif
         </div>
-        <div class="text-sm text-muted">
-            {{ $occ['method'] }} {{ $occ['url'] }}
-            @if($occ['duration_ms'])
-                — {{ $occ['duration_ms'] }}ms
-            @endif
-            @if($occ['memory_usage_bytes'])
-                — {{ number_format($occ['memory_usage_bytes'] / 1024 / 1024, 1) }}MB
-            @endif
-        </div>
-    </div>
-
-    <p class="mb-8"><strong>{{ $occ['message'] }}</strong></p>
-
-    <pre>{{ $occ['stack_trace'] }}</pre>
-
-    @if($occ['request_headers'])
-        <details class="mt-16">
-            <summary class="text-sm" style="cursor:pointer">Request Headers</summary>
-            <pre>{{ json_encode(json_decode($occ['request_headers'], true), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) }}</pre>
-        </details>
     @endif
-
-    @if($occ['request_payload'])
-        <details class="mt-16">
-            <summary class="text-sm" style="cursor:pointer">Request Payload</summary>
-            <pre>{{ json_encode(json_decode($occ['request_payload'], true), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) }}</pre>
-        </details>
-    @endif
-
-    <div class="text-sm text-muted mt-16">
-        IP: {{ $occ['ip'] ?? 'unknown' }}
-    </div>
 </div>
-@endforeach
-
-@if($occurrences->hasPages())
-    <div class="pagination">
-        @if($occurrences->onFirstPage())
-            <span class="text-muted">← Prev</span>
-        @else
-            <a href="{{ $occurrences->previousPageUrl() }}">← Prev</a>
-        @endif
-        <span>Page {{ $occurrences->currentPage() }} of {{ $occurrences->lastPage() }}</span>
-        @if($occurrences->hasMorePages())
-            <a href="{{ $occurrences->nextPageUrl() }}">Next →</a>
-        @else
-            <span class="text-muted">Next →</span>
-        @endif
-    </div>
-@endif
 @endsection

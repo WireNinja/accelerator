@@ -135,70 +135,143 @@ class TelemetryController
     }
 
     /**
+     * Mute an exception group.
+     */
+    public function mute(int $id): RedirectResponse
+    {
+        $pdo = $this->database->connection();
+
+        abort_if($pdo === null, 503);
+
+        $stmt = $pdo->prepare("UPDATE exception_groups SET status = 'muted' WHERE id = :id");
+        $stmt->execute(['id' => $id]);
+
+        return back();
+    }
+
+    /**
      * Paginated log reader (reads laravel.log from the end using SplFileObject).
      *
      * Uses seek-based reading to avoid loading the entire log file into memory.
-     * Reads backward from EOF so newest entries appear first.
+     * Reads backward from EOF and groups continuation lines into one Laravel log entry.
      */
     public function logs(Request $request): View
     {
         $logPath = storage_path('logs/laravel.log');
-        $perPage = 100;
+        $perPage = 25;
         $page = max(1, (int) $request->query('page', '1'));
 
         if (! File::exists($logPath) || File::size($logPath) === 0) {
             return view('accelerator::telemetry.logs', [
-                'lines' => [],
+                'entries' => [],
                 'logFile' => 'laravel.log',
                 'page' => $page,
-                'totalLines' => 0,
-                'startLine' => 0,
-                'endLine' => 0,
                 'hasMore' => false,
             ]);
         }
 
-        $file = new \SplFileObject($logPath, 'r');
-        $file->seek(PHP_INT_MAX);
-        $totalLines = $file->key(); // 0-indexed last line number
-
-        if ($totalLines === 0) {
-            return view('accelerator::telemetry.logs', [
-                'lines' => [],
-                'logFile' => 'laravel.log',
-                'page' => $page,
-                'totalLines' => 0,
-                'startLine' => 0,
-                'endLine' => 0,
-                'hasMore' => false,
-            ]);
-        }
-
-        // Calculate which lines to read (from the end).
-        $endOffset = $totalLines - (($page - 1) * $perPage);
-        $startOffset = max(0, $endOffset - $perPage);
-
-        $lines = [];
-        $file->seek($startOffset);
-
-        for ($i = $startOffset; $i < $endOffset && ! $file->eof(); $i++) {
-            $line = $file->current();
-            if ($line !== false) {
-                $lines[] = rtrim((string) $line);
-            }
-            $file->next();
-        }
-
-        $lines = array_reverse($lines); // Newest on top.
+        $result = $this->readLogEntries($logPath, $page, $perPage);
 
         return view('accelerator::telemetry.logs', [
-            'lines' => $lines,
+            'entries' => $result['entries'],
             'logFile' => 'laravel.log',
             'page' => $page,
-            'totalLines' => $totalLines,
-            'startLine' => $startOffset + 1,
-            'endLine' => min($endOffset, $totalLines),
-            'hasMore' => $startOffset > 0,
+            'hasMore' => $result['has_more'],
         ]);
+    }
+
+    /**
+     * @return array{entries: array<int, array{timestamp: string|null, level: string|null, summary: string, body: string, line_count: int}>, has_more: bool}
+     */
+    private function readLogEntries(string $logPath, int $page, int $perPage): array
+    {
+        $file = new \SplFileObject($logPath, 'r');
+        $file->seek(PHP_INT_MAX);
+        $lastLine = $file->key();
+
+        $skip = ($page - 1) * $perPage;
+        $seen = 0;
+        $entries = [];
+        $currentLines = [];
+        $hasMore = false;
+
+        for ($lineNumber = $lastLine; $lineNumber >= 0; $lineNumber--) {
+            $file->seek($lineNumber);
+            $line = $file->current();
+
+            if ($line !== false) {
+                $line = rtrim((string) $line);
+            }
+
+            if ($line === false || ($line === '' && $lineNumber === $lastLine)) {
+                continue;
+            }
+
+            $currentLines[] = $line;
+
+            if (! $this->isLogEntryStart($line)) {
+                continue;
+            }
+
+            $seen++;
+
+            if ($seen > ($skip + $perPage)) {
+                $hasMore = true;
+
+                break;
+            }
+
+            if ($seen > $skip && count($entries) < $perPage) {
+                $entries[] = $this->formatLogEntry(array_reverse($currentLines));
+            }
+
+            $currentLines = [];
+        }
+
+        if ($currentLines !== []) {
+            $seen++;
+
+            if ($seen > ($skip + $perPage)) {
+                $hasMore = true;
+            } elseif ($seen > $skip && count($entries) < $perPage) {
+                $entries[] = $this->formatLogEntry(array_reverse($currentLines));
+            }
+        }
+
+        return [
+            'entries' => $entries,
+            'has_more' => $hasMore,
+        ];
+    }
+
+    private function isLogEntryStart(string $line): bool
+    {
+        return preg_match('/^\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]/', $line) === 1;
+    }
+
+    /**
+     * @param  list<string>  $lines
+     * @return array{timestamp: string|null, level: string|null, summary: string, body: string, line_count: int}
+     */
+    private function formatLogEntry(array $lines): array
+    {
+        $firstLine = $lines[0] ?? '';
+        $timestamp = null;
+        $level = null;
+        $summary = $firstLine;
+
+        if (preg_match('/^\[(?<timestamp>[^\]]+)\]\s+\w+\.(?<level>\w+):\s*(?<message>.*)$/', $firstLine, $matches) === 1) {
+            $timestamp = $matches['timestamp'];
+            $level = strtolower($matches['level']);
+            $summary = $matches['message'] !== '' ? $matches['message'] : $firstLine;
+        }
+
+        return [
+            'timestamp' => $timestamp,
+            'level' => $level,
+            'summary' => $summary,
+            'body' => implode(PHP_EOL, $lines),
+            'line_count' => count($lines),
+        ];
     }
 }

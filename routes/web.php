@@ -33,6 +33,7 @@ Route::middleware(['web'])->group(function () {
         Route::get('/logs', [TelemetryController::class, 'logs'])->name('logs');
         Route::get('/{id}', [TelemetryController::class, 'show'])->name('show')->where('id', '[0-9]+');
         Route::post('/{id}/resolve', [TelemetryController::class, 'resolve'])->name('resolve')->where('id', '[0-9]+');
+        Route::post('/{id}/mute', [TelemetryController::class, 'mute'])->name('mute')->where('id', '[0-9]+');
         Route::post('/{id}/reopen', [TelemetryController::class, 'reopen'])->name('reopen')->where('id', '[0-9]+');
     });
 
