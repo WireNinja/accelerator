@@ -96,17 +96,28 @@ final class TelemetryFlusher
         $now = now()->toIso8601String();
 
         $groupStmt = $pdo->prepare(<<<'SQL'
-            INSERT INTO exception_groups (fingerprint, class, file, line, status, occurrence_count, first_seen_at, last_seen_at)
-            VALUES (:fingerprint, :class, :file, :line, 'open', 1, :now, :now)
+            INSERT INTO exception_groups (fingerprint, class, message, file, line, status, occurrence_count, first_seen_at, last_seen_at)
+            VALUES (:fingerprint, :class, :message, :file, :line, 'open', 1, :now, :now)
             ON CONFLICT(fingerprint) DO UPDATE SET
+                message = :message2,
                 occurrence_count = occurrence_count + 1,
                 last_seen_at = :now2,
                 status = CASE WHEN status = 'resolved' THEN 'open' ELSE status END
         SQL);
 
         $occurrenceStmt = $pdo->prepare(<<<'SQL'
-            INSERT INTO exception_occurrences (group_id, message, stack_trace, user_id, url, method, ip, request_headers, request_payload, duration_ms, memory_usage_bytes, created_at)
-            VALUES (:group_id, :message, :stack_trace, :user_id, :url, :method, :ip, :request_headers, :request_payload, :duration_ms, :memory_usage_bytes, :created_at)
+            INSERT INTO exception_occurrences (
+                group_id, message, stack_trace, user_id, user_name, user_username, user_email,
+                url, method, ip, request_headers, request_payload, duration_ms, memory_usage_bytes,
+                source_file, source_line, source_class, source_function, source_snippet,
+                timeline_events, db_query_count, db_duration_ms, slowest_query_ms, created_at
+            )
+            VALUES (
+                :group_id, :message, :stack_trace, :user_id, :user_name, :user_username, :user_email,
+                :url, :method, :ip, :request_headers, :request_payload, :duration_ms, :memory_usage_bytes,
+                :source_file, :source_line, :source_class, :source_function, :source_snippet,
+                :timeline_events, :db_query_count, :db_duration_ms, :slowest_query_ms, :created_at
+            )
         SQL);
 
         $groupIdStmt = $pdo->prepare('SELECT id, status, last_notified_at FROM exception_groups WHERE fingerprint = :fingerprint');
@@ -124,6 +135,8 @@ final class TelemetryFlusher
             $groupStmt->execute([
                 'fingerprint' => $fingerprint,
                 'class' => $entry['class'] ?? 'Unknown',
+                'message' => $entry['message'] ?? '',
+                'message2' => $entry['message'] ?? '',
                 'file' => $entry['file'] ?? 'unknown',
                 'line' => $entry['line'] ?? 0,
                 'now' => $entry['created_at'] ?? $now,
@@ -143,6 +156,9 @@ final class TelemetryFlusher
                 'message' => $entry['message'] ?? '',
                 'stack_trace' => $entry['stack_trace'] ?? '',
                 'user_id' => $entry['user_id'] ?? null,
+                'user_name' => $entry['user_name'] ?? null,
+                'user_username' => $entry['user_username'] ?? null,
+                'user_email' => $entry['user_email'] ?? null,
                 'url' => $entry['url'] ?? null,
                 'method' => $entry['method'] ?? null,
                 'ip' => $entry['ip'] ?? null,
@@ -150,6 +166,15 @@ final class TelemetryFlusher
                 'request_payload' => isset($entry['request_payload']) ? json_encode($entry['request_payload'], JSON_UNESCAPED_SLASHES) : null,
                 'duration_ms' => $entry['duration_ms'] ?? null,
                 'memory_usage_bytes' => $entry['memory_usage_bytes'] ?? null,
+                'source_file' => $entry['source_file'] ?? null,
+                'source_line' => $entry['source_line'] ?? null,
+                'source_class' => $entry['source_class'] ?? null,
+                'source_function' => $entry['source_function'] ?? null,
+                'source_snippet' => isset($entry['source_snippet']) ? json_encode($entry['source_snippet'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) : null,
+                'timeline_events' => isset($entry['timeline_events']) ? json_encode($entry['timeline_events'], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) : null,
+                'db_query_count' => $entry['db_query_count'] ?? null,
+                'db_duration_ms' => $entry['db_duration_ms'] ?? null,
+                'slowest_query_ms' => $entry['slowest_query_ms'] ?? null,
                 'created_at' => $entry['created_at'] ?? $now,
             ]);
 

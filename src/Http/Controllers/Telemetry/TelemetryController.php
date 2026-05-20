@@ -46,7 +46,68 @@ class TelemetryController
         $total = (int) $countStmt->fetch()['total'];
 
         $offset = ($page - 1) * $perPage;
-        $dataStmt = $pdo->prepare("SELECT * FROM exception_groups {$where} ORDER BY last_seen_at DESC LIMIT {$perPage} OFFSET {$offset}");
+        $dataStmt = $pdo->prepare(<<<SQL
+            SELECT
+                eg.*,
+                (
+                    SELECT eo.message
+                    FROM exception_occurrences eo
+                    WHERE eo.group_id = eg.id
+                    ORDER BY eo.created_at DESC
+                    LIMIT 1
+                ) AS latest_message,
+                (
+                    SELECT eo.user_name
+                    FROM exception_occurrences eo
+                    WHERE eo.group_id = eg.id
+                    ORDER BY eo.created_at DESC
+                    LIMIT 1
+                ) AS latest_user_name,
+                (
+                    SELECT eo.user_username
+                    FROM exception_occurrences eo
+                    WHERE eo.group_id = eg.id
+                    ORDER BY eo.created_at DESC
+                    LIMIT 1
+                ) AS latest_user_username,
+                (
+                    SELECT eo.user_email
+                    FROM exception_occurrences eo
+                    WHERE eo.group_id = eg.id
+                    ORDER BY eo.created_at DESC
+                    LIMIT 1
+                ) AS latest_user_email,
+                (
+                    SELECT COUNT(DISTINCT eo.user_id)
+                    FROM exception_occurrences eo
+                    WHERE eo.group_id = eg.id AND eo.user_id IS NOT NULL
+                ) AS user_count,
+                (
+                    SELECT eo.duration_ms
+                    FROM exception_occurrences eo
+                    WHERE eo.group_id = eg.id
+                    ORDER BY eo.created_at DESC
+                    LIMIT 1
+                ) AS latest_duration_ms,
+                (
+                    SELECT eo.db_query_count
+                    FROM exception_occurrences eo
+                    WHERE eo.group_id = eg.id
+                    ORDER BY eo.created_at DESC
+                    LIMIT 1
+                ) AS latest_db_query_count,
+                (
+                    SELECT eo.db_duration_ms
+                    FROM exception_occurrences eo
+                    WHERE eo.group_id = eg.id
+                    ORDER BY eo.created_at DESC
+                    LIMIT 1
+                ) AS latest_db_duration_ms
+            FROM exception_groups eg
+            {$where}
+            ORDER BY eg.last_seen_at DESC
+            LIMIT {$perPage} OFFSET {$offset}
+        SQL);
         $dataStmt->execute($params);
         $rows = $dataStmt->fetchAll();
 

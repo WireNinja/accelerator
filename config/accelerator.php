@@ -40,6 +40,9 @@ return [
         'pruning_enabled' => env('ACCELERATOR_TELEMETRY_PRUNING', true),
         'capture_guests' => env('ACCELERATOR_TELEMETRY_CAPTURE_GUESTS', false),
         'sample_rate' => env('ACCELERATOR_TELEMETRY_SAMPLE_RATE', 100),
+        'timeline_max_events' => 50,
+        'timeline_sql_max_length' => 1000,
+        'source_radius' => 5,
         'notify' => [
             'discord_webhook' => env('ACCELERATOR_TELEMETRY_DISCORD_WEBHOOK'),
             'telegram_chat_id' => env('ACCELERATOR_TELEMETRY_TELEGRAM_CHAT'),

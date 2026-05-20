@@ -2,6 +2,10 @@
 
 @section('title', class_basename($group['class']))
 
+@php
+    $focusedOccurrence = $occurrences->getCollection()->first();
+@endphp
+
 @section('content')
 <div class="flex flex-col gap-4">
     <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -12,6 +16,9 @@
                 <h2 class="truncate text-lg font-semibold text-zinc-950">{{ class_basename($group['class']) }}</h2>
             </div>
             <p class="mt-1 truncate font-mono text-xs text-zinc-500">{{ $group['class'] }}</p>
+            @if($group['message'] ?? null)
+                <p class="mt-2 max-w-3xl text-sm text-zinc-700">{{ $group['message'] }}</p>
+            @endif
         </div>
 
         <x-accelerator::telemetry.group-actions :group="$group" />
@@ -41,6 +48,37 @@
             </div>
         </dl>
     </section>
+
+    @if($focusedOccurrence)
+        <div class="grid gap-4 xl:grid-cols-[1fr_24rem]">
+            <x-accelerator::telemetry.source-snippet
+                :file="$focusedOccurrence['source_file'] ?? $group['file']"
+                :line="$focusedOccurrence['source_line'] ?? $group['line']"
+                :class="$focusedOccurrence['source_class'] ?? null"
+                :function="$focusedOccurrence['source_function'] ?? null"
+                :snippet="$focusedOccurrence['source_snippet'] ?? []"
+            />
+
+            <div class="flex flex-col gap-4">
+                <section class="rounded-lg border border-zinc-200 bg-white p-4">
+                    <p class="mb-3 text-xs font-semibold uppercase text-zinc-500">Latest Actor</p>
+                    <x-accelerator::telemetry.user-chip
+                        :user-id="$focusedOccurrence['user_id']"
+                        :name="$focusedOccurrence['user_name'] ?? null"
+                        :username="$focusedOccurrence['user_username'] ?? null"
+                        :email="$focusedOccurrence['user_email'] ?? null"
+                    />
+                </section>
+
+                <x-accelerator::telemetry.waterfall
+                    :events="$focusedOccurrence['timeline_events'] ?? []"
+                    :total-ms="$focusedOccurrence['duration_ms']"
+                    :db-query-count="$focusedOccurrence['db_query_count'] ?? null"
+                    :db-duration-ms="$focusedOccurrence['db_duration_ms'] ?? null"
+                />
+            </div>
+        </div>
+    @endif
 
     <div class="flex items-center justify-between">
         <h3 class="text-base font-semibold text-zinc-950">Recent Occurrences</h3>

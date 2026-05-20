@@ -94,6 +94,8 @@ final class TelemetryDatabase
         )->fetch();
 
         if ($result !== false) {
+            $this->upgradeSchema();
+
             return;
         }
 
@@ -102,6 +104,7 @@ final class TelemetryDatabase
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 fingerprint TEXT NOT NULL UNIQUE,
                 class TEXT NOT NULL,
+                message TEXT NULL,
                 file TEXT NOT NULL,
                 line INTEGER NOT NULL,
                 status TEXT NOT NULL DEFAULT 'open',
@@ -121,6 +124,9 @@ final class TelemetryDatabase
                 message TEXT NOT NULL,
                 stack_trace TEXT NOT NULL,
                 user_id INTEGER NULL,
+                user_name TEXT NULL,
+                user_username TEXT NULL,
+                user_email TEXT NULL,
                 url TEXT NULL,
                 method TEXT NULL,
                 ip TEXT NULL,
@@ -128,6 +134,15 @@ final class TelemetryDatabase
                 request_payload TEXT NULL,
                 duration_ms REAL NULL,
                 memory_usage_bytes INTEGER NULL,
+                source_file TEXT NULL,
+                source_line INTEGER NULL,
+                source_class TEXT NULL,
+                source_function TEXT NULL,
+                source_snippet TEXT NULL,
+                timeline_events TEXT NULL,
+                db_query_count INTEGER NULL,
+                db_duration_ms REAL NULL,
+                slowest_query_ms REAL NULL,
                 created_at TEXT NOT NULL,
                 FOREIGN KEY (group_id) REFERENCES exception_groups(id) ON DELETE CASCADE
             );
@@ -135,6 +150,57 @@ final class TelemetryDatabase
             CREATE INDEX IF NOT EXISTS idx_occurrences_group_created ON exception_occurrences(group_id, created_at);
             CREATE INDEX IF NOT EXISTS idx_occurrences_created ON exception_occurrences(created_at);
         SQL);
+    }
+
+    private function upgradeSchema(): void
+    {
+        if ($this->pdo === null) {
+            return;
+        }
+
+        $this->addMissingColumns('exception_groups', [
+            'message' => 'TEXT NULL',
+        ]);
+
+        $this->addMissingColumns('exception_occurrences', [
+            'user_name' => 'TEXT NULL',
+            'user_username' => 'TEXT NULL',
+            'user_email' => 'TEXT NULL',
+            'source_file' => 'TEXT NULL',
+            'source_line' => 'INTEGER NULL',
+            'source_class' => 'TEXT NULL',
+            'source_function' => 'TEXT NULL',
+            'source_snippet' => 'TEXT NULL',
+            'timeline_events' => 'TEXT NULL',
+            'db_query_count' => 'INTEGER NULL',
+            'db_duration_ms' => 'REAL NULL',
+            'slowest_query_ms' => 'REAL NULL',
+        ]);
+    }
+
+    /**
+     * @param  array<string, string>  $columns
+     */
+    private function addMissingColumns(string $table, array $columns): void
+    {
+        if ($this->pdo === null) {
+            return;
+        }
+
+        $existing = [];
+        $statement = $this->pdo->query("PRAGMA table_info({$table})");
+
+        foreach ($statement->fetchAll() as $column) {
+            $existing[(string) $column['name']] = true;
+        }
+
+        foreach ($columns as $name => $definition) {
+            if (isset($existing[$name])) {
+                continue;
+            }
+
+            $this->pdo->exec("ALTER TABLE {$table} ADD COLUMN {$name} {$definition}");
+        }
     }
 
     /**

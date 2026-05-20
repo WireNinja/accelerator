@@ -43,7 +43,9 @@
                         <tr>
                             <th class="px-4 py-3">Status</th>
                             <th class="px-4 py-3">Exception</th>
-                            <th class="px-4 py-3">Location</th>
+                            <th class="px-4 py-3">Focused File</th>
+                            <th class="px-4 py-3">Latest User</th>
+                            <th class="px-4 py-3">Waterfall</th>
                             <th class="px-4 py-3 text-right">Count</th>
                             <th class="px-4 py-3">Last Seen</th>
                             <th class="px-4 py-3">Actions</th>
@@ -60,9 +62,30 @@
                                         {{ class_basename($group['class']) }}
                                     </a>
                                     <p class="mt-1 truncate font-mono text-xs text-zinc-500">{{ $group['class'] }}</p>
+                                    @if(($group['message'] ?? null) || ($group['latest_message'] ?? null))
+                                        <p class="mt-1 text-sm text-zinc-600">{{ $group['message'] ?? $group['latest_message'] }}</p>
+                                    @endif
                                 </td>
                                 <td class="max-w-sm px-4 py-3">
                                     <p class="truncate font-mono text-xs text-zinc-600">{{ str_replace(base_path().'/', '', $group['file']) }}:{{ $group['line'] }}</p>
+                                </td>
+                                <td class="max-w-[14rem] px-4 py-3">
+                                    <x-accelerator::telemetry.user-chip
+                                        :name="$group['latest_user_name'] ?? null"
+                                        :username="$group['latest_user_username'] ?? null"
+                                        :email="$group['latest_user_email'] ?? null"
+                                    />
+                                    <p class="mt-1 text-xs text-zinc-500">{{ number_format((int) ($group['user_count'] ?? 0)) }} impacted users</p>
+                                </td>
+                                <td class="whitespace-nowrap px-4 py-3 font-mono text-xs text-zinc-600">
+                                    @if($group['latest_duration_ms'] !== null)
+                                        <div>{{ number_format((float) $group['latest_duration_ms'], 2) }}ms req</div>
+                                    @else
+                                        <div class="text-zinc-400">n/a</div>
+                                    @endif
+                                    @if($group['latest_db_query_count'] !== null)
+                                        <div>{{ number_format((int) $group['latest_db_query_count']) }}q / {{ number_format((float) $group['latest_db_duration_ms'], 2) }}ms DB</div>
+                                    @endif
                                 </td>
                                 <td class="px-4 py-3 text-right font-mono text-sm font-semibold text-zinc-900">
                                     {{ number_format($group['occurrence_count']) }}

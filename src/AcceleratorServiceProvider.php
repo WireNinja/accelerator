@@ -5,8 +5,10 @@ namespace WireNinja\Accelerator;
 use Filament\Support\Assets\Css;
 use Filament\Support\Assets\Js;
 use Filament\Support\Facades\FilamentAsset;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Http\Middleware\TrustProxies;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 use Livewire\Livewire;
@@ -34,6 +36,7 @@ use WireNinja\Accelerator\Telemetry\TelemetryFlusher;
 use WireNinja\Accelerator\Telemetry\TelemetryManager;
 use WireNinja\Accelerator\Telemetry\TelemetryNotifier;
 use WireNinja\Accelerator\Telemetry\TelemetryPruneCommand;
+use WireNinja\Accelerator\Telemetry\TelemetryRecorder;
 
 class AcceleratorServiceProvider extends ServiceProvider
 {
@@ -164,5 +167,9 @@ class AcceleratorServiceProvider extends ServiceProvider
             \Laravel\Octane\Events\RequestReceived::class,
             fn () => $manager->resetRequestState(),
         );
+
+        DB::listen(function (QueryExecuted $query): void {
+            TelemetryRecorder::recordQuery($query);
+        });
     }
 }
