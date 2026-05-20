@@ -21,11 +21,6 @@ return new class extends Migration
             $table->string('password')->nullable();
             $table->string('avatar')->nullable();
 
-            // Two-Factor Authentication (Laravel Fortify)
-            $table->text('two_factor_secret')->nullable();
-            $table->text('two_factor_recovery_codes')->nullable();
-            $table->timestamp('two_factor_confirmed_at')->nullable();
-
             // Google OAuth
             $table->string('google_id')->nullable()->unique();
             $table->text('google_token')->nullable();

@@ -57,14 +57,15 @@ class InstallCommand extends Command
     use HasBanner;
 
     /**
-     * Runtime env seed keys yang harus DI-KOSONGKAN (bukan dihapus) saat generate
-     * .env.staging / .env.production dari local .env developer.
+     * Runtime env seed keys that must be BLANKED (not removed) when generating
+     * .env.staging / .env.production from the developer's local .env.
      *
-     * Tujuannya supaya credential lokal developer tidak ter-copy ke seed file
-     * yang nantinya di-scp ke VPS. Key tetap ada agar shape file kompatibel.
+     * Purpose: prevent local developer credentials from being copied to seed files
+     * that will later be scp'd to the VPS. Keys are retained so file shape stays
+     * compatible.
      *
-     * Sebelumnya stripOpsDeployKeys() hanya strip OPS_DEPLOY_*. Daftar di sini
-     * meng-cover credential umum yang biasanya project-specific.
+     * Previously stripOpsDeployKeys() only stripped OPS_DEPLOY_*. This list covers
+     * common project-specific credentials.
      */
     protected array $sensitiveSeedKeys = [
         'APP_KEY',
@@ -90,18 +91,18 @@ class InstallCommand extends Command
     protected bool $envOverwritten = false;
 
     /**
-     * Daftar komponen yang bisa dipilih lewat checkbox install.
+     * Available wizard components for the install checkbox.
      *
-     * Tiap komponen punya:
-     * - label: yang ditampilkan ke user
-     * - commands: artisan command yang dieksekusi
-     * - stubs: file PHP/asset yang di-copy dari stubs/ ke base path
-     * - configs: nama file di stubs/config/ yang di-publish kalau komponen ini dipilih
+     * Each component has:
+     * - label: displayed to the user
+     * - commands: artisan commands to execute
+     * - stubs: PHP/asset files copied from stubs/ to base path
+     * - configs: file names in stubs/config/ published when this component is selected
      *
-     * `app-config` sengaja membawa core config (app, auth, cache, database, dst)
-     * karena tanpa itu Laravel base tidak bisa boot dengan opinion Accelerator.
-     * Komponen lain hanya bawa config yang khusus dengannya — supaya user yang
-     * tidak butuh Filament tidak ke-publish filament-shield.php dst.
+     * `app-config` intentionally carries core configs (app, auth, cache, database, etc)
+     * because without them Laravel base cannot boot with Accelerator opinions.
+     * Other components only carry configs specific to them — so a user who doesn't
+     * need Filament won't get filament-shield.php published etc.
      */
     protected array $wizardComponents = [
         'reverb' => [
@@ -282,8 +283,8 @@ class InstallCommand extends Command
         }
 
         // Check configs — only consider configs that the selected components actually
-        // intend to publish. Sebelumnya semua stub config ke-flag walau user cuma
-        // pilih satu komponen.
+        // intend to publish. Previously all stub configs were flagged even when the user
+        // only selected one component.
         $configsForSelection = $this->configsForComponents($selectedComponents);
         foreach ($configsForSelection as $configFile) {
             $targetFile = 'config/'.$configFile;
@@ -767,9 +768,9 @@ class InstallCommand extends Command
         $this->components->task('Refreshing Laravel Boost resources', function () {
             $this->mergeBoostPackageConfig();
 
-            // Cek `laravel/boost` ter-install. Kalau tidak, `boost:update` tidak ada
-            // dan runProcess fail-silent (failOnError: false). Kasih warn agar
-            // operator tahu.
+            // Check if `laravel/boost` is installed. If not, `boost:update` command
+            // doesn't exist and runProcess will fail-silent (failOnError: false).
+            // Warn so the operator knows.
             if (! Artisan::has('boost:update')) {
                 $this->components->warn('laravel/boost package is not installed (composer require laravel/boost). Skipping boost:update.');
 

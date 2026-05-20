@@ -36,12 +36,12 @@ trait InteractsWithApplication
      * Bootstrap Eloquent best practices.
      *
      * @DONOT-REMOVE Model::unguard()
-     * Filament v5 nested form (Repeater::relationship, HasMany sync via Schema)
-     * meneruskan payload tanpa fillable check di sebagian path. Mengganggu unguard global
-     * akan menimbulkan SilentlyDiscardedAttributesException pada banyak resource yang
-     * memang sengaja menerima nested attribute. Validasi tetap dilakukan via Filament
-     * schema, FormRequest, atau policy. Jangan ubah ini ke opt-in tanpa migrasi
-     * menyeluruh ke fillable explicit di seluruh model userland.
+     * Filament v5 nested forms (Repeater::relationship, HasMany sync via Schema) pass
+     * payloads without fillable checks in some paths. Disturbing global unguard will
+     * cause SilentlyDiscardedAttributesException on many resources that intentionally
+     * accept nested attributes. Validation is still performed via Filament schema,
+     * FormRequest, or policy. Do not change this to opt-in without a comprehensive
+     * migration to explicit fillable on all userland models.
      */
     protected function bootEloquentBestPractices(): void
     {
@@ -78,11 +78,11 @@ trait InteractsWithApplication
     }
 
     /**
-     * Mendaftarkan custom driver `octane-table` ke session manager Laravel.
+     * Register the custom `octane-table` driver with Laravel's session manager.
      *
-     * Registrasi ini hanya memperkenalkan nama drivernya. Driver benar-benar
-     * dipakai nanti oleh middleware framework `StartSession` ketika
-     * `SESSION_DRIVER=octane-table` aktif pada request HTTP.
+     * This registration only introduces the driver name. The driver is actually used
+     * later by the framework `StartSession` middleware when `SESSION_DRIVER=octane-table`
+     * is active on HTTP requests.
      */
     protected function bootCustomSessionDrivers(): void
     {
@@ -139,7 +139,7 @@ trait InteractsWithApplication
             $fileUpload
                 ->imageEditor()
                 ->maxParallelUploads(5)
-                ->maxSize(100 * 1024 * 1024);
+                ->maxSize(1024 * 1024); // 1 GB (Filament maxSize unit is KB)
         });
 
         Select::configureUsing(static function (Select $select): void {

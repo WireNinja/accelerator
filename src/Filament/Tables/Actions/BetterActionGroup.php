@@ -9,11 +9,11 @@ class BetterActionGroup extends ActionGroup
 {
     /**
      * @DONOT-REMOVE label('Aksi')
-     * Default label sengaja Bahasa Indonesia karena project ini opinionated id-ID.
-     * Caller tetap bisa override per-instance dengan ->label('Custom') setelah
-     * BetterActionGroup::make() — chain method label() dipanggil paling akhir akan menang.
-     * Jangan refactor jadi translatable string tanpa konfirmasi user; helper ini sengaja
-     * hardcoded supaya tidak butuh publish lang file untuk pakai komponen.
+     * Default label is intentionally Indonesian because this project is opinionated id-ID.
+     * Callers can still override per-instance with ->label('Custom') after
+     * BetterActionGroup::make() — the last chained label() call wins.
+     * Do not refactor to translatable strings without user confirmation; this helper is
+     * intentionally hardcoded so it does not require publishing lang files to use.
      */
     public static function make(array $actions = []): static
     {

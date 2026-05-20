@@ -9,7 +9,7 @@ WireNinja Accelerator provides reusable Laravel application conventions, built-i
 - Accelerator config is intentionally env-driven so applications can use new package config keys without publishing config files in every project.
 - Deploy orchestration config lives in `.env.envoy`, not Laravel runtime config.
 - Accelerator deploys default to two stages: `test` and `prod`; the default stage is `test`.
-- `AddLinkHeadersForPreloadedAssets` is wrapped by `ConditionalLinkPreload`. Skips `admin` / `admin/*` paths by default. Toggle via `accelerator.middleware.link_preload.enabled`.
+- `AddLinkHeadersForPreloadedAssets` is available via the `link_preload` middleware alias. Apply explicitly on Inertia/frontend route groups — NOT applied globally.
 
 ### Installation
 
@@ -26,7 +26,7 @@ WireNinja Accelerator provides reusable Laravel application conventions, built-i
 
 ### Deployment
 
-- Use Envoy as the deployment orchestrator. Operator writes Nginx vhost + Supervisor config manually once per VPS — Envoy does NOT generate those files.
+- Use Envoy as the deployment orchestrator. Run `vendor/bin/envoy run bootstrap --stage=test` once per VPS to write Nginx vhost + Supervisor config; continuous deploys just restart/reload.
 - Do not bootstrap Laravel config from Envoy.
 - Envoy reads deploy configuration from project-root `.env.envoy`, which contains only `OPS_DEPLOY_*` keys and must not be committed.
 - Per-stage `OPS_DEPLOY_{STAGE}_OCTANE_PORT` is REQUIRED — Envoy `health-check` curls Octane directly.
@@ -62,7 +62,7 @@ If health-check fails, the app stays in maintenance mode for operator triage. Be
 
 - Scope production operations to the configured stage/domain/root.
 - Do not touch unrelated domains or projects from a deployment command.
-- Archive replaced Nginx and Supervisor files before overwriting them (operator-side responsibility — Envoy doesn't write those).
+- Archive replaced Nginx and Supervisor files before overwriting them (handled by the `bootstrap` story automatically — archives existing configs before writing new ones).
 - Keep `{root}/archive` while a deployment is being proven; it contains rollback evidence and archived legacy paths.
 - Do not delete deploy archives blindly. Prune archives only after the active release, rollback path, Nginx config, and Supervisor services are verified.
 - For SSH cleanup during migration, prefer moving legacy paths into `{root}/archive` instead of deleting them.

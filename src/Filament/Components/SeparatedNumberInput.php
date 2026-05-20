@@ -11,24 +11,24 @@ use Filament\Support\RawJs;
 final class SeparatedNumberInput
 {
     /**
-     * @DONOT-REMOVE separator default `.` (decimal) dan `,` (thousands)
+     * @DONOT-REMOVE separator default `.` (decimal) and `,` (thousands)
      *
-     * Default ini SECARA SENGAJA mengikuti format US (5,000.00), BUKAN id-ID (5.000,00).
-     * Walaupun project ini opinionated Indonesia, invert separator akan memecah pipeline:
+     * These defaults INTENTIONALLY follow US format (5,000.00), NOT id-ID (5.000,00).
+     * Although this project is opinionated Indonesian, inverting separators breaks the pipeline:
      *
-     *   Browser kirim: "5.000,00"
+     *   Browser sends: "5.000,00"
      *   ->stripCharacters('.') -> "5000,00"
-     *   BigDecimalSynth::hydrate('5000,00') -> BigDecimal::of() throw MathException
-     *   -> rescue ke null -> data hilang silent.
+     *   BigDecimalSynth::hydrate('5000,00') -> BigDecimal::of() throws MathException
+     *   -> rescue to null -> data silently lost.
      *
-     * Selama mask + stripCharacters + BigDecimal pipeline belum dibikin locale-aware,
-     * decimal HARUS '.' dan thousands HARUS ','. Bagi user, secara visual tetap
-     * "5,000.00" — kurang ideal untuk locale Indo, tapi DATA TIDAK CORRUPT.
+     * Until mask + stripCharacters + BigDecimal pipeline is made locale-aware,
+     * decimal MUST be '.' and thousands MUST be ','. For users, visually it remains
+     * "5,000.00" — not ideal for Indonesian locale, but DATA DOES NOT CORRUPT.
      *
-     * Jangan ubah default ini sebelum:
-     *   1. BigDecimalSynth::hydrate() bisa parse koma decimal, atau
-     *   2. SeparatedNumberInput tambah ->mutateDehydratedStateUsing() yang normalize
-     *      `,` -> `.` sebelum cast ke BigDecimal.
+     * Do not change these defaults until:
+     *   1. BigDecimalSynth::hydrate() can parse comma as decimal, or
+     *   2. SeparatedNumberInput adds ->mutateDehydratedStateUsing() that normalizes
+     *      `,` -> `.` before casting to BigDecimal.
      */
     public static function make(
         ?string $name = null,
@@ -45,15 +45,15 @@ final class SeparatedNumberInput
 
         return TextInput::make($name)
             ->mask(RawJs::make($mask))
-            ->stripCharacters($thousandsSeparator) // Hapus pemisah ribuan sebelum kirim ke server
-            // ->numeric() // <--- HAPUS ATAU COMMENT BARIS INI (Penyebab Error)
+            ->stripCharacters($thousandsSeparator) // Strip thousands separator before sending to server
+            // ->numeric() // <--- DO NOT ENABLE (causes Error with BigDecimal pipeline)
 
-            // Gantinya, kita format manual state-nya agar BigDecimal jadi String
+            // Instead, manually format state so BigDecimal becomes String
             ->formatStateUsing(
                 fn ($state) => $state instanceof BigDecimal ? $state->__toString() : $state
             )
 
-            // Tambahkan validasi manual karena ->numeric() dihapus
+            // Add manual validation since ->numeric() is removed
             ->rules(['numeric'])
             ->rule('decimal:0,'.$precision)
 

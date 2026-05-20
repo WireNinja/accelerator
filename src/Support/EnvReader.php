@@ -9,8 +9,8 @@ class EnvReader
     /**
      * Token-based sensitive matching.
      *
-     * Setiap key env di-split via `_` lalu di-cek per token. Hasilnya lebih ketat
-     * dari substring match — `WIDGET_KEY` match `key`, tapi `KEYCHAIN_HINT` tidak.
+     * Each env key is split by `_` then checked per token. More precise than substring
+     * matching — `WIDGET_KEY` matches `key`, but `KEYCHAIN_HINT` does not.
      */
     protected static array $sensitiveTokens = [
         'key',
@@ -34,8 +34,8 @@ class EnvReader
     ];
 
     /**
-     * Token yang men-downgrade key dari sensitive ke non-sensitive.
-     * Contoh: `GOOGLE_CLIENT_ID` punya token `id` -> dianggap public ID.
+     * Tokens that downgrade a key from sensitive to non-sensitive.
+     * Example: `GOOGLE_CLIENT_ID` has token `id` -> treated as public identifier.
      */
     protected static array $publicTokens = [
         'id',
@@ -43,8 +43,8 @@ class EnvReader
     ];
 
     /**
-     * Token yang membatalkan downgrade public di atas. Kalau key tetap mengandung
-     * token ini, `public/id` whitelist tidak boleh aktif.
+     * Tokens that cancel the public downgrade above. If the key also contains one
+     * of these tokens, the `public/id` whitelist must not activate.
      */
     protected static array $hardSensitiveTokens = [
         'secret',
@@ -77,8 +77,8 @@ class EnvReader
                 continue;
             }
 
-            // Sengaja pakai $value === '' (BUKAN empty()) supaya literal "0" tidak
-            // di-treat sebagai empty.
+            // Intentionally use $value === '' (NOT empty()) so literal "0" is not
+            // treated as empty.
             if ($value === '') {
                 $data[$key] = '[EMPTY]';
 
