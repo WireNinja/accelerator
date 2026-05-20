@@ -16,19 +16,6 @@ return [
         'trust_local' => env('ACCELERATOR_TRUST_LOCAL_PROXY', true),
     ],
 
-    'middleware' => [
-        'link_preload' => [
-            // Master switch: when false, AddLinkHeadersForPreloadedAssets is never
-            // appended at all (saves one middleware for the entire application).
-            'enabled' => env('ACCELERATOR_LINK_PRELOAD_ENABLED', true),
-
-            // Path prefixes skipped even when master switch is on. Default: /admin/*
-            // Filament admin uses Livewire wire-navigate and does not benefit from
-            // preload headers — appending them only adds noise.
-            'skip_path_prefixes' => ['admin', 'admin/*'],
-        ],
-    ],
-
     'enums' => [
         'role' => RoleEnum::class,
         'resource' => ResourceEnum::class,

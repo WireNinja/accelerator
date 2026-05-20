@@ -156,7 +156,7 @@ Every table needs `emptyState`. Globals are already wired (`lucide-database` ico
 - Main resource lists: prefer flat tables showing as many business columns as fit reasonably on one screen. Do NOT prematurely reduce to "safe" minimum.
 - Primary columns (identity, status, location, related party, daily-decision signals) stay visible.
 - Secondary/audit/context columns get `->toggleable()`. Rare ones use `->toggleable(isToggledHiddenByDefault: true)`.
-- Global table state is session-persisted. Toggleable columns are sticky across refreshes — do NOT override that persistence locally without strong domain reason.
+- Toggleable columns respect the user's toggle state within the current browser session. Session persistence is OFF by default globally — do NOT assume toggles survive page reloads unless the project explicitly enables persistence.
 
 ### Enum metadata is automatic
 
@@ -241,8 +241,8 @@ Accelerator already wires global defaults via `WireNinja\Accelerator\Concerns\In
 - `Select::searchable()->preload()->native(false)` — already global.
 - `DateTimePicker::native(false)->displayFormat('j F Y H:i')` — already global.
 - `TimePicker::native(false)->displayFormat('H:i')` — already global.
-- `FileUpload::imageEditor()->maxParallelUploads(5)->maxSize(100MB)` — already global.
-- Table defaults: cursor pagination, IDR currency, id-ID locale, defer loading/filters/columns, default sort `id desc`, striped, empty state, session persistence — all global.
+- `FileUpload::imageEditor()->maxParallelUploads(5)->maxSize(1GB)` — already global.
+- Table defaults: cursor pagination, IDR currency, id-ID locale, defer loading/filters/columns, default sort `id desc`, striped, empty state — all global. Session persistence is OFF by default (all `persistXxxInSession(false)`).
 
 Override locally only when intentionally diverging, with a short comment explaining why.
 

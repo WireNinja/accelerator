@@ -339,8 +339,9 @@
 @task('build-release', ['on' => 'vps'])
     set -euo pipefail
     cd {{ $releasePath }}
+    mkdir -p resources/svg
     composer validate --no-check-all --strict --ansi
-    composer install --no-dev --optimize-autoloader --classmap-authoritative --no-interaction --no-progress --quiet --ansi
+    composer install --no-dev --no-scripts --optimize-autoloader --classmap-authoritative --no-interaction --no-progress --quiet --ansi
     {{ $bunBin }} install --frozen-lockfile --no-scripts --quiet
     {{ $bunBin }} run build
 @endtask
