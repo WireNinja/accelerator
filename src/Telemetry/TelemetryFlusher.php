@@ -46,42 +46,41 @@ final class TelemetryFlusher
             return;
         }
 
-        // Collect all entries and clear the table.
-        $entries = [];
-        $keysToDelete = [];
+        try {
+            $pdo->exec('BEGIN IMMEDIATE');
 
-        foreach ($table as $key => $row) {
-            $payload = json_decode($row['payload'] ?? '{}', true);
+            // Collect rows only after the SQLite write lock is acquired.
+            // Otherwise multiple Octane workers can read the same Swoole rows
+            // and race each other into duplicate writes or lock failures.
+            $entries = [];
+            $keysToDelete = [];
 
-            if (! is_array($payload) || empty($payload['fingerprint'])) {
+            foreach ($table as $key => $row) {
+                $payload = json_decode($row['payload'] ?? '{}', true);
+
+                if (! is_array($payload) || empty($payload['fingerprint'])) {
+                    $keysToDelete[] = $key;
+
+                    continue;
+                }
+
+                $entries[] = $payload;
                 $keysToDelete[] = $key;
-
-                continue;
             }
 
-            $entries[] = $payload;
-            $keysToDelete[] = $key;
-        }
-
-        // Clear processed rows immediately to free buffer space.
-        foreach ($keysToDelete as $key) {
-            $table->del((string) $key);
-        }
-
-        if ($entries === []) {
-            return;
-        }
-
-        try {
-            $pdo->beginTransaction();
             $this->persistEntries($pdo, $entries);
+
+            foreach ($keysToDelete as $key) {
+                $table->del((string) $key);
+            }
+
             $pdo->commit();
         } catch (Throwable $e) {
             rescue(fn () => $pdo->rollBack());
 
             rescue(fn () => logger()->warning(
-                '[Telemetry] Flush failed, entries dropped.',
-                ['error' => $e->getMessage(), 'count' => count($entries)]
+                '[Telemetry] Flush failed, entries retained for retry.',
+                ['error' => $e->getMessage()]
             ));
         }
     }
