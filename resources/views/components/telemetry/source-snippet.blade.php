@@ -26,8 +26,7 @@
     $highlightedCode = null;
 
     if ($decodedSnippet !== []) {
-        $output = (new \Phiki\Phiki())
-            ->codeToHtml($code, $grammar, \Phiki\Theme\Theme::NightOwl)
+        $output = \Phiki\Adapters\Laravel\Facades\Phiki::codeToHtml($code, $grammar, \Phiki\Theme\Theme::NightOwl)
             ->withGutter()
             ->startingLine($startLine);
 
