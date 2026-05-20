@@ -7,67 +7,65 @@
 @endphp
 
 @section('content')
-<div class="flex flex-col gap-4">
-    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+<div class="flex flex-col gap-8">
+    <section class="flex flex-col gap-5">
         <div>
-            <h2 class="text-lg font-semibold text-zinc-950">Exception Groups</h2>
-            <p class="text-sm text-zinc-500">
-                {{ number_format($groups->total()) }} groups
-                @if($activeStatus)
-                    filtered by <x-accelerator::telemetry.status-badge :status="$activeStatus" />
-                @endif
-            </p>
+            <p class="mb-3 text-sm text-neutral-500">Issues</p>
+            <h1 class="text-3xl font-semibold tracking-tight text-white">Exception groups</h1>
+            <p class="mt-2 text-sm text-neutral-400">{{ number_format($groups->total()) }} captured groups</p>
         </div>
 
-        <div class="flex flex-wrap gap-2">
-            <a href="{{ route('accelerator.telemetry.index') }}" class="rounded-md border px-3 py-1.5 text-sm font-medium {{ $activeStatus === null ? 'border-zinc-950 bg-zinc-950 text-white' : 'border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-100' }}">
-                All
-            </a>
-            @foreach(['open', 'resolved', 'muted'] as $status)
-                <a href="{{ route('accelerator.telemetry.index', ['status' => $status]) }}" class="rounded-md border px-3 py-1.5 text-sm font-medium {{ $activeStatus === $status ? 'border-zinc-950 bg-zinc-950 text-white' : 'border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-100' }}">
-                    {{ ucfirst($status) }}
+        <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div class="flex flex-wrap gap-2">
+                <a href="{{ route('accelerator.telemetry.index') }}" class="rounded-md border px-3 py-1.5 text-sm {{ $activeStatus === null ? 'border-white/15 bg-white/10 text-white' : 'border-white/10 bg-white/[3%] text-neutral-400 hover:bg-white/[8%] hover:text-white' }}">
+                    All
                 </a>
-            @endforeach
+                @foreach(['open', 'resolved', 'muted'] as $status)
+                    <a href="{{ route('accelerator.telemetry.index', ['status' => $status]) }}" class="rounded-md border px-3 py-1.5 text-sm {{ $activeStatus === $status ? 'border-white/15 bg-white/10 text-white' : 'border-white/10 bg-white/[3%] text-neutral-400 hover:bg-white/[8%] hover:text-white' }}">
+                        {{ ucfirst($status) }}
+                    </a>
+                @endforeach
+            </div>
         </div>
-    </div>
+    </section>
 
     @if($groups->isEmpty())
-        <div class="rounded-lg border border-zinc-200 bg-white p-6 text-sm text-zinc-500">
+        <div class="rounded-xl border border-white/10 bg-[#1d1d1d] p-8 text-center text-sm text-neutral-500">
             No exception groups found.
         </div>
     @else
-        <div class="overflow-hidden rounded-lg border border-zinc-200 bg-white">
+        <section class="overflow-hidden rounded-xl border border-white/10 bg-[#1d1d1d]">
             <div class="overflow-x-auto">
-                <table class="min-w-full divide-y divide-zinc-200 text-sm">
-                    <thead class="bg-zinc-50 text-left text-xs font-semibold uppercase text-zinc-500">
+                <table class="min-w-full divide-y divide-white/10 text-sm">
+                    <thead class="bg-white/[3%] text-left font-mono text-xs uppercase text-neutral-500">
                         <tr>
                             <th class="px-4 py-3">Status</th>
-                            <th class="px-4 py-3">Exception</th>
-                            <th class="px-4 py-3">Focused File</th>
-                            <th class="px-4 py-3">Latest User</th>
-                            <th class="px-4 py-3">Waterfall</th>
+                            <th class="px-4 py-3">Issue</th>
+                            <th class="px-4 py-3">File</th>
+                            <th class="px-4 py-3">User</th>
+                            <th class="px-4 py-3">Perf</th>
                             <th class="px-4 py-3 text-right">Count</th>
-                            <th class="px-4 py-3">Last Seen</th>
-                            <th class="px-4 py-3">Actions</th>
+                            <th class="px-4 py-3">Last seen</th>
+                            <th class="px-4 py-3"></th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-zinc-100">
+                    <tbody class="divide-y divide-white/5">
                         @foreach($groups as $group)
-                            <tr class="align-top hover:bg-zinc-50">
+                            <tr class="align-top hover:bg-white/[3%]">
                                 <td class="px-4 py-3">
                                     <x-accelerator::telemetry.status-badge :status="$group['status']" />
                                 </td>
                                 <td class="max-w-md px-4 py-3">
-                                    <a href="{{ route('accelerator.telemetry.show', $group['id']) }}" class="font-semibold text-zinc-950 hover:underline">
+                                    <a href="{{ route('accelerator.telemetry.show', $group['id']) }}" class="font-semibold text-neutral-100 hover:text-white hover:underline">
                                         {{ class_basename($group['class']) }}
                                     </a>
-                                    <p class="mt-1 truncate font-mono text-xs text-zinc-500">{{ $group['class'] }}</p>
+                                    <p class="mt-1 truncate font-mono text-xs text-neutral-500">{{ $group['class'] }}</p>
                                     @if(($group['message'] ?? null) || ($group['latest_message'] ?? null))
-                                        <p class="mt-1 text-sm text-zinc-600">{{ $group['message'] ?? $group['latest_message'] }}</p>
+                                        <p class="mt-2 text-sm text-neutral-300">{{ $group['message'] ?? $group['latest_message'] }}</p>
                                     @endif
                                 </td>
                                 <td class="max-w-sm px-4 py-3">
-                                    <p class="truncate font-mono text-xs text-zinc-600">{{ str_replace(base_path().'/', '', $group['file']) }}:{{ $group['line'] }}</p>
+                                    <p class="truncate font-mono text-xs text-neutral-400">{{ str_replace(base_path().'/', '', $group['file']) }}:{{ $group['line'] }}</p>
                                 </td>
                                 <td class="max-w-[14rem] px-4 py-3">
                                     <x-accelerator::telemetry.user-chip
@@ -75,22 +73,22 @@
                                         :username="$group['latest_user_username'] ?? null"
                                         :email="$group['latest_user_email'] ?? null"
                                     />
-                                    <p class="mt-1 text-xs text-zinc-500">{{ number_format((int) ($group['user_count'] ?? 0)) }} impacted users</p>
+                                    <p class="mt-1 text-xs text-neutral-500">{{ number_format((int) ($group['user_count'] ?? 0)) }} impacted users</p>
                                 </td>
-                                <td class="whitespace-nowrap px-4 py-3 font-mono text-xs text-zinc-600">
+                                <td class="whitespace-nowrap px-4 py-3 font-mono text-xs text-neutral-400">
                                     @if($group['latest_duration_ms'] !== null)
-                                        <div>{{ number_format((float) $group['latest_duration_ms'], 2) }}ms req</div>
+                                        <div>{{ number_format((float) $group['latest_duration_ms'], 2) }}ms request</div>
                                     @else
-                                        <div class="text-zinc-400">n/a</div>
+                                        <div class="text-neutral-600">n/a</div>
                                     @endif
                                     @if($group['latest_db_query_count'] !== null)
                                         <div>{{ number_format((int) $group['latest_db_query_count']) }}q / {{ number_format((float) $group['latest_db_duration_ms'], 2) }}ms DB</div>
                                     @endif
                                 </td>
-                                <td class="px-4 py-3 text-right font-mono text-sm font-semibold text-zinc-900">
+                                <td class="px-4 py-3 text-right font-mono text-sm font-semibold text-neutral-100">
                                     {{ number_format($group['occurrence_count']) }}
                                 </td>
-                                <td class="whitespace-nowrap px-4 py-3 font-mono text-xs text-zinc-500">
+                                <td class="whitespace-nowrap px-4 py-3 font-mono text-xs text-neutral-500">
                                     {{ $group['last_seen_at'] }}
                                 </td>
                                 <td class="px-4 py-3">
@@ -101,24 +99,24 @@
                     </tbody>
                 </table>
             </div>
-        </div>
+        </section>
 
         @if($groups->hasPages())
             <div class="flex items-center justify-center gap-2 text-sm">
                 @if($groups->onFirstPage())
-                    <span class="rounded-md border border-zinc-200 bg-zinc-100 px-3 py-1.5 text-zinc-400">Prev</span>
+                    <span class="rounded-md border border-white/10 bg-white/[3%] px-3 py-1.5 text-neutral-600">Prev</span>
                 @else
-                    <a href="{{ $groups->previousPageUrl() }}" class="rounded-md border border-zinc-200 bg-white px-3 py-1.5 font-medium text-zinc-700 hover:bg-zinc-100">Prev</a>
+                    <a href="{{ $groups->previousPageUrl() }}" class="rounded-md border border-white/10 bg-white/[3%] px-3 py-1.5 text-neutral-300 hover:bg-white/[8%]">Prev</a>
                 @endif
 
-                <span class="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-zinc-500">
+                <span class="rounded-md border border-white/10 bg-white/[3%] px-3 py-1.5 text-neutral-500">
                     Page {{ $groups->currentPage() }} of {{ $groups->lastPage() }}
                 </span>
 
                 @if($groups->hasMorePages())
-                    <a href="{{ $groups->nextPageUrl() }}" class="rounded-md border border-zinc-200 bg-white px-3 py-1.5 font-medium text-zinc-700 hover:bg-zinc-100">Next</a>
+                    <a href="{{ $groups->nextPageUrl() }}" class="rounded-md border border-white/10 bg-white/[3%] px-3 py-1.5 text-neutral-300 hover:bg-white/[8%]">Next</a>
                 @else
-                    <span class="rounded-md border border-zinc-200 bg-zinc-100 px-3 py-1.5 text-zinc-400">Next</span>
+                    <span class="rounded-md border border-white/10 bg-white/[3%] px-3 py-1.5 text-neutral-600">Next</span>
                 @endif
             </div>
         @endif

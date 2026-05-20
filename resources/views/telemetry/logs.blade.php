@@ -3,27 +3,24 @@
 @section('title', 'Log Reader')
 
 @section('content')
-<div class="flex flex-col gap-4">
-    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-            <h2 class="text-lg font-semibold text-zinc-950">Logs</h2>
-            <p class="text-sm text-zinc-500">
-                {{ $logFile }} - newest entries first - grouped by Laravel log occurrence
-            </p>
-        </div>
+<div class="flex flex-col gap-6">
+    <section class="flex flex-col gap-2">
+        <p class="text-sm text-neutral-500">Logs</p>
+        <h1 class="text-3xl font-semibold tracking-tight text-white">{{ $logFile }}</h1>
+        <p class="text-sm text-neutral-400">Newest entries first, grouped by Laravel log occurrence.</p>
+    </section>
 
-        <div class="flex flex-wrap gap-2">
-            @if($page > 1)
-                <a href="{{ route('accelerator.telemetry.logs', ['page' => $page - 1]) }}" class="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-100">Newer</a>
-            @endif
-            @if($hasMore)
-                <a href="{{ route('accelerator.telemetry.logs', ['page' => $page + 1]) }}" class="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-100">Older</a>
-            @endif
-        </div>
+    <div class="flex flex-wrap gap-2">
+        @if($page > 1)
+            <a href="{{ route('accelerator.telemetry.logs', ['page' => $page - 1]) }}" class="rounded-md border border-white/10 bg-white/[3%] px-3 py-1.5 text-sm text-neutral-300 hover:bg-white/[8%]">Newer</a>
+        @endif
+        @if($hasMore)
+            <a href="{{ route('accelerator.telemetry.logs', ['page' => $page + 1]) }}" class="rounded-md border border-white/10 bg-white/[3%] px-3 py-1.5 text-sm text-neutral-300 hover:bg-white/[8%]">Older</a>
+        @endif
     </div>
 
     @if(empty($entries))
-        <div class="rounded-lg border border-zinc-200 bg-white p-6 text-sm text-zinc-500">
+        <div class="rounded-xl border border-white/10 bg-[#1d1d1d] p-8 text-center text-sm text-neutral-500">
             Log file is empty or not found.
         </div>
     @else
@@ -37,13 +34,13 @@
     <div class="flex items-center justify-between text-sm">
         <div class="flex gap-2">
             @if($page > 1)
-                <a href="{{ route('accelerator.telemetry.logs', ['page' => $page - 1]) }}" class="rounded-md border border-zinc-200 bg-white px-3 py-1.5 font-medium text-zinc-700 hover:bg-zinc-100">Newer</a>
+                <a href="{{ route('accelerator.telemetry.logs', ['page' => $page - 1]) }}" class="rounded-md border border-white/10 bg-white/[3%] px-3 py-1.5 text-neutral-300 hover:bg-white/[8%]">Newer</a>
             @endif
             @if($hasMore)
-                <a href="{{ route('accelerator.telemetry.logs', ['page' => $page + 1]) }}" class="rounded-md border border-zinc-200 bg-white px-3 py-1.5 font-medium text-zinc-700 hover:bg-zinc-100">Older</a>
+                <a href="{{ route('accelerator.telemetry.logs', ['page' => $page + 1]) }}" class="rounded-md border border-white/10 bg-white/[3%] px-3 py-1.5 text-neutral-300 hover:bg-white/[8%]">Older</a>
             @endif
         </div>
-        <span class="text-zinc-500">Page {{ $page }}</span>
+        <span class="text-neutral-500">Page {{ $page }}</span>
     </div>
 </div>
 @endsection

@@ -17,26 +17,29 @@
     $maxEnd = max($maxEnd, 1);
 @endphp
 
-<section {{ $attributes->class(['rounded-lg border border-zinc-200 bg-white p-4']) }}>
-    <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+<section {{ $attributes->class(['rounded-xl border border-white/10 bg-[#1d1d1d] p-4']) }}>
+    <div class="flex items-center justify-between gap-4">
         <div>
-            <h4 class="text-sm font-semibold text-zinc-950">Waterfall</h4>
-            <p class="text-xs text-zinc-500">
-                {{ $totalMs ? number_format((float) $totalMs, 2).'ms total request' : 'request duration unavailable' }}
+            <h4 class="text-base font-semibold text-neutral-100">Queries</h4>
+            <p class="text-xs text-neutral-500">
+                {{ $totalMs ? number_format((float) $totalMs, 2).'ms request' : 'request duration unavailable' }}
                 @if($dbQueryCount)
-                    · {{ number_format((int) $dbQueryCount) }} DB queries
+                    · {{ number_format((int) $dbQueryCount) }} queries
                     · {{ number_format((float) $dbDurationMs, 2) }}ms DB
                 @endif
             </p>
         </div>
+        @if($decodedEvents !== [])
+            <span class="font-mono text-xs text-neutral-500">1-{{ count($decodedEvents) }} of {{ count($decodedEvents) }}</span>
+        @endif
     </div>
 
     @if($decodedEvents === [])
-        <div class="mt-4 rounded-md bg-zinc-50 px-3 py-6 text-center text-sm text-zinc-500">
-            No timeline events captured for this occurrence.
+        <div class="mt-4 rounded-lg border border-white/5 bg-white/[3%] px-3 py-6 text-center text-sm text-neutral-500">
+            No query timeline captured.
         </div>
     @else
-        <div class="mt-4 flex flex-col gap-2">
+        <div class="mt-4 flex flex-col gap-1.5">
             @foreach($decodedEvents as $event)
                 @php
                     $start = (float) ($event['start_ms'] ?? 0);
@@ -44,19 +47,15 @@
                     $left = min(100, max(0, ($start / $maxEnd) * 100));
                     $width = min(100 - $left, max(1, ($duration / $maxEnd) * 100));
                 @endphp
-                <div class="grid gap-2 text-xs sm:grid-cols-[11rem_1fr_5rem] sm:items-center">
-                    <div class="truncate font-mono text-zinc-600">{{ $event['connection'] ?? $event['name'] ?? 'event' }}</div>
-                    <div class="h-7 rounded-md bg-zinc-100">
-                        <div
-                            class="h-7 rounded-md bg-sky-500"
-                            style="margin-left: {{ $left }}%; width: {{ $width }}%;"
-                            title="{{ $event['sql'] ?? $event['name'] ?? 'event' }}"
-                        ></div>
+                <div class="rounded-md bg-white/[4%] px-3 py-2">
+                    <div class="flex items-center gap-3 text-xs">
+                        <span class="shrink-0 font-mono text-neutral-500">{{ $event['connection'] ?? 'db' }}</span>
+                        <span class="min-w-0 flex-1 truncate font-mono text-neutral-300">{{ $event['sql'] ?? $event['name'] ?? 'query' }}</span>
+                        <span class="shrink-0 font-mono text-neutral-200">{{ number_format($duration, 2) }}ms</span>
                     </div>
-                    <div class="font-mono text-zinc-600">{{ number_format($duration, 2) }}ms</div>
-                    @if(isset($event['sql']))
-                        <div class="truncate font-mono text-zinc-500 sm:col-start-2 sm:col-end-4">{{ $event['sql'] }}</div>
-                    @endif
+                    <div class="mt-2 h-1.5 rounded-full bg-black/40">
+                        <div class="h-1.5 rounded-full bg-emerald-400" style="margin-left: {{ $left }}%; width: {{ $width }}%;"></div>
+                    </div>
                 </div>
             @endforeach
         </div>

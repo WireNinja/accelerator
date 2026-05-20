@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="bg-[#171717]">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,30 +8,38 @@
     <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <style>
         [x-cloak] { display: none !important; }
+
+        body {
+            background:
+                linear-gradient(rgba(255,255,255,.06) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,.06) 1px, transparent 1px),
+                #171717;
+            background-size: 1px 16rem, 16rem 1px;
+        }
     </style>
 </head>
-<body class="bg-zinc-50 text-zinc-950 antialiased">
-    <div class="mx-auto flex min-h-screen max-w-7xl flex-col gap-5 px-4 py-5 sm:px-6 lg:px-8">
-        <header class="flex flex-col gap-3 border-b border-zinc-200 pb-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-                <p class="text-xs font-medium uppercase tracking-wide text-zinc-500">Accelerator</p>
-                <h1 class="text-xl font-semibold tracking-normal text-zinc-950">Telemetry</h1>
-            </div>
+<body class="min-h-screen text-neutral-100 antialiased">
+    <div class="mx-auto flex min-h-screen w-full max-w-6xl flex-col px-5 py-6 sm:px-8 lg:px-14">
+        <header class="mb-12 flex items-center justify-between gap-4">
+            <a href="{{ route('accelerator.telemetry.index') }}" class="flex items-center gap-2 text-sm text-neutral-200">
+                <span class="flex size-5 items-center justify-center rounded-full bg-rose-500 text-[11px] font-bold text-white">!</span>
+                <span>Accelerator Telemetry</span>
+            </a>
 
             <nav class="flex flex-wrap items-center gap-2 text-sm">
                 <a
                     href="{{ route('accelerator.telemetry.index') }}"
-                    class="rounded-md px-3 py-1.5 font-medium {{ request()->routeIs('accelerator.telemetry.index') || request()->routeIs('accelerator.telemetry.show') ? 'bg-zinc-950 text-white' : 'border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-100' }}"
+                    class="rounded-md border px-3 py-1.5 {{ request()->routeIs('accelerator.telemetry.index') || request()->routeIs('accelerator.telemetry.show') ? 'border-white/15 bg-white/10 text-white' : 'border-white/10 bg-white/[3%] text-neutral-400 hover:bg-white/[8%] hover:text-white' }}"
                 >
                     Exceptions
                 </a>
                 <a
                     href="{{ route('accelerator.telemetry.logs') }}"
-                    class="rounded-md px-3 py-1.5 font-medium {{ request()->routeIs('accelerator.telemetry.logs') ? 'bg-zinc-950 text-white' : 'border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-100' }}"
+                    class="rounded-md border px-3 py-1.5 {{ request()->routeIs('accelerator.telemetry.logs') ? 'border-white/15 bg-white/10 text-white' : 'border-white/10 bg-white/[3%] text-neutral-400 hover:bg-white/[8%] hover:text-white' }}"
                 >
                     Logs
                 </a>
-                <a href="{{ url('/admin') }}" class="rounded-md border border-zinc-200 bg-white px-3 py-1.5 font-medium text-zinc-700 hover:bg-zinc-100">
+                <a href="{{ url('/admin') }}" class="rounded-md border border-white/10 bg-white/[3%] px-3 py-1.5 text-neutral-400 hover:bg-white/[8%] hover:text-white">
                     Admin
                 </a>
             </nav>
