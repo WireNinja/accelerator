@@ -167,7 +167,10 @@ return [
 
         // Telemetry exception buffer — captures exceptions in shared memory
         // and flushes to SQLite every N seconds. Zero request latency impact.
-        ...\WireNinja\Accelerator\Telemetry\TelemetryManager::octaneTableConfig(),
+        ...\WireNinja\Accelerator\Telemetry\TelemetryManager::octaneTableConfig(
+            rows: (int) env('ACCELERATOR_TELEMETRY_BUFFER_ROWS', 128),
+            bytes: (int) env('ACCELERATOR_TELEMETRY_BUFFER_BYTES', 65535),
+        ),
     ],
 
     /*

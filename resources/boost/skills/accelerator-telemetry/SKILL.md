@@ -30,7 +30,10 @@ Add the telemetry buffer table to your `config/octane.php`:
 use WireNinja\Accelerator\Telemetry\TelemetryManager;
 
 'tables' => [
-    ...TelemetryManager::octaneTableConfig(),
+    ...TelemetryManager::octaneTableConfig(
+        rows: (int) env('ACCELERATOR_TELEMETRY_BUFFER_ROWS', 128),
+        bytes: (int) env('ACCELERATOR_TELEMETRY_BUFFER_BYTES', 65535),
+    ),
     // ...your other tables (sessions, etc.)
 ],
 ```

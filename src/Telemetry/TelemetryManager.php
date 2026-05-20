@@ -22,7 +22,7 @@ use Throwable;
  * IMPORTANT: The consuming application must register the Swoole Table in config/octane.php:
  *
  *   'tables' => [
- *       ...TelemetryManager::octaneTableConfig(),
+ *       ...TelemetryManager::octaneTableConfig(rows: 128, bytes: 65535),
  *   ],
  *
  * This produces: 'telemetry_buffer:128' => ['payload' => 'string:65535', 'created_at' => 'int']
@@ -73,15 +73,15 @@ final class TelemetryManager
      *
      * Usage in config/octane.php:
      *   'tables' => [
-     *       ...TelemetryManager::octaneTableConfig(),
+     *       ...TelemetryManager::octaneTableConfig(rows: 128, bytes: 65535),
      *   ],
      *
      * @return array<string, array<string, string>>
      */
-    public static function octaneTableConfig(): array
+    public static function octaneTableConfig(int $rows = 128, int $bytes = 65535): array
     {
-        $rows = (int) env('ACCELERATOR_TELEMETRY_BUFFER_ROWS', 128);
-        $bytes = (int) env('ACCELERATOR_TELEMETRY_BUFFER_BYTES', 65535);
+        $rows = max(1, $rows);
+        $bytes = max(1024, $bytes);
 
         return [
             TelemetryRecorder::TABLE_NAME.':'.$rows => [
