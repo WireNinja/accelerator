@@ -36,12 +36,7 @@ use ReflectionMethod;
 use RuntimeException;
 use Spatie\StructureDiscoverer\Discover;
 use Throwable;
-use WireNinja\Accelerator\Attributes\DiscoverAsForm;
-use WireNinja\Accelerator\Attributes\DiscoverAsPage;
-use WireNinja\Accelerator\Attributes\DiscoverAsRelationManager;
 use WireNinja\Accelerator\Attributes\DiscoverAsResource;
-use WireNinja\Accelerator\Attributes\DiscoverAsTable;
-use WireNinja\Accelerator\Attributes\DiscoverAsWidget;
 
 class ResourceContextScanner
 {
@@ -141,169 +136,6 @@ class ResourceContextScanner
             ];
         }
 
-        foreach ($this->discoverAnnotatedClasses(DiscoverAsForm::class) as $formClass) {
-            /** @var ?DiscoverAsForm $attribute */
-            $attribute = $this->getAttributeInstance($formClass, DiscoverAsForm::class);
-
-            $forms[$formClass] = [
-                'class' => $formClass,
-                'resource' => $attribute?->resource,
-                'source' => $this->describeClassSource($formClass),
-            ];
-        }
-
-        foreach ($this->discoverAnnotatedClasses(DiscoverAsTable::class) as $tableClass) {
-            /** @var ?DiscoverAsTable $attribute */
-            $attribute = $this->getAttributeInstance($tableClass, DiscoverAsTable::class);
-
-            $tables[$tableClass] = [
-                'class' => $tableClass,
-                'resource' => $attribute?->resource,
-                'source' => $this->describeClassSource($tableClass),
-            ];
-        }
-
-        foreach ($this->discoverAnnotatedClasses(DiscoverAsRelationManager::class) as $relationManagerClass) {
-            /** @var ?DiscoverAsRelationManager $attribute */
-            $attribute = $this->getAttributeInstance($relationManagerClass, DiscoverAsRelationManager::class);
-
-            $relationManagers[$relationManagerClass] = [
-                'class' => $relationManagerClass,
-                'resource' => $attribute?->resource,
-                'relationship' => $attribute?->relationship,
-                'source' => $this->describeClassSource($relationManagerClass),
-            ];
-        }
-
-        foreach ($this->discoverAnnotatedClasses(DiscoverAsPage::class) as $pageClass) {
-            /** @var ?DiscoverAsPage $attribute */
-            $attribute = $this->getAttributeInstance($pageClass, DiscoverAsPage::class);
-
-            $pages[$pageClass] = [
-                'class' => $pageClass,
-                'resource' => $attribute?->resource,
-                'key' => $attribute?->key,
-                'source' => $this->describeClassSource($pageClass),
-            ];
-        }
-
-        foreach ($this->discoverAnnotatedClasses(DiscoverAsWidget::class) as $widgetClass) {
-            /** @var ?DiscoverAsWidget $attribute */
-            $attribute = $this->getAttributeInstance($widgetClass, DiscoverAsWidget::class);
-
-            $widgets[$widgetClass] = [
-                'class' => $widgetClass,
-                'resource' => $attribute?->resource,
-                'key' => $attribute?->key,
-                'source' => $this->describeClassSource($widgetClass),
-            ];
-        }
-
-        $formsByResource = [];
-
-        foreach ($forms as $formClass => $form) {
-            if (is_string($form['resource']) && $form['resource'] !== '') {
-                $formsByResource[$form['resource']][] = $formClass;
-            }
-        }
-
-        $tablesByResource = [];
-
-        foreach ($tables as $tableClass => $table) {
-            if (is_string($table['resource']) && $table['resource'] !== '') {
-                $tablesByResource[$table['resource']][] = $tableClass;
-            }
-        }
-
-        foreach ($relationManagers as $relationManagerClass => $relationManager) {
-            if (! is_string($relationManager['resource']) || $relationManager['resource'] === '') {
-                continue;
-            }
-
-            if (! isset($resources[$relationManager['resource']])) {
-                $diagnostics[] = [
-                    'type' => 'relation_manager_resource_not_annotated',
-                    'relation_manager' => $relationManagerClass,
-                    'resource' => $relationManager['resource'],
-                ];
-            }
-        }
-
-        foreach ($pages as $pageClass => $page) {
-            if (! is_string($page['resource']) || $page['resource'] === '') {
-                continue;
-            }
-
-            if (! isset($resources[$page['resource']])) {
-                $diagnostics[] = [
-                    'type' => 'page_resource_not_annotated',
-                    'page' => $pageClass,
-                    'resource' => $page['resource'],
-                ];
-            }
-        }
-
-        foreach ($widgets as $widgetClass => $widget) {
-            if (! is_string($widget['resource']) || $widget['resource'] === '') {
-                continue;
-            }
-
-            if (! isset($resources[$widget['resource']])) {
-                $diagnostics[] = [
-                    'type' => 'widget_resource_not_annotated',
-                    'widget' => $widgetClass,
-                    'resource' => $widget['resource'],
-                ];
-            }
-        }
-
-        foreach ($resources as $resourceClass => &$resourceInfo) {
-            $discoveredForms = $formsByResource[$resourceClass] ?? [];
-            $discoveredTables = $tablesByResource[$resourceClass] ?? [];
-
-            if ($resourceInfo['form'] === null && $discoveredForms !== []) {
-                $resourceInfo['form'] = $discoveredForms[0];
-            }
-
-            if ($resourceInfo['table'] === null && $discoveredTables !== []) {
-                $resourceInfo['table'] = $discoveredTables[0];
-            }
-
-            if (count($discoveredForms) > 1) {
-                $diagnostics[] = [
-                    'type' => 'multiple_forms_for_resource',
-                    'resource' => $resourceClass,
-                    'forms' => array_values($discoveredForms),
-                ];
-            }
-
-            if (count($discoveredTables) > 1) {
-                $diagnostics[] = [
-                    'type' => 'multiple_tables_for_resource',
-                    'resource' => $resourceClass,
-                    'tables' => array_values($discoveredTables),
-                ];
-            }
-
-            if (is_string($resourceInfo['form']) && ! isset($forms[$resourceInfo['form']])) {
-                $diagnostics[] = [
-                    'type' => 'resource_form_not_annotated',
-                    'resource' => $resourceClass,
-                    'form' => $resourceInfo['form'],
-                ];
-            }
-
-            if (is_string($resourceInfo['table']) && ! isset($tables[$resourceInfo['table']])) {
-                $diagnostics[] = [
-                    'type' => 'resource_table_not_annotated',
-                    'resource' => $resourceClass,
-                    'table' => $resourceInfo['table'],
-                ];
-            }
-        }
-
-        unset($resourceInfo);
-
         $resourceLookup = [];
 
         foreach ($resources as $resourceClass => $resourceInfo) {
@@ -320,55 +152,15 @@ class ResourceContextScanner
 
                 $resourceLookup[$alias] = $resourceClass;
             }
-        }
 
-        foreach ($forms as $formClass => $formInfo) {
-            if (! is_string($formInfo['resource']) || $formInfo['resource'] === '') {
-                continue;
-            }
+            foreach (['form', 'table'] as $linkedClassKey) {
+                if (! is_string($resourceInfo[$linkedClassKey] ?? null)) {
+                    continue;
+                }
 
-            foreach ($this->linkedClassAliases($formClass) as $alias) {
-                $resourceLookup[$alias] = $formInfo['resource'];
-            }
-        }
-
-        foreach ($tables as $tableClass => $tableInfo) {
-            if (! is_string($tableInfo['resource']) || $tableInfo['resource'] === '') {
-                continue;
-            }
-
-            foreach ($this->linkedClassAliases($tableClass) as $alias) {
-                $resourceLookup[$alias] = $tableInfo['resource'];
-            }
-        }
-
-        foreach ($relationManagers as $relationManagerInfo) {
-            if (! is_string($relationManagerInfo['resource']) || $relationManagerInfo['resource'] === '') {
-                continue;
-            }
-
-            foreach ($this->relationManagerAliases($relationManagerInfo) as $alias) {
-                $resourceLookup[$alias] = $relationManagerInfo['resource'];
-            }
-        }
-
-        foreach ($pages as $pageInfo) {
-            if (! is_string($pageInfo['resource']) || $pageInfo['resource'] === '') {
-                continue;
-            }
-
-            foreach ($this->pageAliases($pageInfo) as $alias) {
-                $resourceLookup[$alias] = $pageInfo['resource'];
-            }
-        }
-
-        foreach ($widgets as $widgetInfo) {
-            if (! is_string($widgetInfo['resource']) || $widgetInfo['resource'] === '') {
-                continue;
-            }
-
-            foreach ($this->widgetAliases($widgetInfo) as $alias) {
-                $resourceLookup[$alias] = $widgetInfo['resource'];
+                foreach ($this->linkedClassAliases($resourceInfo[$linkedClassKey]) as $alias) {
+                    $resourceLookup[$alias] = $resourceClass;
+                }
             }
         }
 
@@ -1126,10 +918,6 @@ class ResourceContextScanner
                 $page['introspection_error'] = $throwable->getMessage();
             }
 
-            if (isset($catalog['pages'][$pageClass]['key']) && is_string($catalog['pages'][$pageClass]['key'])) {
-                $page['annotated_key'] = $catalog['pages'][$pageClass]['key'];
-            }
-
             $pages[] = $page;
         }
 
@@ -1251,16 +1039,6 @@ class ResourceContextScanner
     {
         /** @var ?DiscoverAsResource $resourceAttribute */
         $resourceAttribute = $this->getAttributeInstance($class, DiscoverAsResource::class);
-        /** @var ?DiscoverAsForm $formAttribute */
-        $formAttribute = $this->getAttributeInstance($class, DiscoverAsForm::class);
-        /** @var ?DiscoverAsPage $pageAttribute */
-        $pageAttribute = $this->getAttributeInstance($class, DiscoverAsPage::class);
-        /** @var ?DiscoverAsRelationManager $relationManagerAttribute */
-        $relationManagerAttribute = $this->getAttributeInstance($class, DiscoverAsRelationManager::class);
-        /** @var ?DiscoverAsTable $tableAttribute */
-        $tableAttribute = $this->getAttributeInstance($class, DiscoverAsTable::class);
-        /** @var ?DiscoverAsWidget $widgetAttribute */
-        $widgetAttribute = $this->getAttributeInstance($class, DiscoverAsWidget::class);
 
         return $this->filterNullValues([
             'attributes' => $this->getAttributeClassNames($class),
@@ -1268,24 +1046,6 @@ class ResourceContextScanner
                 'key' => $resourceAttribute->key,
                 'form' => $resourceAttribute->form,
                 'table' => $resourceAttribute->table,
-            ] : null,
-            'annotated_as_form' => $formAttribute ? [
-                'resource' => $formAttribute->resource,
-            ] : null,
-            'annotated_as_page' => $pageAttribute ? [
-                'resource' => $pageAttribute->resource,
-                'key' => $pageAttribute->key,
-            ] : null,
-            'annotated_as_relation_manager' => $relationManagerAttribute ? [
-                'resource' => $relationManagerAttribute->resource,
-                'relationship' => $relationManagerAttribute->relationship,
-            ] : null,
-            'annotated_as_table' => $tableAttribute ? [
-                'resource' => $tableAttribute->resource,
-            ] : null,
-            'annotated_as_widget' => $widgetAttribute ? [
-                'resource' => $widgetAttribute->resource,
-                'key' => $widgetAttribute->key,
             ] : null,
         ]);
     }
@@ -1324,17 +1084,6 @@ class ResourceContextScanner
                         : $widget;
                 }
             }
-        }
-
-        foreach ($catalog['widgets'] ?? [] as $widgetClass => $widgetInfo) {
-            if (($widgetInfo['resource'] ?? null) !== $resourceClass) {
-                continue;
-            }
-
-            $described = $this->describeWidgetClass($widgetClass, $resourceClass, $catalog);
-            $widgets[$widgetClass] = isset($widgets[$widgetClass])
-                ? $this->mergeWidgetPayload($widgets[$widgetClass], $described)
-                : $described;
         }
 
         ksort($widgets);
@@ -1380,10 +1129,6 @@ class ResourceContextScanner
             'resource' => $resourceClass,
             'properties' => $properties,
         ];
-
-        if (isset($catalog['widgets'][$widgetClass]['key']) && is_string($catalog['widgets'][$widgetClass]['key'])) {
-            $payload['key'] = $catalog['widgets'][$widgetClass]['key'];
-        }
 
         if (! class_exists($widgetClass) || ! is_subclass_of($widgetClass, Widget::class)) {
             return $payload;

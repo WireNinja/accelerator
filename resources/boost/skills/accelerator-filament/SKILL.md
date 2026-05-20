@@ -1,6 +1,6 @@
 ---
 name: accelerator-filament
-description: Build Filament v5 resources the Accelerator way — BetterResource, ResourceEnum, Shield, discovery annotations, concentrated long form, BigDecimal, Lookup helper, and strict deprecation rules.
+description: Build Filament v5 resources the Accelerator way — BetterResource, ResourceEnum, Shield, DiscoverAsResource only, concentrated long form, BigDecimal, Lookup helper, and strict deprecation rules.
 ---
 
 # Accelerator Filament
@@ -93,7 +93,7 @@ Use `ResourceEnum::getResourcesPermissions()` to declare custom abilities ONLY w
 
 1. `php artisan make:filament-resource {Name}` — Filament native generator. Do NOT wrap or replace.
 2. **Inject the trait** in the generated `{Name}Resource.php`: `use WireNinja\Accelerator\Filament\Traits\BetterResource;` then `use BetterResource;` inside the class body.
-3. **Add the discovery attribute** above the class: `#[DiscoverAsResource(key: '{camelKey}', form: {Name}Form::class, table: {Names}Table::class)]`. Imports as needed: `WireNinja\Accelerator\Filament\Attributes\DiscoverAsResource`.
+3. **Add the only allowed discovery attribute** above the resource class: `#[DiscoverAsResource(key: '{camelKey}', form: {Name}Form::class, table: {Names}Table::class)]`. Imports as needed: `WireNinja\Accelerator\Attributes\DiscoverAsResource`.
 4. Register in `ResourceEnum` (case, label, resource, navigation icon `lucide-*`, navigation group, panel group, permissions).
 5. Review the generated form/table/policy in `app/Filament/...` and `app/Policies/`.
 6. Run `php artisan shield:safe-regenerate` (idempotent, safe to repeat).
