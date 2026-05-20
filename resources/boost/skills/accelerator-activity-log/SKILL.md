@@ -29,6 +29,8 @@ Core files:
 - `app/Filament/Concerns/LogsResourceRelationshipActivity.php`: Filament create/edit lifecycle hook integration.
 - `app/Filament/RelationManagers/ActivitiesRelationManager.php`: reusable read-only activity relation manager.
 - `app/Filament/RelationManagers/AuditRelationGroup.php`: reusable audit relation group wrapper. Pass relation managers into `AuditRelationGroup::make([...])` so resources stay consistent and relation badges are deferred by default.
+- `app/Policies/ActivityPolicy.php`: policy for `Spatie\Activitylog\Models\Activity`. Strict Filament authorization requires at least `viewAny()` and `view()` because the activity relation manager checks related model access.
+- `app/Providers/AppServiceProvider.php`: manually registers `Gate::policy(Activity::class, ActivityPolicy::class)` for the vendor model.
 
 ## Add Activity Logging To A Model
 
@@ -45,7 +47,8 @@ Core files:
 ## Add Activity Logging To A Filament Resource
 
 1. Ensure the model has an `activities()` relation from `HasConfiguredActivity` or `LogsConfiguredActivity`.
-2. Add the audit relation group to the resource `getRelations()` array:
+2. Ensure `Spatie\Activitylog\Models\Activity` has a registered `ActivityPolicy` with `viewAny()` and `view()` before adding the relation manager. Do not rely on non-strict fallback behavior.
+3. Add the audit relation group to the resource `getRelations()` array:
 
 ```php
 use App\Filament\RelationManagers\ActivitiesRelationManager;
@@ -65,8 +68,8 @@ public static function getRelations(): array
 }
 ```
 
-3. Add `LogsResourceRelationshipActivity` to the Create and Edit resource pages if the resource form saves relationships declared in `config/audit.php`.
-4. For custom table/header actions that manually call `sync()`, `attach()`, `detach()`, or similar relationship writes, wrap the action:
+4. Add `LogsResourceRelationshipActivity` to the Create and Edit resource pages if the resource form saves relationships declared in `config/audit.php`.
+5. For custom table/header actions that manually call `sync()`, `attach()`, `detach()`, or similar relationship writes, wrap the action:
 
 ```php
 $activityLogger = resolve(RelationshipActivityLogger::class);
@@ -77,7 +80,7 @@ $relationshipSnapshot = $activityLogger->snapshot($record);
 $activityLogger->logIfChanged($record, $relationshipSnapshot);
 ```
 
-5. Keep activity relation managers read-only. Do not add create/edit/delete actions for activity rows.
+6. Keep activity relation managers read-only. Do not add create/edit/delete actions for activity rows.
 
 ## Verification
 

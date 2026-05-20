@@ -122,7 +122,7 @@ final class PanelPreset
             ->sidebarFullyCollapsibleOnDesktop()
             ->databaseTransactions()
             ->unsavedChangesAlerts(fn() => resolve('app')->isProduction())
-            // ->strictAuthorization(fn () => resolve('app')->isLocal())
+            ->strictAuthorization(fn() => resolve('app')->isLocal())
             ->profile(ManageProfile::class, isSimple: false)
             ->revealablePasswords()
             ->resourceCreatePageRedirect('index')
