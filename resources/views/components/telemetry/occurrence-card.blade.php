@@ -2,9 +2,9 @@
 
 <article
     x-data="{ open: false, headers: false, payload: false }"
-    class="rounded-xl border border-white/10 bg-[#1d1d1d]"
+    class="max-w-full overflow-hidden rounded-xl border border-white/10 bg-[#1d1d1d]"
 >
-    <button type="button" x-on:click="open = ! open" class="flex w-full flex-col gap-3 px-4 py-3 text-left hover:bg-white/[3%] sm:flex-row sm:items-start sm:justify-between">
+    <button type="button" x-on:click="open = ! open" class="flex w-full min-w-0 flex-col gap-3 px-4 py-3 text-left hover:bg-white/[3%] sm:flex-row sm:items-start sm:justify-between">
         <div class="min-w-0">
             <div class="flex flex-wrap items-center gap-2">
                 <span class="font-mono text-xs font-semibold text-neutral-200">{{ $occurrence['created_at'] }}</span>
@@ -28,8 +28,8 @@
         </div>
     </button>
 
-    <div x-cloak x-show="open" class="border-t border-white/10 px-4 py-4">
-        <div class="mb-4 grid gap-4 lg:grid-cols-[18rem_1fr]">
+    <div x-cloak x-show="open" class="min-w-0 border-t border-white/10 px-4 py-4">
+        <div class="mb-4 grid min-w-0 gap-4 lg:grid-cols-[18rem_minmax(0,1fr)]">
             <div class="rounded-xl border border-white/10 bg-white/[3%] p-3">
                 <p class="mb-2 text-xs font-semibold uppercase text-neutral-500">Actor</p>
                 <x-accelerator::telemetry.user-chip
@@ -57,15 +57,15 @@
             :snippet="$occurrence['source_snippet'] ?? []"
         />
 
-        <pre class="overflow-x-auto whitespace-pre-wrap break-words rounded-xl border border-white/10 bg-[#202020] p-4 text-xs leading-6 text-neutral-300">{{ $occurrence['stack_trace'] }}</pre>
+        <pre class="max-w-full overflow-x-auto whitespace-pre-wrap break-words rounded-xl border border-white/10 bg-[#202020] p-4 text-xs leading-6 text-neutral-300">{{ $occurrence['stack_trace'] }}</pre>
 
-        <div class="mt-4 grid gap-3 lg:grid-cols-2">
+        <div class="mt-4 grid min-w-0 gap-3 lg:grid-cols-2">
             @if($occurrence['request_headers'])
                 <section>
                     <button type="button" x-on:click="headers = ! headers" class="text-xs font-semibold text-neutral-400 hover:text-white">
                         Headers
                     </button>
-                    <pre x-cloak x-show="headers" class="mt-2 overflow-x-auto whitespace-pre-wrap break-words rounded-xl border border-white/10 bg-[#202020] p-3 text-xs leading-5 text-neutral-300">{{ json_encode(json_decode($occurrence['request_headers'], true), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) }}</pre>
+                    <pre x-cloak x-show="headers" class="mt-2 max-w-full overflow-x-auto whitespace-pre-wrap break-words rounded-xl border border-white/10 bg-[#202020] p-3 text-xs leading-5 text-neutral-300">{{ json_encode(json_decode($occurrence['request_headers'], true), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) }}</pre>
                 </section>
             @endif
 
@@ -74,7 +74,7 @@
                     <button type="button" x-on:click="payload = ! payload" class="text-xs font-semibold text-neutral-400 hover:text-white">
                         Body
                     </button>
-                    <pre x-cloak x-show="payload" class="mt-2 overflow-x-auto whitespace-pre-wrap break-words rounded-xl border border-white/10 bg-[#202020] p-3 text-xs leading-5 text-neutral-300">{{ json_encode(json_decode($occurrence['request_payload'], true), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) }}</pre>
+                    <pre x-cloak x-show="payload" class="mt-2 max-w-full overflow-x-auto whitespace-pre-wrap break-words rounded-xl border border-white/10 bg-[#202020] p-3 text-xs leading-5 text-neutral-300">{{ json_encode(json_decode($occurrence['request_payload'], true), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) }}</pre>
                 </section>
             @endif
         </div>

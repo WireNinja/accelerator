@@ -10,16 +10,46 @@
         [x-cloak] { display: none !important; }
 
         body {
-            background:
-                linear-gradient(rgba(255,255,255,.06) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(255,255,255,.06) 1px, transparent 1px),
-                #171717;
-            background-size: 1px 16rem, 16rem 1px;
+            background: #171717;
+        }
+
+        .shiki,
+        .shiki span {
+            background: transparent !important;
+        }
+
+        .shiki {
+            overflow: visible;
+            padding: .75rem 0;
+        }
+
+        .shiki .line {
+            display: block;
+            min-height: 1.75rem;
+            padding-left: 4.25rem;
+            padding-right: 1rem;
+            position: relative;
+        }
+
+        .shiki .line::before {
+            color: rgb(115 115 115);
+            content: attr(data-line);
+            left: 0;
+            padding-right: 1rem;
+            position: absolute;
+            text-align: right;
+            user-select: none;
+            width: 3.25rem;
+        }
+
+        .shiki .line.is-focused {
+            background: rgba(190, 18, 60, .72) !important;
+            color: white;
         }
     </style>
 </head>
 <body class="min-h-screen text-neutral-100 antialiased">
-    <div class="mx-auto flex min-h-screen w-full max-w-6xl flex-col px-5 py-6 sm:px-8 lg:px-14">
+    <div class="mx-auto flex min-h-screen w-full max-w-[94rem] flex-col border-x border-white/[8%] px-5 py-6 sm:px-8 lg:px-14">
         <header class="mb-12 flex items-center justify-between gap-4">
             <a href="{{ route('accelerator.telemetry.index') }}" class="flex items-center gap-2 text-sm text-neutral-200">
                 <span class="flex size-5 items-center justify-center rounded-full bg-rose-500 text-[11px] font-bold text-white">!</span>
@@ -49,5 +79,7 @@
             @yield('content')
         </main>
     </div>
+
+    @stack('scripts')
 </body>
 </html>

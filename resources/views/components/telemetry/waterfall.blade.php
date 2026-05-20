@@ -17,7 +17,7 @@
     $maxEnd = max($maxEnd, 1);
 @endphp
 
-<section {{ $attributes->class(['rounded-xl border border-white/10 bg-[#1d1d1d] p-4']) }}>
+<section {{ $attributes->class(['min-w-0 overflow-hidden rounded-xl border border-white/10 bg-[#1d1d1d] p-4']) }}>
     <div class="flex items-center justify-between gap-4">
         <div>
             <h4 class="text-base font-semibold text-neutral-100">Queries</h4>
@@ -47,7 +47,7 @@
                     $left = min(100, max(0, ($start / $maxEnd) * 100));
                     $width = min(100 - $left, max(1, ($duration / $maxEnd) * 100));
                 @endphp
-                <div class="rounded-md bg-white/[4%] px-3 py-2">
+                <div class="min-w-0 rounded-md bg-white/[4%] px-3 py-2">
                     <div class="flex items-center gap-3 text-xs">
                         <span class="shrink-0 font-mono text-neutral-500">{{ $event['connection'] ?? 'db' }}</span>
                         <span class="min-w-0 flex-1 truncate font-mono text-neutral-300">{{ $event['sql'] ?? $event['name'] ?? 'query' }}</span>
