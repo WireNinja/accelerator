@@ -22,14 +22,10 @@ use Throwable;
  * IMPORTANT: The consuming application must register the Swoole Table in config/octane.php:
  *
  *   'tables' => [
- *       'telemetry_buffer' => [
- *           'rows' => env('ACCELERATOR_TELEMETRY_BUFFER_ROWS', 128),
- *           'columns' => [
- *               ['name' => 'payload', 'type' => 'string', 'size' => env('ACCELERATOR_TELEMETRY_BUFFER_BYTES', 65535)],
- *               ['name' => 'created_at', 'type' => 'int'],
- *           ],
- *       ],
+ *       ...TelemetryManager::octaneTableConfig(),
  *   ],
+ *
+ * This produces: 'telemetry_buffer:128' => ['payload' => 'string:65535', 'created_at' => 'int']
  */
 final class TelemetryManager
 {
@@ -46,9 +42,19 @@ final class TelemetryManager
 
     /**
      * Check if telemetry is enabled and the runtime supports it.
+     *
+     * Telemetry is Octane Swoole only. It is automatically disabled on:
+     * - FPM, RoadRunner, FrankenPHP (runtime != swoole)
+     * - CLI/artisan commands (would keep process alive via Timer::tick)
+     * - When Swoole extension is not loaded
+     * - When explicitly disabled via config
      */
     public static function isSupported(): bool
     {
+        if (app()->runningInConsole()) {
+            return false;
+        }
+
         if (! config('accelerator.telemetry.enabled', true)) {
             return false;
         }
@@ -67,22 +73,24 @@ final class TelemetryManager
     /**
      * Returns the Swoole Table definition to merge into config/octane.php 'tables' array.
      *
+     * Laravel Octane table format is 'name:rows' => ['column' => 'type:size'].
+     *
      * Usage in config/octane.php:
      *   'tables' => [
      *       ...TelemetryManager::octaneTableConfig(),
      *   ],
      *
-     * @return array<string, array{rows: int, columns: array<int, array{name: string, type: string, size?: int}>}>
+     * @return array<string, array<string, string>>
      */
     public static function octaneTableConfig(): array
     {
+        $rows = (int) env('ACCELERATOR_TELEMETRY_BUFFER_ROWS', 128);
+        $bytes = (int) env('ACCELERATOR_TELEMETRY_BUFFER_BYTES', 65535);
+
         return [
-            TelemetryRecorder::TABLE_NAME => [
-                'rows' => (int) env('ACCELERATOR_TELEMETRY_BUFFER_ROWS', 128),
-                'columns' => [
-                    ['name' => 'payload', 'type' => 'string', 'size' => (int) env('ACCELERATOR_TELEMETRY_BUFFER_BYTES', 65535)],
-                    ['name' => 'created_at', 'type' => 'int'],
-                ],
+            TelemetryRecorder::TABLE_NAME.':'.$rows => [
+                'payload' => 'string:'.$bytes,
+                'created_at' => 'int',
             ],
         ];
     }

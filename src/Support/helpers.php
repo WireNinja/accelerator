@@ -55,3 +55,13 @@ if (! function_exists('is_swoole_runtime')) {
         return config('accelerator.runtime') === 'swoole';
     }
 }
+
+if (! function_exists('is_octane_runtime')) {
+    /**
+     * @deprecated Use is_swoole_runtime() instead. This alias will be removed in v2.0.
+     */
+    function is_octane_runtime(): bool
+    {
+        return is_swoole_runtime();
+    }
+}

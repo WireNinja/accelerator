@@ -135,15 +135,18 @@ class TelemetryController
     }
 
     /**
-     * Paginated log reader (reads laravel.log from the end).
+     * Paginated log reader (reads laravel.log from the end using SplFileObject).
+     *
+     * Uses seek-based reading to avoid loading the entire log file into memory.
+     * Reads backward from EOF so newest entries appear first.
      */
     public function logs(Request $request): View
     {
-        $logFile = storage_path('logs/laravel.log');
+        $logPath = storage_path('logs/laravel.log');
         $perPage = 100;
         $page = max(1, (int) $request->query('page', '1'));
 
-        if (! File::exists($logFile)) {
+        if (! File::exists($logPath) || File::size($logPath) === 0) {
             return view('accelerator::telemetry.logs', [
                 'lines' => [],
                 'logFile' => 'laravel.log',
@@ -155,14 +158,37 @@ class TelemetryController
             ]);
         }
 
-        $allLines = file($logFile, FILE_IGNORE_NEW_LINES);
-        $totalLines = count($allLines);
+        $file = new \SplFileObject($logPath, 'r');
+        $file->seek(PHP_INT_MAX);
+        $totalLines = $file->key(); // 0-indexed last line number
 
-        // Paginate from the end (newest first).
+        if ($totalLines === 0) {
+            return view('accelerator::telemetry.logs', [
+                'lines' => [],
+                'logFile' => 'laravel.log',
+                'page' => $page,
+                'totalLines' => 0,
+                'startLine' => 0,
+                'endLine' => 0,
+                'hasMore' => false,
+            ]);
+        }
+
+        // Calculate which lines to read (from the end).
         $endOffset = $totalLines - (($page - 1) * $perPage);
         $startOffset = max(0, $endOffset - $perPage);
 
-        $lines = array_slice($allLines, $startOffset, $endOffset - $startOffset);
+        $lines = [];
+        $file->seek($startOffset);
+
+        for ($i = $startOffset; $i < $endOffset && ! $file->eof(); $i++) {
+            $line = $file->current();
+            if ($line !== false) {
+                $lines[] = rtrim((string) $line);
+            }
+            $file->next();
+        }
+
         $lines = array_reverse($lines); // Newest on top.
 
         return view('accelerator::telemetry.logs', [
@@ -171,7 +197,7 @@ class TelemetryController
             'page' => $page,
             'totalLines' => $totalLines,
             'startLine' => $startOffset + 1,
-            'endLine' => $endOffset,
+            'endLine' => min($endOffset, $totalLines),
             'hasMore' => $startOffset > 0,
         ]);
     }

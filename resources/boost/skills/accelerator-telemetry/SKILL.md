@@ -16,7 +16,7 @@ Accelerator ships a built-in, baked-in telemetry system that captures exceptions
 - **Zero latency**: writes to Swoole shared-memory Table, not disk.
 - **Self-healing**: SQLite database auto-creates on first flush.
 - **Gracefully degrading**: any failure silently disables telemetry for the worker lifecycle.
-- **Octane Swoole only**: automatically disabled on FPM, CLI, RoadRunner, or FrankenPHP.
+- **Octane Swoole only**: automatically disabled on FPM, CLI/artisan, RoadRunner, or FrankenPHP.
 
 Exceptions are buffered in memory and batch-flushed to a dedicated SQLite database every 5 seconds (configurable). Notifications are sent to Discord/Telegram on first occurrence and re-open.
 
@@ -34,6 +34,8 @@ use WireNinja\Accelerator\Telemetry\TelemetryManager;
     // ...your other tables (sessions, etc.)
 ],
 ```
+
+This produces the correct Octane format: `'telemetry_buffer:128' => ['payload' => 'string:65535', 'created_at' => 'int']`.
 
 ### 2. Environment Variables (all optional — defaults are sane)
 
@@ -145,6 +147,7 @@ All keys live under `config('accelerator.telemetry.*')`:
 - SQLite write failure (disk full, permissions) → telemetry disabled for worker lifecycle.
 - Buffer overflow (128 rows full) → newest exceptions dropped (catastrophic flood protection).
 - Notification failure → swallowed by `rescue()`, never crashes the app.
+- CLI/artisan process → `isSupported()` returns false immediately (prevents Timer::tick from keeping CLI alive).
 
 ## Rules
 

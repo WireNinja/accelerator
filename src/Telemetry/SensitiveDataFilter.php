@@ -45,7 +45,11 @@ final class SensitiveDataFilter
     }
 
     /**
-     * Recursively redact keys that match the sensitive list.
+     * Recursively redact keys that contain any sensitive token.
+     *
+     * Uses substring matching: a key like 'api_token' matches the token 'token',
+     * 'client_secret' matches 'secret', etc. This prevents sensitive data from
+     * leaking through compound key names.
      *
      * @param  array<string, mixed>  $data
      * @param  array<int, string>  $sensitiveKeys
@@ -58,7 +62,7 @@ final class SensitiveDataFilter
         foreach ($data as $key => $value) {
             $normalizedKey = strtolower((string) $key);
 
-            if (in_array($normalizedKey, $sensitiveKeys, true)) {
+            if (self::containsSensitiveToken($normalizedKey, $sensitiveKeys)) {
                 $result[$key] = '[REDACTED]';
             } elseif (is_array($value)) {
                 $result[$key] = self::redactKeys($value, $sensitiveKeys);
@@ -68,5 +72,21 @@ final class SensitiveDataFilter
         }
 
         return $result;
+    }
+
+    /**
+     * Check if a key contains any of the sensitive tokens as a substring.
+     *
+     * @param  array<int, string>  $sensitiveTokens
+     */
+    private static function containsSensitiveToken(string $key, array $sensitiveTokens): bool
+    {
+        foreach ($sensitiveTokens as $token) {
+            if (str_contains($key, $token)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
