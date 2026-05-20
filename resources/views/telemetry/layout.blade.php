@@ -13,38 +13,32 @@
             background: #171717;
         }
 
-        .shiki,
-        .shiki span {
-            background: transparent !important;
-        }
-
-        .shiki {
+        .telemetry-code .phiki {
+            border-radius: 0;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+            font-size: 13px;
+            line-height: 1.45;
+            margin: 0;
             overflow: visible;
-            padding: .75rem 0;
+            padding: .5rem 0;
         }
 
-        .shiki .line {
+        .telemetry-code .line {
             display: block;
-            min-height: 1.75rem;
-            padding-left: 4.25rem;
-            padding-right: 1rem;
-            position: relative;
+            min-height: 1.45em;
+            padding: 0 .75rem;
         }
 
-        .shiki .line::before {
-            color: rgb(115 115 115);
-            content: attr(data-line);
-            left: 0;
-            padding-right: 1rem;
-            position: absolute;
+        .telemetry-code .line-number {
+            display: inline-block;
+            margin-right: .85rem;
             text-align: right;
             user-select: none;
             width: 3.25rem;
         }
 
-        .shiki .line.is-focused {
+        .telemetry-code .focused-line {
             background: rgba(190, 18, 60, .72) !important;
-            color: white;
         }
     </style>
 </head>

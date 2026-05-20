@@ -14,14 +14,31 @@
     $startLine = (int) ($decodedSnippet[0]['line'] ?? $line ?? 1);
     $focusedLine = (int) ($line ?? 0);
     $extension = $relativeFile ? strtolower(pathinfo($relativeFile, PATHINFO_EXTENSION)) : 'php';
-    $language = match ($extension) {
-        'js', 'mjs', 'cjs' => 'js',
-        'ts' => 'ts',
-        'css' => 'css',
-        'json' => 'json',
-        'vue' => 'vue',
-        default => 'php',
+    $grammar = match ($extension) {
+        'js', 'mjs', 'cjs' => \Phiki\Grammar\Grammar::Javascript,
+        'ts' => \Phiki\Grammar\Grammar::Typescript,
+        'css' => \Phiki\Grammar\Grammar::Css,
+        'json' => \Phiki\Grammar\Grammar::Json,
+        'vue' => \Phiki\Grammar\Grammar::Vue,
+        default => \Phiki\Grammar\Grammar::Php,
     };
+    $focusedIndex = $focusedLine > 0 ? $focusedLine - $startLine : -1;
+    $highlightedCode = null;
+
+    if ($decodedSnippet !== []) {
+        $output = (new \Phiki\Phiki())
+            ->codeToHtml($code, $grammar, \Phiki\Theme\Theme::NightOwl)
+            ->withGutter()
+            ->startingLine($startLine);
+
+        if ($focusedIndex >= 0) {
+            $output = $output->decoration(
+                \Phiki\Transformers\Decorations\LineDecoration::forLine($focusedIndex)->class('focused-line'),
+            );
+        }
+
+        $highlightedCode = $output->toString();
+    }
 @endphp
 
 <section {{ $attributes->class(['max-w-full overflow-hidden rounded-xl border border-white/10 bg-[#1d1d1d] shadow-2xl shadow-black/20']) }}>
@@ -45,55 +62,8 @@
     @if($decodedSnippet === [])
         <div class="px-4 py-8 text-center text-sm text-neutral-500">Source snippet unavailable.</div>
     @else
-        <div
-            data-shiki-snippet
-            data-code="{{ e($code) }}"
-            data-lang="{{ $language }}"
-            data-start-line="{{ $startLine }}"
-            data-focused-line="{{ $focusedLine }}"
-            class="max-w-full overflow-x-auto bg-[#202020] font-mono text-[13px] leading-7"
-        >
-            <pre class="py-3 text-neutral-300">@foreach($decodedSnippet as $sourceLine)<span class="block {{ ($sourceLine['highlight'] ?? false) ? 'bg-rose-700/70 text-white' : 'odd:bg-white/[2%]' }}"><span class="inline-block w-14 select-none px-3 text-right text-neutral-500">{{ $sourceLine['line'] ?? '' }}</span><code>{{ $sourceLine['code'] ?? '' }}</code></span>@endforeach</pre>
+        <div class="telemetry-code max-w-full overflow-x-auto bg-[#202020]">
+            {!! $highlightedCode !!}
         </div>
     @endif
 </section>
-
-@pushOnce('scripts', 'accelerator-telemetry-shiki')
-    <script type="module">
-        import { codeToHtml } from 'https://esm.sh/shiki@3.0.0'
-
-        const renderShikiSnippets = async () => {
-            const snippets = document.querySelectorAll('[data-shiki-snippet]:not([data-shiki-rendered])')
-
-            for (const snippet of snippets) {
-                snippet.dataset.shikiRendered = 'true'
-
-                try {
-                    const startLine = Number.parseInt(snippet.dataset.startLine || '1', 10)
-                    const focusedLine = Number.parseInt(snippet.dataset.focusedLine || '0', 10)
-                    const html = await codeToHtml(snippet.dataset.code || '', {
-                        lang: snippet.dataset.lang || 'php',
-                        theme: 'night-owl',
-                    })
-
-                    snippet.innerHTML = html
-
-                    snippet.querySelectorAll('.line').forEach((line, index) => {
-                        const lineNumber = startLine + index
-                        line.dataset.line = String(lineNumber)
-
-                        if (lineNumber === focusedLine) {
-                            line.classList.add('is-focused')
-                        }
-                    })
-                } catch (error) {
-                    snippet.removeAttribute('data-shiki-rendered')
-                    console.warn('[Telemetry] Shiki render failed.', error)
-                }
-            }
-        }
-
-        renderShikiSnippets()
-        document.addEventListener('alpine:init', renderShikiSnippets)
-    </script>
-@endPushOnce
