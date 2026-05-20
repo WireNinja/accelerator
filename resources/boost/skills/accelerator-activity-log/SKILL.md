@@ -28,6 +28,7 @@ Core files:
 - `app/Support/ActivityLog/RelationshipActivityLogger.php`: relationship snapshot/diff logging.
 - `app/Filament/Concerns/LogsResourceRelationshipActivity.php`: Filament create/edit lifecycle hook integration.
 - `app/Filament/RelationManagers/ActivitiesRelationManager.php`: reusable read-only activity relation manager.
+- `app/Filament/RelationManagers/AuditRelationGroup.php`: reusable audit relation group wrapper. Pass relation managers into `AuditRelationGroup::make([...])` so resources stay consistent and relation badges are deferred by default.
 
 ## Add Activity Logging To A Model
 
@@ -44,7 +45,26 @@ Core files:
 ## Add Activity Logging To A Filament Resource
 
 1. Ensure the model has an `activities()` relation from `HasConfiguredActivity` or `LogsConfiguredActivity`.
-2. Add `ActivitiesRelationManager::class` to the resource `getRelations()` array.
+2. Add the audit relation group to the resource `getRelations()` array:
+
+```php
+use App\Filament\RelationManagers\ActivitiesRelationManager;
+use App\Filament\RelationManagers\AuditRelationGroup;
+use Filament\Resources\RelationManagers\RelationGroup;
+
+/**
+ * @return array<int, RelationGroup>
+ */
+public static function getRelations(): array
+{
+    return [
+        AuditRelationGroup::make([
+            ActivitiesRelationManager::class,
+        ]),
+    ];
+}
+```
+
 3. Add `LogsResourceRelationshipActivity` to the Create and Edit resource pages if the resource form saves relationships declared in `config/audit.php`.
 4. For custom table/header actions that manually call `sync()`, `attach()`, `detach()`, or similar relationship writes, wrap the action:
 

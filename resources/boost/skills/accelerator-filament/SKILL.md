@@ -299,7 +299,6 @@ php artisan agent:resource-context --list --compact
 ```
 
 - `--compact` is default for AI agents (token-friendly).
-- `#[DiscoverShouldMinify]` hides oversize tree/detail.
 - `--expand` overrides minification when full tree is needed.
 - Bulk actions surfacing in the payload are violations to clean.
 
