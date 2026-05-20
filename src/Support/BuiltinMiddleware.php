@@ -27,14 +27,14 @@ final class BuiltinMiddleware
 
         $middleware->web(append: [
             HandleAppearance::class,
-            HandleInertiaRequests::class,
-            ConditionalLinkPreload::class,
         ]);
 
         $middleware->alias([
             'role' => RoleMiddleware::class,
             'permission' => PermissionMiddleware::class,
             'role_or_permission' => RoleOrPermissionMiddleware::class,
+            'inertia' => HandleInertiaRequests::class,
+            'link_preload' => ConditionalLinkPreload::class,
         ]);
     }
 }

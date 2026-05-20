@@ -18,13 +18,13 @@ return [
 
     'middleware' => [
         'link_preload' => [
-            // Master switch: kalau false, AddLinkHeadersForPreloadedAssets tidak akan
-            // di-append sama sekali (hemat satu middleware untuk seluruh aplikasi).
+            // Master switch: when false, AddLinkHeadersForPreloadedAssets is never
+            // appended at all (saves one middleware for the entire application).
             'enabled' => env('ACCELERATOR_LINK_PRELOAD_ENABLED', true),
 
-            // Path prefix yang di-skip walaupun master switch on. Default: /admin/*
-            // Filament admin biasanya pakai Livewire wire-navigate dan tidak butuh
-            // preload header — append-nya cuma menambah noise.
+            // Path prefixes skipped even when master switch is on. Default: /admin/*
+            // Filament admin uses Livewire wire-navigate and does not benefit from
+            // preload headers — appending them only adds noise.
             'skip_path_prefixes' => ['admin', 'admin/*'],
         ],
     ],

@@ -9,14 +9,14 @@ use Composer\Plugin\PluginInterface;
 use Composer\Script\Event;
 
 /**
- * @DONOT-REMOVE seluruh class
+ * @DONOT-REMOVE entire class
  *
- * Composer plugin yang membuat folder `resources/svg` di root project setiap kali
- * `post-autoload-dump` ter-trigger. blade-icons (vendor) akan throw error saat boot
- * jika folder `resources/svg` tidak ada — meskipun tidak ada custom icon yang dipakai.
+ * Composer plugin that creates the `resources/svg` folder in the project root every
+ * time `post-autoload-dump` fires. blade-icons (vendor) will throw an error on boot
+ * if `resources/svg` does not exist — even when no custom icons are used.
  *
- * Method activate / deactivate / uninstall sengaja kosong: PluginInterface mewajibkan
- * implement, tapi kita tidak butuh hook tambahan. JANGAN convert ke abstract atau hapus.
+ * The activate / deactivate / uninstall methods are intentionally empty: PluginInterface
+ * requires them, but we have no additional hooks needed. Do NOT convert to abstract or remove.
  */
 class Plugin implements EventSubscriberInterface, PluginInterface
 {
@@ -32,8 +32,8 @@ class Plugin implements EventSubscriberInterface, PluginInterface
 
     public function uninstall(Composer $composer, IOInterface $io)
     {
-        // No-op: required by PluginInterface contract. Folder resources/svg sengaja
-        // tidak dihapus saat uninstall karena bisa berisi file user.
+        // No-op: required by PluginInterface contract. The resources/svg folder is
+        // intentionally not removed on uninstall as it may contain user files.
     }
 
     public static function getSubscribedEvents()

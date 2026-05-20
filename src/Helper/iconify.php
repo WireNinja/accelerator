@@ -12,7 +12,6 @@ if (! function_exists('js_iconify')) {
     }
 }
 
-// @TODO : decide if this is needed or not.
 if (! function_exists('iconify')) {
     /**
      * @param  array<string, mixed>  $attributes

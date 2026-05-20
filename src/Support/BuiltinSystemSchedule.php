@@ -13,7 +13,6 @@ final class BuiltinSystemSchedule
     {
         self::dbBackup();
         self::filesBackup();
-        self::fullBackup();
         self::ticketNotifyOverdue();
         self::snapshotHorizon();
     }
@@ -26,11 +25,6 @@ final class BuiltinSystemSchedule
     public static function filesBackup(): Event
     {
         return Schedule::command('backup:run --only-files')->dailyAt('02:00')->withoutOverlapping();
-    }
-
-    public static function fullBackup(): Event
-    {
-        return Schedule::command('backup:run')->dailyAt('03:00')->withoutOverlapping();
     }
 
     public static function ticketNotifyOverdue(): Event

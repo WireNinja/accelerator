@@ -348,8 +348,8 @@
 @task('harden-release', ['on' => 'vps'])
     set -euo pipefail
     cd {{ $releasePath }}
-    # Vendor sengaja di-exclude: composer install sudah set 644/755 yang benar
-    # dan traversal ulang ribuan file vendor mahal tanpa benefit.
+    # Vendor is intentionally excluded: composer install already sets correct 644/755
+    # and re-traversing thousands of vendor files is expensive with no benefit.
     find . -type d -not -path "./storage*" -not -path "./bootstrap/cache*" -not -path "./vendor*" -exec chmod 755 {} +
     find . -type f -not -path "./storage*" -not -path "./bootstrap/cache*" -not -path "./vendor*" -not -name "artisan" -exec chmod 644 {} +
     chmod 755 artisan

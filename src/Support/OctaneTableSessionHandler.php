@@ -10,18 +10,18 @@ use Swoole\Table;
 use Throwable;
 
 /**
- * Session handler berbasis dedicated Swoole table.
+ * Session handler based on a dedicated Swoole table.
  *
- * Tujuannya adalah meminimalkan latency baca / tulis session pada runtime
- * Octane Swoole dengan menyimpan payload session langsung di shared memory.
+ * Purpose: minimize session read/write latency on the Octane Swoole runtime by
+ * storing session payloads directly in shared memory.
  *
- * Konsekuensi penting:
- * - Data hilang saat Octane restart / reload / deploy / crash.
- * - Tidak bisa dipakai pada FPM, `php artisan serve`, RoadRunner, atau CLI.
- * - Ukuran payload dibatasi oleh `SESSION_OCTANE_TABLE_BYTES`.
+ * Important consequences:
+ * - Data is lost on Octane restart / reload / deploy / crash.
+ * - Cannot be used on FPM, `php artisan serve`, RoadRunner, or CLI.
+ * - Payload size is limited by `SESSION_OCTANE_TABLE_BYTES`.
  *
- * Jadi driver ini cocok hanya untuk session yang boleh volatile. Jika session
- * harus bertahan saat deploy, pakai backend persisten seperti Redis.
+ * This driver is only suitable for sessions that are allowed to be volatile.
+ * If sessions must survive deploys, use a persistent backend like Redis.
  */
 final readonly class OctaneTableSessionHandler implements SessionHandlerInterface
 {
@@ -61,15 +61,15 @@ final readonly class OctaneTableSessionHandler implements SessionHandlerInterfac
     public function write(string $sessionId, string $data): bool
     {
         try {
-            // Laravel sudah mengurus serialisasi payload; handler ini hanya
-            // menyimpan string mentahnya beserta timestamp aktivitas terakhir.
+            // Laravel handles payload serialization; this handler only stores the
+            // raw string along with a last activity timestamp.
             return $this->table()->set($sessionId, [
                 'payload' => $data,
                 'last_activity' => time(),
             ]);
         } catch (ValueTooLargeForColumnException $valueTooLargeForColumnException) {
             throw new RuntimeException(sprintf(
-                'Session payload [%s] terlalu besar untuk Octane table [%s]. Naikkan SESSION_OCTANE_TABLE_BYTES agar payload ini bisa tersimpan.',
+                'Session payload [%s] is too large for Octane table [%s]. Increase SESSION_OCTANE_TABLE_BYTES to store this payload.',
                 $sessionId,
                 $this->tableName,
             ), $valueTooLargeForColumnException->getCode(), previous: $valueTooLargeForColumnException);
@@ -117,7 +117,7 @@ final readonly class OctaneTableSessionHandler implements SessionHandlerInterfac
             return Octane::table($this->tableName);
         } catch (Throwable $throwable) {
             throw new RuntimeException(sprintf(
-                'Session driver [octane-table] membutuhkan Octane Swoole dan tabel [%s] yang sudah terdaftar di config/octane.php.',
+                'Session driver [octane-table] requires Octane Swoole and a table [%s] registered in config/octane.php.',
                 $this->tableName,
             ), $throwable->getCode(), previous: $throwable);
         }
