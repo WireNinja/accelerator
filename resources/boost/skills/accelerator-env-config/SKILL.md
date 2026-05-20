@@ -29,8 +29,6 @@ Adding or reviewing Accelerator config keys, `.env.example`, `.base-env.example`
 
 ```php
 return [
-    'runtime' => env('SERVER_RUNTIME', 'fpm'),
-
     'infra' => [
         'hosting' => env('INFRA_HOSTING', 'dedicated'),
     ],
@@ -46,12 +44,6 @@ return [
         'launcher' => LauncherEnum::class,
     ],
 
-    'cache' => [
-        'allow_swoole' => env('ACCELERATOR_CACHE_ALLOW_SWOOLE', true),
-        'allow_redis' => env('ACCELERATOR_CACHE_ALLOW_REDIS', true),
-        'allow_database' => env('ACCELERATOR_CACHE_ALLOW_DATABASE', true),
-    ],
-
     'horizon' => [
         'auto_register' => true,
         'email_to' => env('HORIZON_EMAIL_TO'),
@@ -63,6 +55,12 @@ return [
     ],
 ];
 ```
+
+Runtime detection is intentionally not env-driven. Accelerator is opinionated for Octane Swoole when running under Octane, and uses the current PHP process marker instead:
+
+- `is_octane_runtime()` checks `$_SERVER['LARAVEL_OCTANE'] === '1'`.
+- `is_swoole_runtime()` checks Octane plus the loaded Swoole extension.
+- Do not reintroduce `SERVER_RUNTIME` or `ACCELERATOR_CACHE_ALLOW_*`; cache/session choices are resolved by their own Laravel config and runtime-specific code paths.
 
 ### Link Preload
 
@@ -129,4 +127,4 @@ When comparing env files, compare keys first. Values may intentionally differ be
 
 Per-stage `OPS_DEPLOY_{STAGE}_OCTANE_PORT` is REQUIRED — Envoy `health-check` curls Octane directly using that port.
 
-Do not let runtime `SERVER_RUNTIME` accidentally override deploy-stage runtime. Use explicit `OPS_DEPLOY_{STAGE}_RUNTIME` in `.env.envoy`.
+Runtime deploy intent belongs only in `.env.envoy` via explicit `OPS_DEPLOY_{STAGE}_RUNTIME`. Do not add runtime selector keys back to Laravel runtime `.env` files.

@@ -48,20 +48,20 @@ if (! function_exists('accelerator_setting_migration_path')) {
 
 if (! function_exists('is_swoole_runtime')) {
     /**
-     * Check if the current runtime is Swoole (Laravel Octane with Swoole server).
+     * Check if the current PHP process is an Octane Swoole worker.
      */
     function is_swoole_runtime(): bool
     {
-        return config('accelerator.runtime') === 'swoole';
+        return is_octane_runtime() && extension_loaded('swoole');
     }
 }
 
 if (! function_exists('is_octane_runtime')) {
     /**
-     * @deprecated Use is_swoole_runtime() instead. This alias will be removed in v2.0.
+     * Check if the current PHP process is running inside Laravel Octane.
      */
     function is_octane_runtime(): bool
     {
-        return is_swoole_runtime();
+        return ($_SERVER['LARAVEL_OCTANE'] ?? null) === '1';
     }
 }

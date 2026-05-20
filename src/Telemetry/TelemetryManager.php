@@ -44,7 +44,7 @@ final class TelemetryManager
      * Check if telemetry is enabled and the runtime supports it.
      *
      * Telemetry is Octane Swoole only. It is automatically disabled on:
-     * - FPM, RoadRunner, FrankenPHP (runtime != swoole)
+     * - FPM / non-Octane requests
      * - CLI/artisan commands (would keep process alive via Timer::tick)
      * - When Swoole extension is not loaded
      * - When explicitly disabled via config
@@ -59,11 +59,7 @@ final class TelemetryManager
             return false;
         }
 
-        if (config('accelerator.runtime') !== 'swoole') {
-            return false;
-        }
-
-        if (! extension_loaded('swoole')) {
+        if (! is_swoole_runtime()) {
             return false;
         }
 
