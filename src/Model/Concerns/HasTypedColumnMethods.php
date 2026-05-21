@@ -23,11 +23,11 @@ trait HasTypedColumnMethods
 
     public function __call($method, $parameters): mixed
     {
-        if (is_string($method) && str_starts_with($method, 'setColumn') && ($method !== 'setColumn')) {
+        if (str_starts_with($method, 'setColumn') && ($method !== 'setColumn')) {
             return $this->handleSetColumnMethod($method, $parameters);
         }
 
-        if (is_string($method) && str_starts_with($method, 'getColumn') && ($method !== 'getColumn')) {
+        if (str_starts_with($method, 'getColumn') && ($method !== 'getColumn')) {
             return $this->handleGetColumnMethod($method, $parameters);
         }
 
