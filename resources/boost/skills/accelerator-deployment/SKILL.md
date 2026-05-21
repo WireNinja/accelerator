@@ -22,6 +22,7 @@ First deployment, continuous deployment, deployment cleanup, Envoy release folde
 - Never touch unrelated domains, Nginx files, Supervisor groups, `/var/www` roots, ports, or services.
 - Do not serve Laravel from legacy `{root}/html/public`; Nginx must serve `{root}/current/public`.
 - Envoy does NOT auto-generate Nginx vhost or Supervisor config on every deploy. Run the one-shot `bootstrap` story per VPS to write them once (operator can edit later); continuous deploy just restarts/reloads.
+- `deploy-fresh-seed` is destructive and must only run with the exact explicit Envoy flag shown below. It temporarily installs Composer dev dependencies so seeders/factories can use `fake()`, then prunes dev packages before switching current.
 
 ## Stories Cheatsheet
 
@@ -32,6 +33,7 @@ First deployment, continuous deployment, deployment cleanup, Envoy release folde
 | `init` | first deploy on a fresh VPS root | layout setup + tooling check + clone + build + harden + prepare-laravel + switch + opcache + restart + health-check |
 | `deploy` | continuous full deploy | tooling + sync-env + clone + build + harden + clear-cache + migration-safety + db-backup + maintenance-on + prepare-laravel + switch + opcache + restart + health-check + maintenance-off + prune |
 | `deploy-slim` | hot patch backend only (no JS/CSS rebuild) | same as deploy minus build-release |
+| `deploy-fresh-seed` | destructive redeploy with fresh DB + seeded data | explicit phrase gate + tooling + sync-env + clone + build with Composer dev deps + backup + maintenance + `migrate:fresh --seed` + prune dev deps + switch + opcache + restart + health-check + maintenance-off + prune |
 | `rollback` | switch back to previous valid release | rollback-release + opcache + restart + health-check (NO maintenance window — speed prioritised) |
 | `releases` | list release history + prune target | tabular output |
 | `backups` | list predeploy and scheduled backup files | list-backups |
@@ -431,6 +433,26 @@ Flow (sandbox to risky zone):
 14. `health-check` — curl Octane `/up`, fail if not 200.
 15. `maintenance-off` — `php artisan up`.
 16. `prune-releases` — keep N latest, preserve current.
+
+## Fresh Seed Redeploy
+
+Use `deploy-fresh-seed` only when the operator intentionally wants to replace the database with fresh migrations and seeded data:
+
+```bash
+vendor/bin/envoy run deploy-fresh-seed --stage=test --i-understand-this-will-drop-and-reseed-database="aku mengkonfirmasi remigrate fresh seed"
+```
+
+This is not a migration-safety bypass. It intentionally runs `php artisan migrate:fresh --seed --force`, so all existing database data for that stage is destroyed after the pre-deploy backup.
+
+Flow differences from `deploy`:
+
+1. `assert-fresh-seed-confirmed` refuses to continue unless the exact long flag value is present.
+2. `build-release-with-dev` runs Composer with dev dependencies available so seeders, factories, and Laravel's `fake()` helper can work.
+3. `migration-safety` is skipped because this story is already explicitly destructive.
+4. `prepare-laravel-fresh-seed` runs `migrate:fresh --seed --force`.
+5. `prune-dev-dependencies` immediately runs Composer again with `--no-dev --optimize-autoloader --classmap-authoritative`, then reoptimizes the app before `switch-current`.
+
+Do not use this story for production unless the operator explicitly asks for data loss and accepts restoring from backup if seeders fail. If anything fails after `maintenance-on`, maintenance mode stays enabled for triage, matching the normal deploy failure posture.
 
 ## Rollback
 

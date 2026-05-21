@@ -12,6 +12,9 @@
     deploy       Continuous full deploy with asset rebuild. INCLUDES db-backup,
                  maintenance window, health-check, prune.
     deploy-slim  Continuous deploy minus build-release (hot patch backend only).
+    deploy-fresh-seed
+                 DESTRUCTIVE redeploy that runs migrate:fresh --seed with dev
+                 dependencies available, then prunes dev packages before switch.
     rollback    Atomic switch back to a verified previous release. NO maintenance
                  window — emergency speed prioritised.
     releases     Print release history + current pointer + prune target.
@@ -93,6 +96,20 @@
     $keepReleases = (int) $value($envoy, 'OPS_DEPLOY_KEEP_RELEASES', '5');
     $service = isset($service) ? $service : 'all';
     $seedEnvFile = $root.'/'.($stage === 'prod' ? '.env.production' : '.env.staging');
+    $freshSeedConfirmationPhrase = 'aku mengkonfirmasi remigrate fresh seed';
+    $freshSeedConfirmation = isset($iUnderstandThisWillDropAndReseedDatabase)
+        ? (string) $iUnderstandThisWillDropAndReseedDatabase
+        : (isset($i_understand_this_will_drop_and_reseed_database) ? (string) $i_understand_this_will_drop_and_reseed_database : '');
+    $requestedTask = isset($__task) ? (string) $__task : '';
+    $freshSeedProtectedTasks = ['deploy-fresh-seed', 'assert-fresh-seed-confirmed', 'prepare-laravel-fresh-seed'];
+
+    if (in_array($requestedTask, $freshSeedProtectedTasks, true) && $freshSeedConfirmation !== $freshSeedConfirmationPhrase) {
+        throw new RuntimeException(
+            'Refusing destructive fresh-seed deploy. Re-run with --i-understand-this-will-drop-and-reseed-database="'.
+            $freshSeedConfirmationPhrase.
+            '".'
+        );
+    }
 
     foreach (['domain' => $domain, 'root' => $deployRoot, 'repo' => $repo, 'group' => $group, 'octane port' => $octanePort] as $name => $required) {
         if ($required === '') {
@@ -247,6 +264,27 @@
     db-backup
     maintenance-on
     prepare-laravel
+    switch-current
+    invalidate-opcache
+    restart-service
+    health-check
+    maintenance-off
+    prune-releases
+@endstory
+
+@story('deploy-fresh-seed')
+    assert-fresh-seed-confirmed
+    ensure-deploy-tools
+    sync-env
+    clone-release
+    link-shared
+    build-release-with-dev
+    harden-release
+    clear-cache
+    db-backup
+    maintenance-on
+    prepare-laravel-fresh-seed
+    prune-dev-dependencies
     switch-current
     invalidate-opcache
     restart-service
@@ -414,6 +452,24 @@
     @endif
 @endtask
 
+@task('build-release-with-dev', ['on' => 'vps'])
+    set -euo pipefail
+    cd {{ $releasePath }}
+    mkdir -p resources/svg
+    composer validate --no-check-all --strict --ansi
+    composer install --no-scripts --no-interaction --no-progress --quiet --ansi
+    @if(str_contains($npmBin, 'bun'))
+        {{ $npmBin }} install --frozen-lockfile --no-scripts --quiet
+        {{ $npmBin }} run build
+    @elseif(str_contains($npmBin, 'pnpm'))
+        {{ $npmBin }} install --frozen-lockfile --no-scripts --quiet
+        {{ $npmBin }} run build
+    @else
+        {{ $npmBin }} ci --no-audit --no-fund --quiet
+        {{ $npmBin }} run build
+    @endif
+@endtask
+
 @task('harden-release', ['on' => 'vps'])
     set -euo pipefail
     cd {{ $releasePath }}
@@ -445,6 +501,15 @@
         --disable-notifications \
         --no-interaction \
         --ansi
+@endtask
+
+@task('assert-fresh-seed-confirmed', ['on' => 'localhost'])
+    set -euo pipefail
+    @if($freshSeedConfirmation !== $freshSeedConfirmationPhrase)
+        echo "[deploy-fresh-seed] missing explicit destructive confirmation flag."
+        exit 1
+    @endif
+    echo "[deploy-fresh-seed] destructive confirmation accepted for {{ $stage }}."
 @endtask
 
 @task('migration-safety', ['on' => 'vps'])
@@ -515,6 +580,27 @@
     larahelp --setfacl
     {{ $phpBin }} artisan migrate --force --no-interaction --ansi
     {{ $phpBin }} artisan storage:link --force --no-interaction --ansi
+@endtask
+
+@task('prepare-laravel-fresh-seed', ['on' => 'vps'])
+    set -euo pipefail
+    @if($freshSeedConfirmation !== $freshSeedConfirmationPhrase)
+        echo "[deploy-fresh-seed] missing explicit destructive confirmation flag."
+        exit 1
+    @endif
+    cd {{ $releasePath }}
+    larahelp --reoptimize
+    larahelp --setfacl
+    {{ $phpBin }} artisan migrate:fresh --seed --force --no-interaction --ansi
+    {{ $phpBin }} artisan storage:link --force --no-interaction --ansi
+@endtask
+
+@task('prune-dev-dependencies', ['on' => 'vps'])
+    set -euo pipefail
+    cd {{ $releasePath }}
+    composer install --no-dev --no-scripts --optimize-autoloader --classmap-authoritative --no-interaction --no-progress --quiet --ansi
+    larahelp --reoptimize
+    larahelp --setfacl
 @endtask
 
 @task('switch-current', ['on' => 'vps'])
