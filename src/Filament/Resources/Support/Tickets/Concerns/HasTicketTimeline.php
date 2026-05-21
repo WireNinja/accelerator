@@ -10,9 +10,13 @@ use WireNinja\Accelerator\Enums\Ticket\TicketPriorityEnum;
 use WireNinja\Accelerator\Enums\Ticket\TicketStatusEnum;
 use WireNinja\Accelerator\Enums\Ticket\TicketTypeEnum;
 use WireNinja\Accelerator\Model\AcceleratedUser;
+use WireNinja\Accelerator\Model\Ticket;
 use WireNinja\Accelerator\Model\TicketBoard;
 use WireNinja\Accelerator\Model\TicketBoardColumn;
 
+/**
+ * @method Ticket getRecord()
+ */
 trait HasTicketTimeline
 {
     /**
@@ -145,7 +149,7 @@ trait HasTicketTimeline
             'type' => 'activity',
             'title' => implode(' | ', $summary),
             'description' => $this->formatActivityChanges($attributes, $oldAttributes, $userNames),
-            'author' => $activity->causer?->name ?? 'Sistem',
+            'author' => $activity->causer?->getAttribute('name') ?? 'Sistem',
             'author_badge' => ucfirst((string) $activity->event),
             'author_badge_color' => match ($activity->event) {
                 'created' => 'success',

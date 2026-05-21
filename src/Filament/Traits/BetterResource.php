@@ -37,7 +37,7 @@ trait BetterResource
             return $memo[$class] = null;
         }
 
-        /** @var class-string<MustBeResourceEnum> $enumClass */
+        /** @var class-string<UnitEnum&MustBeResourceEnum> $enumClass */
         return $memo[$class] = $enumClass::fromResource($class);
     }
 

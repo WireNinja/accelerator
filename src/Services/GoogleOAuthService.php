@@ -5,11 +5,14 @@ namespace WireNinja\Accelerator\Services;
 use App\Models\User;
 use Illuminate\Support\Facades\Auth;
 use Laravel\Socialite\Contracts\User as SocialiteUser;
+use Laravel\Socialite\Two\User as OAuth2User;
 
 class GoogleOAuthService
 {
     /**
      * Handle the data from a Google OAuth user and either create or login the user.
+     *
+     * @param  SocialiteUser&OAuth2User  $googleUser
      */
     public function handle(SocialiteUser $googleUser): User
     {

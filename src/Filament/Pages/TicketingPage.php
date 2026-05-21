@@ -12,6 +12,7 @@ use UnitEnum;
 use WireNinja\Accelerator\Enums\Ticket\TicketTaskStatusEnum;
 use WireNinja\Accelerator\Filament\Resources\Support\TicketBoards\TicketBoardResource;
 use WireNinja\Accelerator\Filament\Resources\Support\Tickets\TicketResource;
+use WireNinja\Accelerator\Model\Ticket;
 use WireNinja\Accelerator\Model\TicketBoard;
 use WireNinja\Accelerator\Support\Ticket\TicketVisibility;
 
@@ -99,6 +100,7 @@ class TicketingPage extends Page
 
         if (! TicketVisibility::canViewAll($authUser)) {
             $boardOptionsQuery->whereHas('tickets', function (Builder $ticketQuery) use ($authUser): void {
+                /** @var Builder<Ticket> $ticketQuery */
                 $ticketQuery->visibleTo($authUser);
             });
         }
@@ -140,8 +142,11 @@ class TicketingPage extends Page
             ->orderBy('position')
             ->with([
                 'tickets' => function (HasMany $ticketQuery) use ($authUser, $search, $filterType, $filterPriority, $filterDampakBisnis, $filterModulTerkait): void {
-                    $ticketQuery
-                        ->visibleTo($authUser)
+                    $query = $ticketQuery->getQuery();
+                    /** @var Builder<Ticket> $query */
+                    $query->visibleTo($authUser);
+
+                    $query
                         ->when($filterType !== '', fn ($q) => $q->where('type', $filterType))
                         ->when($filterPriority !== '', fn ($q) => $q->where('priority', $filterPriority))
                         ->when($filterDampakBisnis !== '', fn ($q) => $q->where('dampak_bisnis', $filterDampakBisnis))

@@ -11,7 +11,11 @@ use Filament\Schemas\Components\View;
 use Filament\Schemas\Schema;
 use WireNinja\Accelerator\Filament\Resources\Support\Tickets\Concerns\HasTicketTimeline;
 use WireNinja\Accelerator\Filament\Resources\Support\Tickets\TicketResource;
+use WireNinja\Accelerator\Model\Ticket;
 
+/**
+ * @extends ViewRecord<Ticket>
+ */
 class ViewTicket extends ViewRecord
 {
     use HasTicketTimeline;

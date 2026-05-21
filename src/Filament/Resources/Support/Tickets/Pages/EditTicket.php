@@ -13,6 +13,9 @@ use WireNinja\Accelerator\Filament\Resources\Support\Tickets\Concerns\HasTicketT
 use WireNinja\Accelerator\Filament\Resources\Support\Tickets\TicketResource;
 use WireNinja\Accelerator\Model\Ticket;
 
+/**
+ * @extends EditRecord<Ticket>
+ */
 class EditTicket extends EditRecord
 {
     use HasTicketTimeline;

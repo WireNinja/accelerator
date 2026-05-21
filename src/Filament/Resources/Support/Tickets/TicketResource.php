@@ -21,6 +21,9 @@ use WireNinja\Accelerator\Filament\Traits\AutoBadge;
 use WireNinja\Accelerator\Filament\Traits\BetterResource;
 use WireNinja\Accelerator\Model\Ticket;
 
+/**
+ * @extends Resource<Ticket>
+ */
 class TicketResource extends Resource
 {
     use AutoBadge;
@@ -67,6 +70,9 @@ class TicketResource extends Resource
         ];
     }
 
+    /**
+     * @return Builder<Ticket>
+     */
     #[Override]
     public static function getEloquentQuery(): Builder
     {

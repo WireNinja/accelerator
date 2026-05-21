@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Schema;
 use ReflectionClass;
 use ReflectionMethod;
+use ReflectionNamedType;
 use Symfony\Component\Console\Output\BufferedOutput;
 use Throwable;
 use WireNinja\Accelerator\Console\Concerns\HasBanner;
@@ -343,7 +344,7 @@ class ModelOutlineCommand extends Command
                 $relationshipType = null;
                 $relatedModel = null;
 
-                if ($returnType && ! $returnType->isBuiltin()) {
+                if ($returnType instanceof ReflectionNamedType && ! $returnType->isBuiltin()) {
                     $className = $returnType->getName();
                     if (is_subclass_of($className, Relation::class)) {
                         $result = $method->invoke($model);

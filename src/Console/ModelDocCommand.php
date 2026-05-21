@@ -20,6 +20,7 @@ use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use ReflectionClass;
 use ReflectionMethod;
+use ReflectionNamedType;
 use Symfony\Component\Finder\SplFileInfo;
 use Throwable;
 use WireNinja\Accelerator\Console\Concerns\HasBanner;
@@ -349,7 +350,7 @@ class ModelDocCommand extends Command
                 $returnType = $method->getReturnType();
                 $isRelation = false;
 
-                if ($returnType && (! $returnType->isBuiltin()) && is_subclass_of($returnType->getName(), Relation::class)) {
+                if ($returnType instanceof ReflectionNamedType && (! $returnType->isBuiltin()) && is_subclass_of($returnType->getName(), Relation::class)) {
                     $isRelation = true;
                 }
 
