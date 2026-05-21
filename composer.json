@@ -49,23 +49,6 @@
         "laravel/wayfinder": "^0.1.20",
         "phiki/phiki": "^2.0"
     },
-    "require-dev": {
-        "larastan/larastan": "^3.0",
-        "nesbot/carbon": "^3.10",
-        "phpstan/phpstan": "^2.1",
-        "phpstan/phpstan-deprecation-rules": "^2.0"
-    },
-    "scripts": {
-        "phpstan": [
-            "phpstan:human"
-        ],
-        "phpstan:agent": [
-            "phpstan analyse --memory-limit=2G --error-format=json --no-progress"
-        ],
-        "phpstan:human": [
-            "phpstan analyse --memory-limit=2G --no-progress"
-        ]
-    },
     "extra": {
         "class": "WireNinja\\Accelerator\\Composer\\Plugin",
         "laravel": {
