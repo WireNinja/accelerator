@@ -451,3 +451,7 @@ Backup status JSON for AI agents:
 ```bash
 php artisan vps:backup-status --json --compact
 ```
+
+## Breaking Changes
+
+See the `accelerator-breaking-changes` skill for the full migration guide when upgrading `wireninja/accelerator`.
