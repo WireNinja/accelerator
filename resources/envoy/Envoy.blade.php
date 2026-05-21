@@ -80,7 +80,7 @@
     $branch = $value($envoy, "OPS_DEPLOY_{$stageKey}_BRANCH", $value($envoy, 'OPS_DEPLOY_BRANCH', 'main'));
     $group = $value($envoy, "OPS_DEPLOY_{$stageKey}_GROUP");
     $phpBin = $value($envoy, "OPS_DEPLOY_{$stageKey}_PHP_BIN", $value($envoy, 'OPS_DEPLOY_PHP_BIN', 'php'));
-    $bunBin = $value($envoy, "OPS_DEPLOY_{$stageKey}_BUN_BIN", $value($envoy, 'OPS_DEPLOY_BUN_BIN', 'bun'));
+    $npmBin = $value($envoy, "OPS_DEPLOY_{$stageKey}_NPM_BIN", $value($envoy, 'OPS_DEPLOY_NPM_BIN', 'npm'));
     $runUser = $value($envoy, "OPS_DEPLOY_{$stageKey}_RUN_USER", $value($envoy, 'OPS_DEPLOY_RUN_USER', 'www-data'));
     $sshHost = $value($envoy, "OPS_DEPLOY_{$stageKey}_SSH_HOST", $value($envoy, 'OPS_DEPLOY_SSH_HOST', 'onidel'));
     $octanePort = $value($envoy, "OPS_DEPLOY_{$stageKey}_OCTANE_PORT");
@@ -147,7 +147,7 @@
 
         $content = file_get_contents($stubPath);
         foreach ($vars as $key => $value) {
-            $content = str_replace('{{ '.$key.' }}', (string) $value, $content);
+            $content = str_replace('{' . '{ ' . $key . ' }' . '}', (string) $value, $content);
         }
 
         return $content;
@@ -291,7 +291,7 @@
     command -v git >/dev/null
     command -v composer >/dev/null
     command -v {{ $phpBin }} >/dev/null
-    command -v {{ $bunBin }} >/dev/null
+    command -v {{ $npmBin }} >/dev/null
     command -v larahelp >/dev/null
     command -v setfacl >/dev/null
     command -v curl >/dev/null
@@ -342,8 +342,8 @@
     mkdir -p resources/svg
     composer validate --no-check-all --strict --ansi
     composer install --no-dev --no-scripts --optimize-autoloader --classmap-authoritative --no-interaction --no-progress --quiet --ansi
-    {{ $bunBin }} install --frozen-lockfile --no-scripts --quiet
-    {{ $bunBin }} run build
+    {{ $npmBin }} install --frozen-lockfile --no-scripts --quiet
+    {{ $npmBin }} run build
 @endtask
 
 @task('harden-release', ['on' => 'vps'])

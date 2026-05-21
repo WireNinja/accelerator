@@ -66,7 +66,7 @@ Global keys:
 - `OPS_DEPLOY_DEFAULT_STAGE`, `OPS_DEPLOY_PROJECT`, `OPS_DEPLOY_SSH_HOST`
 - `OPS_DEPLOY_REPO`, `OPS_DEPLOY_BRANCH`
 - `OPS_DEPLOY_KEEP_RELEASES` (default 5)
-- `OPS_DEPLOY_PHP_BIN`, `OPS_DEPLOY_BUN_BIN`
+- `OPS_DEPLOY_PHP_BIN`, `OPS_DEPLOY_NPM_BIN`
 - `OPS_DEPLOY_RUN_USER` (default `www-data`)
 - `OPS_DEPLOY_SSL_EMAIL`
 
@@ -206,7 +206,7 @@ Runs after a successful health-check + `maintenance-off`. Keeps `OPS_DEPLOY_KEEP
 
 Before touching the VPS:
 
-1. Read `.env.envoy` — confirm domain, root, group, ports, repo, branch, PHP/Bun binaries, run user.
+1. Read `.env.envoy` — confirm domain, root, group, ports, repo, branch, PHP/npm binaries, run user.
 2. Confirm `.env.staging` / `.env.production` exists, is non-empty, and key-compatible with `.env`.
 3. Confirm runtime env files have NO `OPS_DEPLOY_*` keys.
 4. Confirm `OPS_DEPLOY_{STAGE}_OCTANE_PORT` is set (required).
@@ -259,11 +259,11 @@ vendor/bin/envoy run deploy-slim --stage=test
 
 Flow (sandbox to risky zone):
 
-1. `ensure-deploy-tools` — verify git/composer/php/bun/larahelp/setfacl/curl exist.
+1. `ensure-deploy-tools` — verify git/composer/php/npm/larahelp/setfacl/curl exist.
 2. `sync-env` — scp `.env.{stage}` to `{root}/shared/.env`, archive previous shared.
 3. `clone-release` — git clone `--depth 1 --single-branch`, `git reset --hard {sha}`.
 4. `link-shared` — symlink `.env`, `storage`, `public/storage`.
-5. `build-release` — composer install + bun install + bun run build.
+5. `build-release` — composer install + npm install + npm run build.
 6. `harden-release` — chmod (excludes vendor for speed).
 
    *— production state from this point —*
