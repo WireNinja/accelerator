@@ -11,6 +11,24 @@ Format per entry:
 
 ---
 
+## v1.1.64
+
+No breaking changes.
+
+### 🟡 AWARENESS — Fresh-seed deploy works in production
+
+`deploy-fresh-seed` now explicitly unprohibits Laravel's `migrate:fresh` command inside the already-confirmed Envoy flow before running:
+
+```bash
+php artisan migrate:fresh --seed --force
+```
+
+This is required because Accelerator globally calls `DB::prohibitDestructiveCommands(app()->isProduction())`. The bypass is scoped to the one-off console kernel call inside `prepare-laravel-fresh-seed`; normal production commands remain protected.
+
+**Action required**: None. Use the same explicit confirmation flag as v1.1.63.
+
+---
+
 ## v1.1.63
 
 No breaking changes.

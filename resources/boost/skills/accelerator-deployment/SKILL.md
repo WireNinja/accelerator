@@ -449,7 +449,7 @@ Flow differences from `deploy`:
 1. `assert-fresh-seed-confirmed` refuses to continue unless the exact long flag value is present.
 2. `build-release-with-dev` runs Composer with dev dependencies available so seeders, factories, and Laravel's `fake()` helper can work.
 3. `migration-safety` is skipped because this story is already explicitly destructive.
-4. `prepare-laravel-fresh-seed` runs `migrate:fresh --seed --force`.
+4. `prepare-laravel-fresh-seed` explicitly unprohibits Laravel's `FreshCommand` inside the confirmed deploy process, then runs `migrate:fresh --seed --force`.
 5. `prune-dev-dependencies` immediately runs Composer again with `--no-dev --optimize-autoloader --classmap-authoritative`, then reoptimizes the app before `switch-current`.
 
 Do not use this story for production unless the operator explicitly asks for data loss and accepts restoring from backup if seeders fail. If anything fails after `maintenance-on`, maintenance mode stays enabled for triage, matching the normal deploy failure posture.

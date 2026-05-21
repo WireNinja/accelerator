@@ -591,7 +591,7 @@
     cd {{ $releasePath }}
     larahelp --reoptimize
     larahelp --setfacl
-    {{ $phpBin }} artisan migrate:fresh --seed --force --no-interaction --ansi
+    {{ $phpBin }} -r '$app = require "bootstrap/app.php"; $kernel = $app->make(Illuminate\Contracts\Console\Kernel::class); $kernel->bootstrap(); Illuminate\Database\Console\Migrations\FreshCommand::prohibit(false); $status = $kernel->call("migrate:fresh", ["--seed" => true, "--force" => true, "--no-interaction" => true, "--ansi" => true]); echo $kernel->output(); exit($status);'
     {{ $phpBin }} artisan storage:link --force --no-interaction --ansi
 @endtask
 
