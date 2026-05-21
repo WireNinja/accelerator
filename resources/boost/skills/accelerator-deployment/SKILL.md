@@ -66,7 +66,7 @@ Global keys:
 - `OPS_DEPLOY_DEFAULT_STAGE`, `OPS_DEPLOY_PROJECT`, `OPS_DEPLOY_SSH_HOST`
 - `OPS_DEPLOY_REPO`, `OPS_DEPLOY_BRANCH`
 - `OPS_DEPLOY_KEEP_RELEASES` (default 5)
-- `OPS_DEPLOY_PHP_BIN`, `OPS_DEPLOY_NPM_BIN`
+- `OPS_DEPLOY_PHP_BIN`, `OPS_DEPLOY_NPM_BIN` (supports `pnpm`, `bun`, or `npm`; auto-detects if empty — fallback order: pnpm → bun → npm)
 - `OPS_DEPLOY_RUN_USER` (default `www-data`)
 - `OPS_DEPLOY_SSL_EMAIL`
 

@@ -80,7 +80,13 @@
     $branch = $value($envoy, "OPS_DEPLOY_{$stageKey}_BRANCH", $value($envoy, 'OPS_DEPLOY_BRANCH', 'main'));
     $group = $value($envoy, "OPS_DEPLOY_{$stageKey}_GROUP");
     $phpBin = $value($envoy, "OPS_DEPLOY_{$stageKey}_PHP_BIN", $value($envoy, 'OPS_DEPLOY_PHP_BIN', 'php'));
-    $npmBin = $value($envoy, "OPS_DEPLOY_{$stageKey}_NPM_BIN", $value($envoy, 'OPS_DEPLOY_NPM_BIN', 'npm'));
+    $npmBin = $value($envoy, "OPS_DEPLOY_{$stageKey}_NPM_BIN", $value($envoy, 'OPS_DEPLOY_NPM_BIN', ''));
+
+    // Auto-detect package manager when not explicitly set.
+    if ($npmBin === '') {
+        $detect = trim((string) shell_exec('which pnpm 2>/dev/null || which bun 2>/dev/null || which npm 2>/dev/null'));
+        $npmBin = $detect !== '' ? $detect : 'npm';
+    }
     $runUser = $value($envoy, "OPS_DEPLOY_{$stageKey}_RUN_USER", $value($envoy, 'OPS_DEPLOY_RUN_USER', 'www-data'));
     $sshHost = $value($envoy, "OPS_DEPLOY_{$stageKey}_SSH_HOST", $value($envoy, 'OPS_DEPLOY_SSH_HOST', 'onidel'));
     $octanePort = $value($envoy, "OPS_DEPLOY_{$stageKey}_OCTANE_PORT");
@@ -342,8 +348,16 @@
     mkdir -p resources/svg
     composer validate --no-check-all --strict --ansi
     composer install --no-dev --no-scripts --optimize-autoloader --classmap-authoritative --no-interaction --no-progress --quiet --ansi
-    {{ $npmBin }} install --frozen-lockfile --no-scripts --quiet
-    {{ $npmBin }} run build
+    @if(str_contains($npmBin, 'bun'))
+        {{ $npmBin }} install --frozen-lockfile --no-scripts --quiet
+        {{ $npmBin }} run build
+    @elseif(str_contains($npmBin, 'pnpm'))
+        {{ $npmBin }} install --frozen-lockfile --no-scripts --quiet
+        {{ $npmBin }} run build
+    @else
+        {{ $npmBin }} ci --no-audit --no-fund --quiet
+        {{ $npmBin }} run build
+    @endif
 @endtask
 
 @task('harden-release', ['on' => 'vps'])
