@@ -29,10 +29,11 @@ First deployment, continuous deployment, deployment cleanup, Envoy release folde
 |---|---|---|
 | `bootstrap` | one-shot per VPS to write Nginx vhost + Supervisor conf | bootstrap-nginx + bootstrap-supervisor |
 | `init` | first deploy on a fresh VPS root | layout setup + tooling check + clone + build + harden + prepare-laravel + switch + opcache + restart + health-check |
-| `deploy` | continuous full deploy | tooling + sync-env + clone + build + harden + migration-safety + db-backup + maintenance-on + prepare-laravel + switch + opcache + restart + health-check + maintenance-off + prune |
+| `deploy` | continuous full deploy | tooling + sync-env + clone + build + harden + clear-cache + migration-safety + db-backup + maintenance-on + prepare-laravel + switch + opcache + restart + health-check + maintenance-off + prune |
 | `deploy-slim` | hot patch backend only (no JS/CSS rebuild) | same as deploy minus build-release |
 | `rollback` | switch back to previous valid release | rollback-release + opcache + restart + health-check (NO maintenance window — speed prioritised) |
 | `releases` | list release history + prune target | tabular output |
+| `backups` | list predeploy and scheduled backup files | list-backups |
 | `status` | quick state check | readlink current + supervisor status |
 | `restart` / `logs` | targeted service operation | supervisorctl / tail |
 
@@ -265,9 +266,10 @@ Flow (sandbox to risky zone):
 4. `link-shared` — symlink `.env`, `storage`, `public/storage`.
 5. `build-release` — composer install + npm install + npm run build.
 6. `harden-release` — chmod (excludes vendor for speed).
+7. `clear-cache` — `optimize:clear` on current release (ensures fresh config for backup/migrate).
 
    *— production state from this point —*
-7. `migration-safety` — grep new migration files for `dropColumn` / `dropTable` / `renameColumn`. Aborts unless `MIGRATION_SAFETY_ALLOW=1` is set in shared `.env`.
+8. `migration-safety` — grep new migration files for `dropColumn` / `dropTable` / `renameColumn`. Aborts unless `MIGRATION_SAFETY_ALLOW=1` is set in shared `.env`.
 8. `db-backup` — Spatie pre-deploy profile.
 9. `maintenance-on` — `php artisan down --secret={random}`.
 10. `prepare-laravel` — `larahelp --reoptimize`, `larahelp --setfacl`, `migrate --force`.

@@ -213,6 +213,7 @@
     link-shared
     build-release
     harden-release
+    clear-cache
     migration-safety
     db-backup
     maintenance-on
@@ -231,6 +232,7 @@
     clone-release
     link-shared
     harden-release
+    clear-cache
     migration-safety
     db-backup
     maintenance-on
@@ -269,6 +271,10 @@
 @story('bootstrap')
     bootstrap-nginx
     bootstrap-supervisor
+@endstory
+
+@story('backups')
+    list-backups
 @endstory
 
 {{-- ════════════════════════════════════════════════════════════════════
@@ -375,6 +381,12 @@
 {{-- ════════════════════════════════════════════════════════════════════
      Risky zone — past this line, production state is touched
      ──────────────────────────────────────────────────────────────────── --}}
+
+@task('clear-cache', ['on' => 'vps'])
+    set -euo pipefail
+    cd {{ $currentPath }}
+    {{ $phpBin }} artisan optimize:clear --no-interaction --ansi
+@endtask
 
 @task('db-backup', ['on' => 'vps'])
     set -euo pipefail
@@ -645,6 +657,49 @@
     echo "[rollback] current -> $(basename "$target")"
 @endtask
 
+
+{{-- ════════════════════════════════════════════════════════════════════
+     Backup listing
+     ──────────────────────────────────────────────────────────────────── --}}
+
+@task('list-backups', ['on' => 'vps'])
+    set -euo pipefail
+    app_name=$(grep -E "^APP_NAME=" {{ $sharedPath }}/.env | cut -d= -f2 | tr -d '"' | tr -d "'")
+    backup_base="{{ $sharedPath }}/storage/app/private"
+
+    echo ""
+    echo "═══════════════════════════════════════════════════════════════"
+    echo "  PREDEPLOY BACKUPS: ${app_name}-predeploy"
+    echo "═══════════════════════════════════════════════════════════════"
+    predeploy_dir="${backup_base}/${app_name}-predeploy"
+    if [ -d "$predeploy_dir" ]; then
+        find "$predeploy_dir" -name "*.zip" -printf "%T@ %Tc %s %p\n" 2>/dev/null | sort -rn | head -10 | while IFS= read -r line; do
+            size=$(echo "$line" | awk '{print $4}')
+            path=$(echo "$line" | awk '{for(i=5;i<=NF;i++) printf "%s ", $i; print ""}')
+            size_kb=$((size / 1024))
+            printf "  %6s KB  %s\n" "$size_kb" "$(basename "$path")"
+        done
+    else
+        echo "  (none)"
+    fi
+
+    echo ""
+    echo "═══════════════════════════════════════════════════════════════"
+    echo "  SCHEDULED BACKUPS: ${app_name}"
+    echo "═══════════════════════════════════════════════════════════════"
+    scheduled_dir="${backup_base}/${app_name}"
+    if [ -d "$scheduled_dir" ]; then
+        find "$scheduled_dir" -name "*.zip" -printf "%T@ %Tc %s %p\n" 2>/dev/null | sort -rn | head -10 | while IFS= read -r line; do
+            size=$(echo "$line" | awk '{print $4}')
+            path=$(echo "$line" | awk '{for(i=5;i<=NF;i++) printf "%s ", $i; print ""}')
+            size_kb=$((size / 1024))
+            printf "  %6s KB  %s\n" "$size_kb" "$(basename "$path")"
+        done
+    else
+        echo "  (none)"
+    fi
+    echo ""
+@endtask
 
 {{-- ════════════════════════════════════════════════════════════════════
      One-shot VPS bootstrap: nginx vhost + supervisor conf
