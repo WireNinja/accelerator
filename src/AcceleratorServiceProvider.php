@@ -140,7 +140,6 @@ class AcceleratorServiceProvider extends ServiceProvider
 
         $this->app->singleton(TelemetryManager::class, function ($app) {
             return new TelemetryManager(
-                $app->make(TelemetryDatabase::class),
                 $app->make(TelemetryFlusher::class),
             );
         });

@@ -260,8 +260,8 @@ class InsiderSessionController extends Controller
             return [
                 'configured_rows' => (string) $configuredRows,
                 'configured_payload_bytes' => (string) $configuredPayloadBytes,
-                'active_rows' => method_exists($table, 'count') ? (string) $table->count() : '-',
-                'memory_size' => method_exists($table, 'getMemorySize') ? $this->formatBytes((int) $table->getMemorySize()) : '-',
+                'active_rows' => (string) $table->count(),
+                'memory_size' => $this->formatBytes((int) $table->getMemorySize()),
                 'status' => 'available',
             ];
         } catch (Throwable $throwable) {

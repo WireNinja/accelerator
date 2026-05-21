@@ -40,7 +40,7 @@ final readonly class OctaneTableSessionHandler implements SessionHandlerInterfac
         return true;
     }
 
-    public function read(string $sessionId): string|false
+    public function read(string $sessionId): string
     {
         $table = $this->table();
         $record = $table->get($sessionId);
@@ -87,7 +87,7 @@ final readonly class OctaneTableSessionHandler implements SessionHandlerInterfac
         return $table->del($sessionId);
     }
 
-    public function gc(int $lifetime): int|false
+    public function gc(int $lifetime): int
     {
         $table = $this->table();
         $deletedSessions = 0;

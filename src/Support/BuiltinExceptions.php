@@ -136,8 +136,10 @@ final class BuiltinExceptions
                 return null;
             }
 
-            if (view()->exists('errors.500')) {
-                return response()->view('errors.500', [
+            $errorView = 'errors.500';
+
+            if (view()->exists($errorView)) {
+                return response()->view($errorView, [
                     'exception' => $exception,
                     'errors' => new ViewErrorBag,
                 ], 500);

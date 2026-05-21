@@ -128,9 +128,9 @@ class ResourceContextScanner
 
             $resources[$resourceClass] = [
                 'class' => $resourceClass,
-                'key' => $attribute?->key ?? $this->defaultResourceKey($resourceClass),
-                'form' => $attribute?->form,
-                'table' => $attribute?->table,
+                'key' => $attribute->key ?? $this->defaultResourceKey($resourceClass),
+                'form' => $attribute->form,
+                'table' => $attribute->table,
                 'model' => $this->callPublicMethod($resourceClass, 'getModel', true),
                 'source' => $this->describeClassSource($resourceClass),
             ];
@@ -513,7 +513,7 @@ class ResourceContextScanner
                 'type' => 'bulk_actions_forbidden',
                 'message' => 'Bulk actions are forbidden by project rules and should be removed from the table definition.',
                 'count' => count($bulkActions),
-                'classes' => array_values(array_map(static fn (Action|ActionGroup $action): string => $action::class, $bulkActions)),
+                'classes' => array_map(static fn (Action|ActionGroup $action): string => $action::class, $bulkActions),
             ]];
 
         return [
@@ -533,12 +533,12 @@ class ResourceContextScanner
                 'icon' => $this->normalizeValue($this->callPublicMethod($table, 'getEmptyStateIcon')),
                 'heading' => $this->normalizeValue($this->callPublicMethod($table, 'getEmptyStateHeading')),
                 'description' => $this->normalizeValue($this->callPublicMethod($table, 'getEmptyStateDescription')),
-                'actions' => array_values(array_map(fn (object $action): array => $this->summarizeAction($action, $policyClass), $emptyStateActions)),
+                'actions' => array_map(fn (object $action): array => $this->summarizeAction($action, $policyClass), $emptyStateActions),
             ],
-            'columns' => array_values(array_map($this->summarizeTableColumn(...), $columns)),
-            'filters' => array_values(array_map($this->summarizeTableFilter(...), $filters)),
-            'header_actions' => array_values(array_map(fn (object $action): array => $this->summarizeAction($action, $policyClass), $headerActions)),
-            'record_actions' => array_values(array_map(fn (object $action): array => $this->summarizeAction($action, $policyClass), $recordActions)),
+            'columns' => array_map($this->summarizeTableColumn(...), $columns),
+            'filters' => array_map($this->summarizeTableFilter(...), $filters),
+            'header_actions' => array_map(fn (object $action): array => $this->summarizeAction($action, $policyClass), $headerActions),
+            'record_actions' => array_map(fn (object $action): array => $this->summarizeAction($action, $policyClass), $recordActions),
             'violations' => $violations,
         ];
     }
@@ -912,7 +912,7 @@ class ResourceContextScanner
                     ? array_values(array_map(fn (mixed $widget): array => $this->describePageWidget($widget, $resourceClass, $pageClass, 'footer', $catalog), $footerWidgets))
                     : [];
                 $page['tabs'] = is_array($tabs)
-                    ? array_values(array_map(fn (string $tabKey, mixed $tab): array => $this->summarizePageTab($tabKey, $tab), array_keys($tabs), array_values($tabs)))
+                    ? array_map(fn (string $tabKey, mixed $tab): array => $this->summarizePageTab($tabKey, $tab), array_keys($tabs), array_values($tabs))
                     : [];
             } catch (Throwable $throwable) {
                 $page['introspection_error'] = $throwable->getMessage();
@@ -1483,7 +1483,7 @@ class ResourceContextScanner
             ...$this->collectActionAbilities($table['record_actions'] ?? []),
         ];
 
-        $abilities = array_values(array_unique(array_filter($abilities, static fn (mixed $ability): bool => is_string($ability) && $ability !== '')));
+        $abilities = array_values(array_unique(array_filter($abilities, static fn (string $ability): bool => $ability !== '')));
         sort($abilities);
 
         return $abilities;
@@ -1498,10 +1498,6 @@ class ResourceContextScanner
         $abilities = [];
 
         foreach ($actions as $action) {
-            if (! is_array($action)) {
-                continue;
-            }
-
             $authorization = $action['authorization'] ?? null;
 
             if (is_array($authorization)) {
@@ -1561,10 +1557,6 @@ class ResourceContextScanner
         $counts = [];
 
         foreach ($items as $item) {
-            if (! is_object($item)) {
-                continue;
-            }
-
             $type = class_basename($item);
             $counts[$type] = ($counts[$type] ?? 0) + 1;
         }
@@ -1621,10 +1613,10 @@ class ResourceContextScanner
 
         $reflection = new ReflectionClass($class);
 
-        return array_values(array_map(
+        return array_map(
             static fn (ReflectionAttribute $attribute): string => $attribute->getName(),
             $reflection->getAttributes(),
-        ));
+        );
     }
 
     /**
@@ -1639,7 +1631,7 @@ class ResourceContextScanner
         $reflection = new ReflectionClass($class);
         $file = $reflection->getFileName();
 
-        if (! is_string($file) || $file === '') {
+        if (! is_string($file)) {
             return null;
         }
 
@@ -1761,7 +1753,7 @@ class ResourceContextScanner
 
             $invoker = Closure::bind(fn (): mixed => $this->{$method}(), $target, $target::class);
 
-            return $invoker instanceof Closure ? $invoker() : null;
+            return $invoker();
         } catch (Throwable) {
             return null;
         }

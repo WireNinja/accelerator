@@ -66,7 +66,7 @@ trait HasTicketTimeline
                 'type' => $comment->is_internal ? 'internal-note' : 'comment',
                 'title' => $comment->is_internal ? 'Catatan internal' : 'Komentar client',
                 'description' => $comment->body,
-                'author' => $comment->user?->name ?? 'Sistem',
+                'author' => $comment->user->name,
                 'author_badge' => $comment->is_internal ? 'Internal' : 'Client',
                 'author_badge_color' => $comment->is_internal ? 'gray' : 'info',
                 'occurred_at' => $comment->created_at,
@@ -79,7 +79,7 @@ trait HasTicketTimeline
                 'type' => 'work-log',
                 'title' => 'Log waktu '.$this->formatMinutes($workLog->minutes_spent),
                 'description' => $workLog->notes,
-                'author' => $workLog->user?->name ?? 'Sistem',
+                'author' => $workLog->user->name,
                 'author_badge' => 'Work log',
                 'author_badge_color' => 'success',
                 'occurred_at' => $workLog->logged_at ?? $workLog->created_at,
@@ -239,12 +239,26 @@ trait HasTicketTimeline
             'status' => TicketStatusEnum::tryFrom((string) $value)?->getLabel() ?? (string) $value,
             'priority' => TicketPriorityEnum::tryFrom((string) $value)?->getLabel() ?? (string) $value,
             'type' => TicketTypeEnum::tryFrom((string) $value)?->getLabel() ?? (string) $value,
-            'ticket_board_id' => TicketBoard::query()->find($value)?->name ?? 'Board #'.(string) $value,
-            'ticket_board_column_id' => TicketBoardColumn::query()->find($value)?->name ?? 'Kolom #'.(string) $value,
+            'ticket_board_id' => $this->formatTicketBoardValue($value),
+            'ticket_board_column_id' => $this->formatTicketBoardColumnValue($value),
             'assignee_id', 'reporter_id', 'closed_by', 'archived_by' => $userNames[(string) $value] ?? 'User #'.(string) $value,
             'due_at', 'started_at', 'resolved_at', 'closed_at', 'archived_at' => Str::of((string) $value)->replace('T', ' ')->before('+')->toString(),
             default => is_scalar($value) ? (string) $value : json_encode($value, JSON_THROW_ON_ERROR),
         };
+    }
+
+    protected function formatTicketBoardValue(mixed $value): string
+    {
+        $board = TicketBoard::query()->find($value);
+
+        return $board instanceof TicketBoard ? $board->name : 'Board #'.(string) $value;
+    }
+
+    protected function formatTicketBoardColumnValue(mixed $value): string
+    {
+        $column = TicketBoardColumn::query()->find($value);
+
+        return $column instanceof TicketBoardColumn ? $column->name : 'Kolom #'.(string) $value;
     }
 
     protected function labelForField(string $field): string

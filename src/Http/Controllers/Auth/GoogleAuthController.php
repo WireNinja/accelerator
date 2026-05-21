@@ -4,6 +4,7 @@ namespace WireNinja\Accelerator\Http\Controllers\Auth;
 
 use Exception;
 use Illuminate\Routing\Controller;
+use Laravel\Socialite\Two\User as OAuth2User;
 use Laravel\Socialite\Facades\Socialite;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use WireNinja\Accelerator\Services\GoogleOAuthService;
@@ -25,6 +26,11 @@ class GoogleAuthController extends Controller
     {
         try {
             $googleUser = Socialite::driver('google')->user();
+
+            if (! $googleUser instanceof OAuth2User) {
+                throw new Exception('Google OAuth did not return an OAuth 2 user.');
+            }
+
             $service->handle($googleUser);
 
             return redirect()->intended(config('filament.path', 'admin'));

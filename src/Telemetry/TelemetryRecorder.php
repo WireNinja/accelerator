@@ -248,7 +248,7 @@ final class TelemetryRecorder
             return $encoded;
         }
 
-        $payload['stack_trace'] = mb_substr((string) ($payload['stack_trace'] ?? ''), 0, 20000);
+        $payload['stack_trace'] = mb_substr((string) $payload['stack_trace'], 0, 20000);
         $payload['timeline_events'] = array_slice($payload['timeline_events'] ?? [], 0, 20);
         $encoded = json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 
@@ -256,7 +256,7 @@ final class TelemetryRecorder
             return $encoded;
         }
 
-        $payload['stack_trace'] = mb_substr((string) ($payload['stack_trace'] ?? ''), 0, 8000);
+        $payload['stack_trace'] = mb_substr((string) $payload['stack_trace'], 0, 8000);
         $payload['timeline_events'] = [];
         $payload['source_snippet'] = [];
 
@@ -270,7 +270,7 @@ final class TelemetryRecorder
         try {
             $request = request();
 
-            return $request instanceof Request ? $request : null;
+            return request();
         } catch (Throwable) {
             return null;
         }
@@ -340,7 +340,7 @@ final class TelemetryRecorder
                 'file' => $file,
                 'line' => isset($frame['line']) ? (int) $frame['line'] : null,
                 'class' => isset($frame['class']) ? (string) $frame['class'] : null,
-                'function' => isset($frame['function']) ? (string) $frame['function'] : null,
+                'function' => (string) $frame['function'],
             ];
         }
 

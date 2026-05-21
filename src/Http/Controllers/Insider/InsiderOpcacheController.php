@@ -46,8 +46,6 @@ class InsiderOpcacheController extends Controller
             foreach ($directives as $key => $value) {
                 if (is_bool($value)) {
                     $valStr = $value ? 'true' : 'false';
-                } elseif (is_array($value)) {
-                    $valStr = json_encode($value);
                 } else {
                     $valStr = (string) $value;
                 }

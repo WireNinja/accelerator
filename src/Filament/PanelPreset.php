@@ -5,6 +5,9 @@ namespace WireNinja\Accelerator\Filament;
 use Filament\Actions\Action;
 use Filament\Auth\MultiFactor\App\AppAuthentication;
 use Filament\Auth\MultiFactor\Email\EmailAuthentication;
+use Filament\Auth\Pages\EmailVerification\EmailVerificationPrompt;
+use Filament\Auth\Pages\PasswordReset\RequestPasswordReset;
+use Filament\Auth\Pages\PasswordReset\ResetPassword;
 use Filament\Auth\Pages\Register;
 use Filament\Enums\ThemeMode;
 use Filament\FontProviders\GoogleFontProvider;
@@ -173,11 +176,17 @@ final class PanelPreset
                     $panel
                         ->font($settings->google_font->value, provider: GoogleFontProvider::class)
                         ->registration($settings->registration_enabled ? Register::class : null)
-                        ->passwordReset($settings->password_reset_enabled ? true : null)
+                        ->passwordReset(
+                            $settings->password_reset_enabled ? RequestPasswordReset::class : null,
+                            $settings->password_reset_enabled ? ResetPassword::class : null,
+                        )
                         ->brandName($settings->brand_name)
                         ->brandLogo(self::resolveAssetUrl($settings->brand_logo))
                         ->favicon(self::resolveAssetUrl($settings->brand_favicon))
-                        ->emailVerification($settings->email_verification_enabled ? true : null)
+                        ->emailVerification(
+                            $settings->email_verification_enabled ? EmailVerificationPrompt::class : null,
+                            $settings->email_verification_enabled,
+                        )
                         ->emailChangeVerification($settings->email_verification_enabled ? true : false);
                 });
 

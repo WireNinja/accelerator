@@ -36,7 +36,6 @@ final class TelemetryManager
     private ?int $timerId = null;
 
     public function __construct(
-        private readonly TelemetryDatabase $database,
         private readonly TelemetryFlusher $flusher,
     ) {}
 

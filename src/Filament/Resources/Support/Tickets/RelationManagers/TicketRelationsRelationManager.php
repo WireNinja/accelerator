@@ -54,7 +54,7 @@ class TicketRelationsRelationManager extends RelationManager
             ->columns([
                 TextColumn::make('relatedTicket.ticket_number')
                     ->label('Tiket Terkait')
-                    ->description(fn (TicketRelation $record): string => $record->relatedTicket?->title ?? '')
+                    ->description(fn (TicketRelation $record): string => $record->relatedTicket->title)
                     ->searchable()
                     ->sortable(),
                 TextColumn::make('relation_type')

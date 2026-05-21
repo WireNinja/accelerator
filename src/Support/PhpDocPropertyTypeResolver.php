@@ -58,7 +58,7 @@ final class PhpDocPropertyTypeResolver
 
         $imports = [];
 
-        foreach ($matches[1] ?? [] as $import) {
+        foreach ($matches[1] as $import) {
             $import = trim($import);
 
             if (
