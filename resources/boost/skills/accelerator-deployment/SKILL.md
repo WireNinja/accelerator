@@ -28,6 +28,7 @@ First deployment, continuous deployment, deployment cleanup, Envoy release folde
 | Story | When | What it runs |
 |---|---|---|
 | `bootstrap` | one-shot per VPS to write Nginx vhost + Supervisor conf | bootstrap-nginx + bootstrap-supervisor |
+| `bootstrap-ssl` | one-shot per domain to obtain cert + upgrade Nginx to SSL | obtain-cert + upgrade-nginx-ssl |
 | `init` | first deploy on a fresh VPS root | layout setup + tooling check + clone + build + harden + prepare-laravel + switch + opcache + restart + health-check |
 | `deploy` | continuous full deploy | tooling + sync-env + clone + build + harden + clear-cache + migration-safety + db-backup + maintenance-on + prepare-laravel + switch + opcache + restart + health-check + maintenance-off + prune |
 | `deploy-slim` | hot patch backend only (no JS/CSS rebuild) | same as deploy minus build-release |
@@ -203,36 +204,128 @@ Expected 200. Anything else fails the deploy and leaves the app in maintenance f
 
 Runs after a successful health-check + `maintenance-off`. Keeps `OPS_DEPLOY_KEEP_RELEASES` newest releases. Always preserves `current` even if it would have fallen off the list. Does NOT touch `archive/` (that's rollback evidence).
 
-## First-Time Deploy Checklist
+## Initial Deployment (Step-by-Step)
+
+This is the full sequence for deploying a project to a fresh VPS for the first time. Follow in order.
+
+### Step 1: Local Pre-flight
 
 Before touching the VPS:
 
-1. Read `.env.envoy` — confirm domain, root, group, ports, repo, branch, PHP/npm binaries, run user.
-2. Confirm `.env.staging` / `.env.production` exists, is non-empty, and key-compatible with `.env`.
-3. Confirm runtime env files have NO `OPS_DEPLOY_*` keys.
-4. Confirm `OPS_DEPLOY_{STAGE}_OCTANE_PORT` is set (required).
-5. Confirm ports are not used by another project on the VPS:
+1. `.env.envoy` exists with all required stage keys, especially `_OCTANE_PORT`.
+2. `.env.staging` or `.env.production` exists, non-empty, key-compatible with `.env`.
+3. Runtime env files have NO `OPS_DEPLOY_*` keys.
+4. `pnpm run build` (or your configured npm bin) works locally without errors.
+5. All application dependencies are committed (check `composer.json` and `package.json`).
+6. Code is pushed to the remote repo branch configured in `OPS_DEPLOY_BRANCH`.
 
-   ```bash
-   ssh onidel 'ss -ltnp'
-   ```
-6. For SQLite, keep `DB_SOCKET`, `DB_HOST`, `DB_PORT`, `DB_USERNAME`, `DB_PASSWORD` commented or empty.
-7. Confirm `pnpm run build` works locally before first deploy.
-8. Confirm node/pnpm is available in non-interactive SSH (check `/etc/environment` has the PATH).
+```bash
+# Verify ports are free on VPS
+ssh onidel 'ss -ltnp | grep -E ":(9012|9013)\b"'
+```
+
+### Step 2: Bootstrap (one-shot)
+
+Writes Nginx vhost + Supervisor config to VPS. Run once per domain.
+
+```bash
+vendor/bin/envoy run bootstrap --stage=test
+```
+
+What happens:
+- `bootstrap-nginx`: Checks if SSL cert exists at `/etc/letsencrypt/live/{domain}/`. If yes → uses SSL+QUIC stub. If no → uses HTTP-only stub. Archives existing config before overwriting. Validates `nginx -t` and reloads.
+- `bootstrap-supervisor`: Writes `/etc/supervisor/conf.d/{group}.conf`, runs `reread + update`.
+
+**Guard**: If existing Nginx config has `ssl_certificate` but no cert file is found, bootstrap skips to avoid downgrading a working SSL config.
+
+### Step 3: SSL (one-shot, after bootstrap)
+
+If the domain needs HTTPS (it always does for production):
+
+```bash
+vendor/bin/envoy run bootstrap-ssl --stage=test
+```
+
+What happens:
+- `obtain-cert`: Runs `certbot certonly --webroot` using the deployed `public/` as webroot. Non-interactive. Skips if cert already exists.
+- `upgrade-nginx-ssl`: Uploads the SSL stub (with HTTP/2, HTTP/3/QUIC, 301 redirect), archives old config, validates and reloads nginx.
+
+**Important**: `bootstrap-ssl` requires that `{root}/current/public` exists (i.e., at least one deploy has completed or `init` has run). If running on a completely fresh VPS, run `init` first (which creates HTTP-only deploy), then `bootstrap-ssl`.
+
+Alternative flow for fresh VPS:
+1. `bootstrap` → HTTP-only nginx + supervisor
+2. `init` → first release deployed, app accessible via HTTP
+3. `bootstrap-ssl` → cert obtained + nginx upgraded to HTTPS
+
+### Step 4: First Deploy (init)
+
+```bash
+vendor/bin/envoy run init --stage=test
+```
+
+What it does (in order):
+1. `prepare-layout` — creates full directory structure, sets ownership + ACL, creates SQLite file if needed
+2. `ensure-deploy-tools` — verifies git, composer, php, npm/pnpm, larahelp, setfacl, curl exist
+3. `sync-env` — uploads `.env.staging`/`.env.production` to `shared/.env`
+4. `clone-release` — clones repo at exact SHA
+5. `link-shared` — symlinks `.env`, `storage`, `public/storage`
+6. `build-release` — composer install + pnpm/bun/npm install + vite build
+7. `harden-release` — chmod files
+8. `prepare-laravel` — `larahelp --reoptimize`, `larahelp --setfacl`, `migrate --force`, `storage:link`
+9. `switch-current` — atomic symlink swap
+10. `invalidate-opcache` — per-file invalidation
+11. `restart-service` — supervisor restart + FATAL check
+12. `health-check` — curl Octane `/up` expecting 200
+
+`init` intentionally SKIPS: db-backup (nothing to backup), maintenance-on (no traffic), migration-safety (no previous release), prune (no old releases).
+
+### Step 5: Verify
+
+```bash
+vendor/bin/envoy run status --stage=test
+curl -I https://{domain}
+```
+
+Check:
+- All supervisor programs RUNNING
+- HTTPS responds 200
+- Dynamic assets accessible: `/livewire/livewire.min.js`, `/build/manifest.webmanifest`
 
 ## VPS Prerequisites
 
-`prepare-layout` automatically handles these, but understanding the layout is important:
+`prepare-layout` automatically handles these, but understanding is important:
 
 - Creates `{root}/releases`, `{root}/shared`, `{root}/archive`
-- Creates `shared/storage/framework/{views,cache,sessions}` (required by Blade, config cache)
+- Creates `shared/storage/framework/{views,cache,sessions}` (required by Blade/config cache)
 - Creates `shared/storage/logs`, `shared/storage/app/public`
 - Creates `shared/database/` directory
 - Sets ownership: `chown -R {deploy_user}:{run_user}` on deploy root
-- Applies ACL on `shared/storage` so `{run_user}` can write from first Octane boot
-- If SQLite detected in `shared/.env`: creates the database file + sets ACL on it
+- Applies ACL on `shared/storage` so runtime user can write from first boot
+- If SQLite detected in `shared/.env`: creates the database file + sets ACL
 
-**Important**: `prepare-layout` reads `shared/.env` for SQLite detection. Run `sync-env` before `prepare-layout` on a completely fresh VPS, or run `init` which handles the ordering correctly.
+**Ordering**: `prepare-layout` reads `shared/.env` for SQLite detection. In `init` story, `sync-env` runs before `prepare-layout` is implicitly handled (layout is created, then env synced, then release built). If SQLite file doesn't exist after `sync-env` + `prepare-layout`, the `prepare-laravel` task's `migrate` will fail. This is handled automatically by the `init` story ordering.
+
+## Nginx Stub Architecture
+
+Two stubs ship with the library:
+
+| Stub | When used | Features |
+|---|---|---|
+| `nginx-vhost-http.conf.stub` | No SSL cert found | HTTP-only, certbot webroot challenge path, @octane pattern |
+| `nginx-vhost-ssl.conf.stub` | SSL cert exists | HTTPS redirect, HTTP/2+3, QUIC, Alt-Svc header, @octane pattern |
+
+Both stubs use the **@octane named location pattern**:
+```nginx
+location / { try_files $uri @octane; }
+location @octane {
+    proxy_pass http://127.0.0.1:{port}$suffix;
+    ...
+}
+```
+
+This ensures nginx serves static files directly and only proxies to Octane when needed. Do NOT use the old `upstream` block + `proxy_pass` directly in `location /` pattern.
+
+`bootstrap-nginx` auto-detects which stub to use based on cert existence. Re-running `bootstrap` after SSL is set up will use the SSL stub (safe to re-run).
 
 ## larahelp
 
@@ -262,19 +355,20 @@ VPS-side, one-shot bootstrap (rendered from `.env.envoy`):
 vendor/bin/envoy run bootstrap --stage=test
 ```
 
-This writes `/etc/nginx/sites-available/{domain}.conf` (HTTP-only Octane upstream + Reverb proxy + static asset locations) and `/etc/supervisor/conf.d/{group}.conf` (stage-scoped programs), validates `nginx -t`, runs `supervisorctl reread && update`. Existing files are archived under `{root}/archive/` first.
+This writes `/etc/nginx/sites-available/{domain}.conf` (auto-detects HTTP-only or SSL+QUIC based on cert existence) and `/etc/supervisor/conf.d/{group}.conf` (stage-scoped programs), validates `nginx -t`, runs `supervisorctl reread && update`. Existing files are archived under `{root}/archive/` first.
 
 Manual operator follow-ups (one-time):
 
-1. Run certbot for SSL: `sudo certbot --nginx -d {domain} -m {OPS_DEPLOY_SSL_EMAIL} --agree-tos --redirect`.
-2. Confirm `larahelp` v2.0+ is in `/usr/local/bin/larahelp` (update from `vendor/wireninja/accelerator/stubs/vps/larahelp`).
-3. Confirm SSH key on the VPS can clone from GitHub (test once with `ssh -T git@github.com`).
-4. Confirm `/etc/environment` has node/pnpm paths for non-interactive SSH.
+1. Install `larahelp` v2.0+ on VPS (from `vendor/wireninja/accelerator/stubs/vps/larahelp`).
+2. Confirm SSH key on the VPS can clone from GitHub (test once with `ssh -T git@github.com`).
+3. Confirm `/etc/environment` has node/pnpm paths for non-interactive SSH.
+4. After first deploy (`init`), run `vendor/bin/envoy run bootstrap-ssl --stage=test` for HTTPS.
 
 Then run from local:
 
 ```bash
 vendor/bin/envoy run init --stage=test
+vendor/bin/envoy run bootstrap-ssl --stage=test
 vendor/bin/envoy run status --stage=test
 ```
 
@@ -351,27 +445,36 @@ Use this before manual rollback or to confirm prune behaviour.
 
 ## Nginx Requirements
 
-The active Nginx vhost should:
+The active Nginx vhost uses the `@octane` named location pattern:
 
-- `server_name {domain}`
-- `root {root}/current/public`
-- HTTPS redirect once SSL is ready
-- HTTP/2 + HTTP/3 when supported
-- proxy normal Laravel requests to Octane on the stage Octane port
-- proxy Reverb websocket endpoints to the stage Reverb port
-- send `X-Forwarded-Host`, `X-Forwarded-Proto`, `X-Forwarded-Port`, `X-Forwarded-For`, `Host` headers
-- avoid blocking dynamic route-backed assets (Livewire, Filament JS)
-- log to domain-specific access/error files
-
-Verify dynamic assets:
-
-```text
-/livewire/livewire.min.js
-/build/manifest.webmanifest
-/sw.js
+```nginx
+location / { try_files $uri @octane; }
+location @octane {
+    proxy_pass http://127.0.0.1:{OCTANE_PORT}$suffix;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    ...
+}
 ```
 
-Never point Nginx to `{root}/html/public` after migrating to release layout.
+Key properties:
+- `server_name {domain}`
+- `root {root}/current/public`
+- `try_files $uri @octane` — nginx serves static files directly, only proxies dynamic requests
+- HTTPS redirect (301 from port 80) once SSL is active
+- HTTP/2 + HTTP/3 (QUIC) with `Alt-Svc` header for SSL config
+- Reverb websocket at `location ~ ^/(app|apps|pusher)/`
+- Static asset caching with `expires 365d` + `Cache-Control: public, immutable`
+- Domain-specific access/error logs
+- `client_max_body_size 100m`
+
+Do NOT:
+- Use `upstream` block + `proxy_pass` directly in `location /` (old pattern)
+- Add `location ~ \.php$ { fastcgi_pass ... }` (shadows Livewire/Filament dynamic JS)
+- Point Nginx to `{root}/html/public` after migrating to release layout
+- Manually run `certbot --nginx` (use `bootstrap-ssl` instead to avoid QUIC conflicts)
 
 ## Supervisor Requirements
 

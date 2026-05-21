@@ -129,9 +129,13 @@
      * The stubs ship with the accelerator package; resolve from vendor first,
      * fall back to the in-tree path when running from the package itself.
      */
-    $nginxStub = $root.'/vendor/wireninja/accelerator/stubs/vps/nginx-vhost.conf.stub';
+    $nginxStub = $root.'/vendor/wireninja/accelerator/stubs/vps/nginx-vhost-http.conf.stub';
     if (! is_file($nginxStub)) {
-        $nginxStub = $root.'/packages/accelerator/stubs/vps/nginx-vhost.conf.stub';
+        $nginxStub = $root.'/packages/accelerator/stubs/vps/nginx-vhost-http.conf.stub';
+    }
+    $nginxSslStub = $root.'/vendor/wireninja/accelerator/stubs/vps/nginx-vhost-ssl.conf.stub';
+    if (! is_file($nginxSslStub)) {
+        $nginxSslStub = $root.'/packages/accelerator/stubs/vps/nginx-vhost-ssl.conf.stub';
     }
     $supervisorStub = $root.'/vendor/wireninja/accelerator/stubs/vps/supervisor.conf.stub';
     if (! is_file($supervisorStub)) {
@@ -172,14 +176,20 @@
     ];
 
     $renderedNginxConf = is_file($nginxStub) ? $renderStub($nginxStub, $stubVars) : '';
+    $renderedNginxSslConf = is_file($nginxSslStub) ? $renderStub($nginxSslStub, $stubVars) : '';
     $renderedSupervisorConf = is_file($supervisorStub) ? $renderStub($supervisorStub, $stubVars) : '';
 
     $localTmp = sys_get_temp_dir().'/accelerator-bootstrap-'.bin2hex(random_bytes(4));
     $localNginx = $localTmp.'-nginx.conf';
+    $localNginxSsl = $localTmp.'-nginx-ssl.conf';
     $localSupervisor = $localTmp.'-supervisor.conf';
     if ($renderedNginxConf !== '') {
         @mkdir(dirname($localNginx), 0700, true);
         file_put_contents($localNginx, $renderedNginxConf);
+    }
+    if ($renderedNginxSslConf !== '') {
+        @mkdir(dirname($localNginxSsl), 0700, true);
+        file_put_contents($localNginxSsl, $renderedNginxSslConf);
     }
     if ($renderedSupervisorConf !== '') {
         @mkdir(dirname($localSupervisor), 0700, true);
@@ -271,6 +281,11 @@
 @story('bootstrap')
     bootstrap-nginx
     bootstrap-supervisor
+@endstory
+
+@story('bootstrap-ssl')
+    obtain-cert
+    upgrade-nginx-ssl
 @endstory
 
 @story('backups')
@@ -740,12 +755,32 @@
 
 @task('bootstrap-nginx', ['on' => 'localhost'])
     set -euo pipefail
-    test -s {{ $localNginx }}
+
+    # Determine which stub to use: if cert already exists on VPS, use SSL stub
+    has_cert=$(ssh {{ $sshHost }} 'test -f /etc/letsencrypt/live/{{ $domain }}/fullchain.pem && echo yes || echo no')
+
+    if [ "$has_cert" = "yes" ]; then
+        test -s {{ $localNginxSsl }}
+        conf_file="{{ $localNginxSsl }}"
+        echo "[bootstrap-nginx] SSL cert detected — using SSL+QUIC stub"
+    else
+        test -s {{ $localNginx }}
+        conf_file="{{ $localNginx }}"
+        echo "[bootstrap-nginx] No SSL cert — using HTTP-only stub"
+    fi
+
+    # Guard: if existing config has ssl_certificate, warn and require confirmation
+    has_ssl_config=$(ssh {{ $sshHost }} 'grep -l "ssl_certificate" /etc/nginx/sites-available/{{ $domain }}.conf 2>/dev/null && echo yes || echo no')
+    if [ "$has_ssl_config" = "yes" ] && [ "$has_cert" = "no" ]; then
+        echo "[bootstrap-nginx] WARNING: existing config has SSL but no cert found."
+        echo "[bootstrap-nginx] Skipping to avoid downgrading SSL config. Use --force or fix cert path."
+        exit 0
+    fi
+
     echo "[bootstrap-nginx] uploading rendered vhost to {{ $sshHost }}…"
-    scp {{ $localNginx }} {{ $sshHost }}:/tmp/{{ $domain }}.conf
+    scp "$conf_file" {{ $sshHost }}:/tmp/{{ $domain }}.conf
     ssh {{ $sshHost }} 'set -euo pipefail
         sudo mkdir -p /etc/nginx/sites-available /etc/nginx/sites-enabled
-        # Archive existing config (steering: archive-replaced-before-overwrite)
         if [ -f /etc/nginx/sites-available/{{ $domain }}.conf ]; then
             sudo mkdir -p {{ $archivePath }}
             sudo cp /etc/nginx/sites-available/{{ $domain }}.conf {{ $archivePath }}/nginx-{{ $domain }}.conf.before-bootstrap-$(date +%Y-%m-%d_%H-%M-%S)
@@ -756,10 +791,17 @@
         sudo ln -sfn /etc/nginx/sites-available/{{ $domain }}.conf /etc/nginx/sites-enabled/{{ $domain }}.conf
         sudo nginx -t
         sudo systemctl reload nginx
-        echo "[bootstrap-nginx] HTTP-only vhost live for {{ $domain }}. Run certbot for SSL:"
-        echo "  sudo certbot --nginx -d {{ $domain }} -m {{ $sslEmail }} --agree-tos --redirect"
     '
-    rm -f {{ $localNginx }}
+
+    if [ "$has_cert" = "yes" ]; then
+        echo "[bootstrap-nginx] SSL vhost live for {{ $domain }} (HTTPS + HTTP/2 + HTTP/3)"
+    else
+        echo "[bootstrap-nginx] HTTP-only vhost live for {{ $domain }}."
+        echo "[bootstrap-nginx] To enable SSL, run:"
+        echo "  vendor/bin/envoy run bootstrap-ssl --stage={{ $stage }}"
+    fi
+
+    rm -f {{ $localNginx }} {{ $localNginxSsl }}
 @endtask
 
 @task('bootstrap-supervisor', ['on' => 'localhost'])
@@ -782,4 +824,56 @@
         sudo supervisorctl status {{ $group }}:* || true
     '
     rm -f {{ $localSupervisor }}
+@endtask
+
+@task('obtain-cert', ['on' => 'localhost'])
+    set -euo pipefail
+    # Check if cert already exists
+    has_cert=$(ssh {{ $sshHost }} 'test -f /etc/letsencrypt/live/{{ $domain }}/fullchain.pem && echo yes || echo no')
+    if [ "$has_cert" = "yes" ]; then
+        echo "[obtain-cert] Certificate already exists for {{ $domain }}. Skipping."
+        exit 0
+    fi
+
+    # Ensure webroot path exists
+    ssh {{ $sshHost }} 'sudo mkdir -p {{ $deployRoot }}/current/public/.well-known/acme-challenge'
+
+    echo "[obtain-cert] Requesting certificate via certbot webroot..."
+    ssh {{ $sshHost }} 'sudo certbot certonly \
+        --webroot \
+        -w {{ $deployRoot }}/current/public \
+        -d {{ $domain }} \
+        -m {{ $sslEmail }} \
+        --agree-tos \
+        --non-interactive'
+
+    echo "[obtain-cert] Certificate obtained for {{ $domain }}."
+@endtask
+
+@task('upgrade-nginx-ssl', ['on' => 'localhost'])
+    set -euo pipefail
+    # Verify cert exists after obtain-cert
+    has_cert=$(ssh {{ $sshHost }} 'test -f /etc/letsencrypt/live/{{ $domain }}/fullchain.pem && echo yes || echo no')
+    if [ "$has_cert" != "yes" ]; then
+        echo "[upgrade-nginx-ssl] No certificate found. Run obtain-cert first or check certbot output."
+        exit 1
+    fi
+
+    test -s {{ $localNginxSsl }}
+    echo "[upgrade-nginx-ssl] Uploading SSL vhost config..."
+    scp {{ $localNginxSsl }} {{ $sshHost }}:/tmp/{{ $domain }}.conf
+    ssh {{ $sshHost }} 'set -euo pipefail
+        sudo mkdir -p {{ $archivePath }}
+        if [ -f /etc/nginx/sites-available/{{ $domain }}.conf ]; then
+            sudo cp /etc/nginx/sites-available/{{ $domain }}.conf {{ $archivePath }}/nginx-{{ $domain }}.conf.before-ssl-$(date +%Y-%m-%d_%H-%M-%S)
+        fi
+        sudo mv /tmp/{{ $domain }}.conf /etc/nginx/sites-available/{{ $domain }}.conf
+        sudo chown root:root /etc/nginx/sites-available/{{ $domain }}.conf
+        sudo chmod 644 /etc/nginx/sites-available/{{ $domain }}.conf
+        sudo ln -sfn /etc/nginx/sites-available/{{ $domain }}.conf /etc/nginx/sites-enabled/{{ $domain }}.conf
+        sudo nginx -t
+        sudo systemctl reload nginx
+    '
+    echo "[upgrade-nginx-ssl] SSL vhost live for {{ $domain }} (HTTPS + HTTP/2 + HTTP/3)"
+    rm -f {{ $localNginxSsl }}
 @endtask

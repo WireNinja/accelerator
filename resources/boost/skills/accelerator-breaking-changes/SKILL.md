@@ -11,6 +11,37 @@ Format per entry:
 
 ---
 
+## v1.1.60
+
+### 🔴 BREAKING — Nginx stub renamed and rewritten
+
+Old stub `nginx-vhost.conf.stub` no longer exists. Replaced by two stubs:
+- `nginx-vhost-http.conf.stub` — HTTP-only, used when no SSL cert exists
+- `nginx-vhost-ssl.conf.stub` — Full SSL + HTTP/2 + HTTP/3 (QUIC)
+
+Both stubs now use the `@octane` named location pattern (`try_files $uri @octane`) instead of the old `upstream` block + direct `proxy_pass`.
+
+**Action required**: Re-run `vendor/bin/envoy run bootstrap --stage={stage}` to regenerate Nginx config. Bootstrap now auto-detects SSL cert and uses the correct stub.
+
+### 🔴 BREAKING — `bootstrap-nginx` now guards against SSL downgrade
+
+If existing Nginx config has `ssl_certificate` but no cert file is found at `/etc/letsencrypt/live/{domain}/`, bootstrap will **skip** instead of overwriting. This prevents accidental SSL → HTTP downgrade.
+
+**Action required**: None if certs are in place. If bootstrap skips unexpectedly, verify cert path or use `--force`.
+
+### 🟡 AWARENESS — New `bootstrap-ssl` story
+
+New story to obtain SSL cert and upgrade Nginx config in one command:
+```bash
+vendor/bin/envoy run bootstrap-ssl --stage=test
+```
+
+Uses `certbot certonly --webroot` (does NOT use `certbot --nginx` plugin which conflicts with QUIC). Then renders the SSL stub and reloads nginx.
+
+**Action required**: None. Additive feature. Replaces manual certbot + manual nginx edit.
+
+---
+
 ## v1.1.59
 
 No breaking changes. Added this skill file.
