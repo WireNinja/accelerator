@@ -14,7 +14,7 @@ Adding or reviewing Accelerator config keys, `.env.example`, `.base-env.example`
 - Read runtime behavior from `config('accelerator.*')`.
 - Do NOT call `env()` directly outside config files — `env()` returns null after `config:cache`.
 - Keep package config env-driven so applications can update the package without republishing config.
-- Add new env keys to `packages/accelerator/.base-env.example`.
+- Add new env keys to `vendor/wireninja/accelerator/.base-env.example` (library source).
 - Add project-specific env keys to the application `.env.example` only when the project needs concrete values.
 - Treat `.env` as local/server runtime state. Do not print secrets in responses.
 - Use `WireNinja\Accelerator\Support\EnvReader` or existing Artisan commands for env inspection.
