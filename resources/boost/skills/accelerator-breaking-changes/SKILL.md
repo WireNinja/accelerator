@@ -11,6 +11,18 @@ Format per entry:
 
 ---
 
+## v1.1.65
+
+No breaking changes.
+
+### 🟡 AWARENESS — Fresh-seed bootstrap loads Composer autoload
+
+The confirmed `deploy-fresh-seed` production bypass now loads `vendor/autoload.php` before bootstrapping Laravel in the one-off PHP process. This fixes the v1.1.64 failure where `bootstrap/app.php` could not resolve `Illuminate\Foundation\Application`.
+
+**Action required**: None. Use the same explicit confirmation flag.
+
+---
+
 ## v1.1.64
 
 No breaking changes.
