@@ -316,19 +316,7 @@ After this step, app is accessible via HTTPS with automatic HTTP→HTTPS redirec
 ### Step 5: Verify
 
 ```bash
-vendor/bin/envoy run status --stage=prod
-curl -I https://{domain}
-```
-
-Check:
-- All supervisor programs RUNNING
-- HTTPS responds 200
-- Dynamic assets accessible: `/livewire/livewire.min.js`, `/build/manifest.webmanifest`
-
-### Step 5: Verify
-
-```bash
-vendor/bin/envoy run status --stage=test
+vendor/bin/envoy run status --stage={stage}
 curl -I https://{domain}
 ```
 
