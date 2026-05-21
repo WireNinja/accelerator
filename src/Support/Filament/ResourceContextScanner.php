@@ -186,7 +186,7 @@ class ResourceContextScanner
 
     /**
      * @param  array<string, array<int|string, array<string, mixed>|string>>  $catalog
-     * @return list<array<string, mixed>>
+     * @return array<string, mixed>
      */
     protected function describeRegistry(array $catalog): array
     {

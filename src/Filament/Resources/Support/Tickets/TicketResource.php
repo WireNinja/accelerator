@@ -44,7 +44,7 @@ class TicketResource extends Resource
     }
 
     /**
-     * @return array{}
+     * @return array<class-string<\Filament\Resources\RelationManagers\RelationManager> | \Filament\Resources\RelationManagers\RelationGroup | \Filament\Resources\RelationManagers\RelationManagerConfiguration>
      */
     #[Override]
     public static function getRelations(): array
