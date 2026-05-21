@@ -11,6 +11,25 @@ Format per entry:
 
 ---
 
+## v1.1.63
+
+No breaking changes.
+
+### 🟡 AWARENESS — Destructive fresh-seed deploy story
+
+New Envoy story:
+```bash
+vendor/bin/envoy run deploy-fresh-seed --stage=test --i-understand-this-will-drop-and-reseed-database="aku mengkonfirmasi remigrate fresh seed"
+```
+
+This story is intentionally destructive. It runs the normal release build path with Composer dev dependencies available, enters maintenance mode, runs `php artisan migrate:fresh --seed --force`, then prunes dev dependencies with the production Composer install before switching `current`.
+
+Use it only when the operator explicitly wants a fresh database and fresh seeded data. Existing database data is destroyed after the pre-deploy backup.
+
+**Action required**: None. Additive feature.
+
+---
+
 ## v1.1.60
 
 ### 🔴 BREAKING — Nginx stub renamed and rewritten
