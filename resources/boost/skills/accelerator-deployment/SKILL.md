@@ -217,6 +217,44 @@ Before touching the VPS:
    ssh onidel 'ss -ltnp'
    ```
 6. For SQLite, keep `DB_SOCKET`, `DB_HOST`, `DB_PORT`, `DB_USERNAME`, `DB_PASSWORD` commented or empty.
+7. Confirm `pnpm run build` works locally before first deploy.
+8. Confirm node/pnpm is available in non-interactive SSH (check `/etc/environment` has the PATH).
+
+## VPS Prerequisites
+
+`prepare-layout` automatically handles these, but understanding the layout is important:
+
+- Creates `{root}/releases`, `{root}/shared`, `{root}/archive`
+- Creates `shared/storage/framework/{views,cache,sessions}` (required by Blade, config cache)
+- Creates `shared/storage/logs`, `shared/storage/app/public`
+- Creates `shared/database/` directory
+- Sets ownership: `chown -R {deploy_user}:{run_user}` on deploy root
+- Applies ACL on `shared/storage` so `{run_user}` can write from first Octane boot
+- If SQLite detected in `shared/.env`: creates the database file + sets ACL on it
+
+**Important**: `prepare-layout` reads `shared/.env` for SQLite detection. Run `sync-env` before `prepare-layout` on a completely fresh VPS, or run `init` which handles the ordering correctly.
+
+## larahelp
+
+`larahelp` v2.0 is a shell script at `/usr/local/bin/larahelp`. Must be run from a Laravel project root (has `artisan` file).
+
+Commands:
+- `--reoptimize` — `optimize:clear` + `optimize` (used in deploy)
+- `--setfacl` — sets ACL for storage, bootstrap/cache, and SQLite database (auto-detects from .env)
+- `--log-size` — shows storage/logs disk usage
+- `--log-truncate` — truncates laravel.log to last 1000 lines
+- `--audit-permission` — finds world-writable or group-writable files
+- `--audit-public` — finds unauthorized PHP files in public/
+
+Environment variables respected:
+- `OPS_DEPLOY_PHP_BIN` — PHP binary (default: `php`)
+- `OPS_DEPLOY_RUN_USER` — runtime user for ACL (default: `www-data`)
+
+To install/update larahelp on VPS:
+```bash
+scp vendor/wireninja/accelerator/stubs/vps/larahelp onidel:/tmp/larahelp
+ssh onidel 'sudo mv /tmp/larahelp /usr/local/bin/larahelp && sudo chmod 755 /usr/local/bin/larahelp'
+```
 
 VPS-side, one-shot bootstrap (rendered from `.env.envoy`):
 
@@ -229,8 +267,9 @@ This writes `/etc/nginx/sites-available/{domain}.conf` (HTTP-only Octane upstrea
 Manual operator follow-ups (one-time):
 
 1. Run certbot for SSL: `sudo certbot --nginx -d {domain} -m {OPS_DEPLOY_SSL_EMAIL} --agree-tos --redirect`.
-2. Confirm `larahelp` is in `/usr/local/bin/larahelp`.
+2. Confirm `larahelp` v2.0+ is in `/usr/local/bin/larahelp` (update from `vendor/wireninja/accelerator/stubs/vps/larahelp`).
 3. Confirm SSH key on the VPS can clone from GitHub (test once with `ssh -T git@github.com`).
+4. Confirm `/etc/environment` has node/pnpm paths for non-interactive SSH.
 
 Then run from local:
 

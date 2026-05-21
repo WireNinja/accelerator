@@ -283,11 +283,44 @@
 
 @task('prepare-layout', ['on' => 'vps'])
     set -euo pipefail
-    mkdir -p {{ $deployRoot }} {{ $releasesPath }} {{ $sharedPath }} {{ $archivePath }} {{ $sharedPath }}/storage/app/public {{ $sharedPath }}/storage/framework {{ $sharedPath }}/storage/logs
+    mkdir -p {{ $deployRoot }} {{ $releasesPath }} {{ $sharedPath }} {{ $archivePath }} \
+        {{ $sharedPath }}/storage/app/public \
+        {{ $sharedPath }}/storage/framework/views \
+        {{ $sharedPath }}/storage/framework/cache \
+        {{ $sharedPath }}/storage/framework/sessions \
+        {{ $sharedPath }}/storage/logs \
+        {{ $sharedPath }}/database
+
+    # Ensure deploy root is owned by deploy user
+    sudo chown -R $(whoami):{{ $runUser }} {{ $deployRoot }}
+
+    # Set default ACL on shared storage so www-data can write from first boot
+    sudo setfacl -R -m u:{{ $runUser }}:rwx -m u:$(whoami):rwx {{ $sharedPath }}/storage
+    sudo setfacl -dR -m u:{{ $runUser }}:rwx -m u:$(whoami):rwx {{ $sharedPath }}/storage
+
+    # If SQLite, create database file with correct permissions
+    if [ -f {{ $sharedPath }}/.env ]; then
+        db_conn=$(grep -E "^DB_CONNECTION=" {{ $sharedPath }}/.env 2>/dev/null | cut -d= -f2 | tr -d '"' | tr -d "'" || true)
+        if [ "$db_conn" = "sqlite" ]; then
+            db_path=$(grep -E "^DB_DATABASE=" {{ $sharedPath }}/.env 2>/dev/null | cut -d= -f2 | tr -d '"' | tr -d "'" || true)
+            if [ -n "$db_path" ] && [ ! -f "$db_path" ]; then
+                mkdir -p "$(dirname "$db_path")"
+                touch "$db_path"
+                chmod 664 "$db_path"
+                sudo setfacl -m u:{{ $runUser }}:rw -m u:$(whoami):rw "$db_path"
+                echo "[prepare-layout] created SQLite database: $db_path"
+            fi
+            # Also ACL the database directory
+            sudo setfacl -R -m u:{{ $runUser }}:rwx -m u:$(whoami):rwx {{ $sharedPath }}/database
+            sudo setfacl -dR -m u:{{ $runUser }}:rwx -m u:$(whoami):rwx {{ $sharedPath }}/database
+        fi
+    fi
+
     test -d {{ $deployRoot }}
     test -d {{ $releasesPath }}
     test -d {{ $sharedPath }}
     test -d {{ $archivePath }}
+    echo "[prepare-layout] layout ready at {{ $deployRoot }}"
 @endtask
 
 @task('sync-env', ['on' => 'localhost'])
