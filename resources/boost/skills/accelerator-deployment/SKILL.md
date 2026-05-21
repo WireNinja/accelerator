@@ -206,7 +206,42 @@ Runs after a successful health-check + `maintenance-off`. Keeps `OPS_DEPLOY_KEEP
 
 ## Initial Deployment (Step-by-Step)
 
-This is the full sequence for deploying a project to a fresh VPS for the first time. Follow in order.
+This is the full sequence for deploying a project to a fresh VPS for the first time.
+
+### Fresh Project Happy Path
+
+For AI agents and operators — the exact 3-command sequence for a fresh VPS:
+
+```bash
+# 1. Write Nginx (HTTP-only) + Supervisor config
+vendor/bin/envoy run bootstrap --stage=prod
+
+# 2. Deploy first release (app now accessible via HTTP)
+vendor/bin/envoy run init --stage=prod
+
+# 3. Obtain SSL cert + upgrade Nginx to HTTPS/HTTP2/HTTP3
+vendor/bin/envoy run bootstrap-ssl --stage=prod
+```
+
+**Order matters.** `bootstrap` → `init` → `bootstrap-ssl`. Do NOT change the order:
+- `bootstrap-ssl` REQUIRES `init` to have run first because `certbot --webroot` needs `{root}/current/public` to exist.
+- `bootstrap` can run before `init` because it only writes Nginx/Supervisor config (no webroot needed).
+
+### VPS One-Time Prerequisites
+
+Before running the 3-command sequence above, ensure these are done once on the VPS:
+
+1. `larahelp` v2.0+ installed at `/usr/local/bin/larahelp`:
+   ```bash
+   scp vendor/wireninja/accelerator/stubs/vps/larahelp onidel:/tmp/larahelp
+   ssh onidel 'sudo mv /tmp/larahelp /usr/local/bin/larahelp && sudo chmod 755 /usr/local/bin/larahelp'
+   ```
+2. SSH key on VPS can clone from GitHub: `ssh onidel 'ssh -T git@github.com'`
+3. `/etc/environment` has node/pnpm paths (for non-interactive SSH):
+   ```bash
+   ssh onidel 'echo "PATH=/home/adhi/.nvm/versions/node/v24.15.0/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" | sudo tee /etc/environment'
+   ```
+4. `certbot` installed: `ssh onidel 'command -v certbot'`
 
 ### Step 1: Local Pre-flight
 
@@ -229,7 +264,7 @@ ssh onidel 'ss -ltnp | grep -E ":(9012|9013)\b"'
 Writes Nginx vhost + Supervisor config to VPS. Run once per domain.
 
 ```bash
-vendor/bin/envoy run bootstrap --stage=test
+vendor/bin/envoy run bootstrap --stage=prod
 ```
 
 What happens:
@@ -238,29 +273,12 @@ What happens:
 
 **Guard**: If existing Nginx config has `ssl_certificate` but no cert file is found, bootstrap skips to avoid downgrading a working SSL config.
 
-### Step 3: SSL (one-shot, after bootstrap)
+**Re-running bootstrap is safe**: If cert exists, it auto-uses the SSL stub. It won't downgrade HTTPS → HTTP.
 
-If the domain needs HTTPS (it always does for production):
-
-```bash
-vendor/bin/envoy run bootstrap-ssl --stage=test
-```
-
-What happens:
-- `obtain-cert`: Runs `certbot certonly --webroot` using the deployed `public/` as webroot. Non-interactive. Skips if cert already exists.
-- `upgrade-nginx-ssl`: Uploads the SSL stub (with HTTP/2, HTTP/3/QUIC, 301 redirect), archives old config, validates and reloads nginx.
-
-**Important**: `bootstrap-ssl` requires that `{root}/current/public` exists (i.e., at least one deploy has completed or `init` has run). If running on a completely fresh VPS, run `init` first (which creates HTTP-only deploy), then `bootstrap-ssl`.
-
-Alternative flow for fresh VPS:
-1. `bootstrap` → HTTP-only nginx + supervisor
-2. `init` → first release deployed, app accessible via HTTP
-3. `bootstrap-ssl` → cert obtained + nginx upgraded to HTTPS
-
-### Step 4: First Deploy (init)
+### Step 3: First Deploy (init)
 
 ```bash
-vendor/bin/envoy run init --stage=test
+vendor/bin/envoy run init --stage=prod
 ```
 
 What it does (in order):
@@ -278,6 +296,34 @@ What it does (in order):
 12. `health-check` — curl Octane `/up` expecting 200
 
 `init` intentionally SKIPS: db-backup (nothing to backup), maintenance-on (no traffic), migration-safety (no previous release), prune (no old releases).
+
+After `init`, app is accessible via HTTP. Supervisor programs should all be RUNNING.
+
+### Step 4: SSL (one-shot, after init)
+
+```bash
+vendor/bin/envoy run bootstrap-ssl --stage=prod
+```
+
+**Dependency**: This REQUIRES `{root}/current/public` to exist. `init` must have completed successfully.
+
+What happens:
+- `obtain-cert`: Runs `certbot certonly --webroot -w {root}/current/public -d {domain}`. Non-interactive. Skips if cert already exists.
+- `upgrade-nginx-ssl`: Uploads the SSL stub (HTTPS redirect, HTTP/2, HTTP/3/QUIC, `Alt-Svc` header), archives old HTTP config, validates `nginx -t`, reloads.
+
+After this step, app is accessible via HTTPS with automatic HTTP→HTTPS redirect.
+
+### Step 5: Verify
+
+```bash
+vendor/bin/envoy run status --stage=prod
+curl -I https://{domain}
+```
+
+Check:
+- All supervisor programs RUNNING
+- HTTPS responds 200
+- Dynamic assets accessible: `/livewire/livewire.min.js`, `/build/manifest.webmanifest`
 
 ### Step 5: Verify
 
@@ -357,22 +403,7 @@ vendor/bin/envoy run bootstrap --stage=test
 
 This writes `/etc/nginx/sites-available/{domain}.conf` (auto-detects HTTP-only or SSL+QUIC based on cert existence) and `/etc/supervisor/conf.d/{group}.conf` (stage-scoped programs), validates `nginx -t`, runs `supervisorctl reread && update`. Existing files are archived under `{root}/archive/` first.
 
-Manual operator follow-ups (one-time):
-
-1. Install `larahelp` v2.0+ on VPS (from `vendor/wireninja/accelerator/stubs/vps/larahelp`).
-2. Confirm SSH key on the VPS can clone from GitHub (test once with `ssh -T git@github.com`).
-3. Confirm `/etc/environment` has node/pnpm paths for non-interactive SSH.
-4. After first deploy (`init`), run `vendor/bin/envoy run bootstrap-ssl --stage=test` for HTTPS.
-
-Then run from local:
-
-```bash
-vendor/bin/envoy run init --stage=test
-vendor/bin/envoy run bootstrap-ssl --stage=test
-vendor/bin/envoy run status --stage=test
-```
-
-Verify HTTPS, Livewire/Filament dynamic assets, Reverb websocket routes, OPcache state, and service logs.
+See **Initial Deployment (Step-by-Step)** above for the full flow including VPS prerequisites.
 
 ## Continuous Deploy Checklist
 
