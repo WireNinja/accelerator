@@ -123,7 +123,7 @@ class TicketAttachmentsRelationManager extends RelationManager
             ])
             ->headerActions([
                 CreateAction::make()
-                    ->mutateFormDataUsing(function (array $data): array {
+                    ->mutateDataUsing(function (array $data): array {
                         $data['disk'] = 'local';
 
                         return $data;

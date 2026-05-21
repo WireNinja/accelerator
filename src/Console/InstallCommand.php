@@ -771,7 +771,7 @@ class InstallCommand extends Command
             // Check if `laravel/boost` is installed. If not, `boost:update` command
             // doesn't exist and runProcess will fail-silent (failOnError: false).
             // Warn so the operator knows.
-            if (! Artisan::has('boost:update')) {
+            if (! array_key_exists('boost:update', Artisan::all())) {
                 $this->components->warn('laravel/boost package is not installed (composer require laravel/boost). Skipping boost:update.');
 
                 return true;

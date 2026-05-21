@@ -18,7 +18,6 @@ final class BigDecimalSynth extends Synth
     /**
      * Tell Livewire which object this synth handles.
      */
-    // @phpstan-ignore-next-line
     public static function match($target): bool
     {
         return $target instanceof BigDecimal;
@@ -31,7 +30,6 @@ final class BigDecimalSynth extends Synth
      * @param  BigDecimal  $target
      * @param  mixed  $dehydrate
      */
-    // @phpstan-ignore-next-line
     public function dehydrate($target, $dehydrate): array
     {
         // Send as string so precision is not lost in JavaScript
@@ -42,7 +40,6 @@ final class BigDecimalSynth extends Synth
      * BROWSER -> SERVER
      * Convert form input (String/Number) back to BigDecimal.
      */
-    // @phpstan-ignore-next-line
     public function hydrate($value, $meta, $hydrate): ?BigDecimal
     {
         // Handle empty input (empty string or null)

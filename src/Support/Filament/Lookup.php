@@ -8,6 +8,9 @@ use Closure;
 use Filament\Schemas\Components\Utilities\Get;
 use Illuminate\Database\Eloquent\Model;
 
+/**
+ * @phpstan-consistent-constructor
+ */
 class Lookup
 {
     protected string $label = 'name';

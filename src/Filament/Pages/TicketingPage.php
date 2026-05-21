@@ -99,7 +99,7 @@ class TicketingPage extends Page
 
         if (! TicketVisibility::canViewAll($authUser)) {
             $boardOptionsQuery->whereHas('tickets', function (Builder $ticketQuery) use ($authUser): void {
-                $ticketQuery->visibleTo($authUser); // @phpstan-ignore method.notFound
+                $ticketQuery->visibleTo($authUser);
             });
         }
 
@@ -141,7 +141,7 @@ class TicketingPage extends Page
             ->with([
                 'tickets' => function (HasMany $ticketQuery) use ($authUser, $search, $filterType, $filterPriority, $filterDampakBisnis, $filterModulTerkait): void {
                     $ticketQuery
-                        ->visibleTo($authUser) // @phpstan-ignore method.notFound
+                        ->visibleTo($authUser)
                         ->when($filterType !== '', fn ($q) => $q->where('type', $filterType))
                         ->when($filterPriority !== '', fn ($q) => $q->where('priority', $filterPriority))
                         ->when($filterDampakBisnis !== '', fn ($q) => $q->where('dampak_bisnis', $filterDampakBisnis))

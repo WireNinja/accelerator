@@ -72,6 +72,6 @@ class TicketResource extends Resource
     {
         $query = parent::getEloquentQuery();
 
-        return $query->visibleTo(mustUser()); // @phpstan-ignore method.notFound
+        return $query->visibleTo(mustUser());
     }
 }
