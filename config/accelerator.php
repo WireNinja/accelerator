@@ -32,12 +32,7 @@ return [
     ],
 
     'dicebear' => [
-        'url' => env(
-            'ACCELERATOR_DICEBEAR_URL',
-            env('APP_ENV', 'production') === 'local' && (bool) env('APP_DEBUG', false)
-                ? 'http://127.0.0.1:3012'
-                : 'https://dicebear.ohmyserver.com',
-        ),
+        'url' => env('ACCELERATOR_DICEBEAR_URL', 'https://dicebear.ohmyserver.com'),
         'version' => env('ACCELERATOR_DICEBEAR_VERSION', '9.x'),
         'style' => env('ACCELERATOR_DICEBEAR_STYLE', 'notionists'),
     ],
