@@ -35,6 +35,7 @@ use Illuminate\Support\Str;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 use ReflectionClass;
 use WireNinja\Accelerator\Constant\Profile;
+use WireNinja\Accelerator\Filament\AvatarProviders\DiceBearAvatarProvider;
 use WireNinja\Accelerator\Filament\Pages\Auth\Login;
 use WireNinja\Accelerator\Filament\Pages\ManageProfile;
 use WireNinja\Accelerator\Livewire\Sidebar;
@@ -51,6 +52,7 @@ final class PanelPreset
         return $panel
             ->id($id)
             ->path($id)
+            ->defaultAvatarProvider(DiceBearAvatarProvider::class)
             ->viteTheme([
                 self::viteTheme($id),
                 'vendor/wireninja/accelerator/resources/css/accelerator.css',

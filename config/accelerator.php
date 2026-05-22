@@ -31,6 +31,17 @@ return [
         'password_default' => env('DEV_PASSWORD', null),
     ],
 
+    'dicebear' => [
+        'url' => env(
+            'ACCELERATOR_DICEBEAR_URL',
+            env('APP_ENV', 'production') === 'local' && (bool) env('APP_DEBUG', false)
+                ? 'http://127.0.0.1:3012'
+                : 'https://dicebear.ohmyserver.com',
+        ),
+        'version' => env('ACCELERATOR_DICEBEAR_VERSION', '9.x'),
+        'style' => env('ACCELERATOR_DICEBEAR_STYLE', 'notionists'),
+    ],
+
     'telemetry' => [
         'enabled' => env('ACCELERATOR_TELEMETRY_ENABLED', true),
         'flush_interval' => env('ACCELERATOR_TELEMETRY_FLUSH_INTERVAL', 5),
