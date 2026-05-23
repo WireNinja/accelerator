@@ -1,7 +1,7 @@
 @props([
-    'compact' => false,
     'description' => '',
     'items' => [],
+    'meta' => '',
     'name' => '',
     'user' => filament()->auth()->user(),
 ])
@@ -28,50 +28,40 @@
 {{ \Filament\Support\Facades\FilamentView::renderHook(\Filament\View\PanelsRenderHook::USER_MENU_BEFORE) }}
 
 <x-filament::dropdown
-    :placement="$compact ? 'right-start' : 'top-end'"
+    placement="top-end"
     :attributes="\Filament\Support\prepare_inherited_attributes($attributes)->class(['fi-user-menu accelerator-user-menu'])"
 >
     <x-slot name="trigger">
-        @if ($compact)
-            <button
-                aria-label="{{ __('filament-panels::layout.actions.open_user_menu.label') }}"
-                type="button"
-                class="group flex h-14 w-14 items-center justify-center rounded-2xl border border-gray-200 bg-white shadow-sm transition-all duration-200 hover:border-gray-300 hover:bg-gray-50 dark:border-white/10 dark:bg-gray-900 dark:hover:bg-white/5"
-                x-data="{}"
-                x-tooltip.content="'{{ __('filament-panels::layout.actions.open_user_menu.label') }}'"
-            >
-                <x-filament-panels::avatar.user
-                    size="h-11 w-11"
-                    :user="$user"
-                    loading="lazy"
-                />
-            </button>
-        @else
-            <button
-                aria-label="{{ __('filament-panels::layout.actions.open_user_menu.label') }}"
-                type="button"
-                class="group flex min-w-0 flex-1 items-center gap-3 rounded-2xl px-2 py-2 text-left transition-colors duration-200 hover:bg-gray-50 dark:hover:bg-white/5"
-            >
-                <x-filament-panels::avatar.user
-                    size="h-12 w-12"
-                    :user="$user"
-                    loading="lazy"
-                    class="shrink-0"
-                />
+        <button
+            aria-label="{{ __('filament-panels::layout.actions.open_user_menu.label') }}"
+            type="button"
+            class="group flex min-w-0 flex-1 items-center gap-3 rounded-2xl px-2 py-2 text-left transition-colors duration-200 hover:bg-gray-50 dark:hover:bg-white/5"
+        >
+            <x-filament-panels::avatar.user
+                size="h-16 w-16"
+                :user="$user"
+                loading="lazy"
+                class="shrink-0"
+            />
 
-                <span class="min-w-0 flex-1">
-                    <span class="block truncate text-sm font-semibold text-gray-950 dark:text-white">
-                        {{ $name }}
-                    </span>
-
-                    @if (filled($description))
-                        <span class="mt-0.5 block truncate text-xs text-gray-500 dark:text-gray-400">
-                            {{ $description }}
-                        </span>
-                    @endif
+            <span class="min-w-0 flex-1">
+                <span class="block truncate text-[15px] font-semibold text-gray-950 dark:text-white">
+                    {{ $name }}
                 </span>
-            </button>
-        @endif
+
+                @if (filled($description))
+                    <span class="mt-0.5 block truncate text-xs font-medium text-gray-600 dark:text-gray-300">
+                        {{ $description }}
+                    </span>
+                @endif
+
+                @if (filled($meta))
+                    <span class="mt-0.5 block truncate text-xs text-gray-500 dark:text-gray-400">
+                        {{ $meta }}
+                    </span>
+                @endif
+            </span>
+        </button>
     </x-slot>
 
     @if ($hasProfileHeader)

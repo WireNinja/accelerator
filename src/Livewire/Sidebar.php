@@ -74,6 +74,27 @@ class Sidebar extends Component implements HasActions, HasSchemas
         return is_string($email) ? $email : '';
     }
 
+    public function getUserMeta(?Authenticatable $user): string
+    {
+        if ($user === null) {
+            return '';
+        }
+
+        $username = data_get($user, 'username');
+        $email = data_get($user, 'email');
+        $parts = [];
+
+        if (is_string($username) && filled($username)) {
+            $parts[] = '@'.$username;
+        }
+
+        if (is_string($email) && filled($email)) {
+            $parts[] = $email;
+        }
+
+        return implode(' / ', $parts);
+    }
+
     /**
      * @return array<mixed>
      */

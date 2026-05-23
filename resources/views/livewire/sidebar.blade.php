@@ -13,6 +13,7 @@
         $user = filament()->auth()->user();
         $userName = $user ? filament()->getUserName($user) : '';
         $userDescription = $this->getUserDescription($user);
+        $userMeta = $this->getUserMeta($user);
         $userMenuItems = $isAuthenticated ? $this->getAcceleratorUserMenuItems() : [];
         $hasDatabaseNotificationsInSidebar = filament()->hasDatabaseNotifications() && filament()->getDatabaseNotificationsPosition() === \Filament\Enums\DatabaseNotificationsPosition::Sidebar;
         $hasUserMenuInSidebar = filament()->hasUserMenu() && filament()->getUserMenuPosition() === \Filament\Enums\UserMenuPosition::Sidebar;
@@ -37,9 +38,7 @@
             {{ \Filament\Support\Facades\FilamentView::renderHook(\Filament\View\PanelsRenderHook::SIDEBAR_START) }}
 
             <div class="fi-sidebar-header-ctn shrink-0 border-b border-gray-100 dark:border-white/5">
-                <header
-                    class="fi-sidebar-header flex items-center justify-between px-2 pt-2 pb-2"
-                >
+                <header class="fi-sidebar-header flex items-center justify-between px-3 pt-3 pb-3">
                     @if ((! $hasTopbar) && $isSidebarCollapsibleOnDesktop)
                         <x-filament::icon-button
                             color="gray"
@@ -62,36 +61,36 @@
                         />
                     @endif
 
-                    <div x-show="$store.sidebar.isOpen" class="flex-1 px-1">
+                    <div x-show="$store.sidebar.isOpen" class="min-w-0 flex-1 px-1">
                         {{ \Filament\Support\Facades\FilamentView::renderHook(\Filament\View\PanelsRenderHook::SIDEBAR_LOGO_BEFORE) }}
                         <div class="fi-sidebar-header-logo-ctn transition-all duration-300 transform">
                             @php
                                 $sidebarBrandLogo = filament()->getBrandLogo();
-                                $sidebarBrandLogoHeight = filament()->getBrandLogoHeight() ?? '1.5rem';
+                                $sidebarBrandLogoHeight = filament()->getBrandLogoHeight() ?? '2rem';
                                 $sidebarBrandName = filament()->getBrandName();
                                 $sidebarHomeUrl = filament()->getHomeUrl();
                             @endphp
                             @php $logoAndName = true; @endphp
-                            <div class="flex items-center gap-2.5">
+                            <div class="flex min-w-0 items-center gap-3">
                                 @if (filled($sidebarBrandLogo))
                                     @if ($sidebarBrandLogo instanceof \Illuminate\Contracts\Support\Htmlable)
-                                        <div class="fi-logo shrink-0" style="height: {{ $sidebarBrandLogoHeight }}">{{ $sidebarBrandLogo }}</div>
+                                        <div class="fi-logo shrink-0" style="height: max({{ $sidebarBrandLogoHeight }}, 2rem)">{{ $sidebarBrandLogo }}</div>
                                     @else
                                         <img
                                             src="{{ $sidebarBrandLogo }}"
                                             alt="{{ $sidebarBrandName }}"
                                             class="fi-logo shrink-0 object-contain"
-                                            style="height: {{ $sidebarBrandLogoHeight }}"
+                                            style="height: max({{ $sidebarBrandLogoHeight }}, 2rem)"
                                         >
                                     @endif
                                 @endif
                                 {{-- BRAND NAME, FONT SIZE --}}
                                 @if ($sidebarHomeUrl)
-                                    <a {{ \Filament\Support\generate_href_html($sidebarHomeUrl) }} class="text-[15px] font-bold tracking-tight text-gray-900 dark:text-white hover:opacity-75 transition-opacity focus:outline-none truncate">
+                                    <a {{ \Filament\Support\generate_href_html($sidebarHomeUrl) }} class="truncate text-lg font-bold text-gray-950 transition-opacity hover:opacity-75 focus:outline-none dark:text-white">
                                         {{ $sidebarBrandName }}
                                     </a>
                                 @else
-                                    <span class="text-[15px] font-bold tracking-tight text-gray-900 dark:text-white truncate">
+                                    <span class="truncate text-lg font-bold text-gray-950 dark:text-white">
                                         {{ $sidebarBrandName }}
                                     </span>
                                 @endif
@@ -156,18 +155,6 @@
                     ])
                 >
                     <div class="flex flex-col gap-y-3 py-2 w-full items-center">
-                        @if ($isAuthenticated && $hasUserMenuInSidebar)
-                            <x-accelerator::sidebar.user-menu
-                                compact
-                                :items="$userMenuItems"
-                                :name="$userName"
-                                :description="$userDescription"
-                                :user="$user"
-                            />
-
-                            <div class="h-px w-10 bg-gray-200 dark:bg-white/10 my-1"></div>
-                        @endif
-
                         @foreach($panels as $panel)
                             @php
                                 $isActive = $currentPanel === $panel->value;
@@ -335,6 +322,7 @@
                                     :items="$userMenuItems"
                                     :name="$userName"
                                     :description="$userDescription"
+                                    :meta="$userMeta"
                                     :user="$user"
                                 />
 
@@ -345,16 +333,16 @@
                                 >
                                     @csrf
 
-                                    <button
-                                        aria-label="{{ __('filament-panels::layout.actions.logout.label') }}"
+                                    <x-filament::icon-button
+                                        color="danger"
+                                        icon="lucide-power"
+                                        icon-size="lg"
+                                        :label="__('filament-panels::layout.actions.logout.label')"
+                                        size="lg"
+                                        tag="button"
                                         type="submit"
-                                        class="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-sm transition-colors duration-200 hover:bg-emerald-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600"
-                                    >
-                                        <x-filament::icon
-                                            icon="lucide-power"
-                                            class="h-5 w-5"
-                                        />
-                                    </button>
+                                        class="shrink-0"
+                                    />
                                 </form>
                             </div>
                         @endif
