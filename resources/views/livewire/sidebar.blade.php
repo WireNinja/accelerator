@@ -13,7 +13,6 @@
         $user = filament()->auth()->user();
         $userName = $user ? filament()->getUserName($user) : '';
         $userDescription = $this->getUserDescription($user);
-        $userMeta = $this->getUserMeta($user);
         $userMenuItems = $isAuthenticated ? $this->getAcceleratorUserMenuItems() : [];
         $hasDatabaseNotificationsInSidebar = filament()->hasDatabaseNotifications() && filament()->getDatabaseNotificationsPosition() === \Filament\Enums\DatabaseNotificationsPosition::Sidebar;
         $hasUserMenuInSidebar = filament()->hasUserMenu() && filament()->getUserMenuPosition() === \Filament\Enums\UserMenuPosition::Sidebar;
@@ -38,7 +37,7 @@
             {{ \Filament\Support\Facades\FilamentView::renderHook(\Filament\View\PanelsRenderHook::SIDEBAR_START) }}
 
             <div class="fi-sidebar-header-ctn shrink-0 border-b border-gray-100 dark:border-white/5">
-                <header class="fi-sidebar-header flex items-center justify-between px-3 pt-3 pb-3">
+                <header class="fi-sidebar-header flex items-center justify-between ps-1 pe-3 pt-3 pb-3">
                     @if ((! $hasTopbar) && $isSidebarCollapsibleOnDesktop)
                         <x-filament::icon-button
                             color="gray"
@@ -61,7 +60,7 @@
                         />
                     @endif
 
-                    <div x-show="$store.sidebar.isOpen" class="min-w-0 flex-1 px-1">
+                    <div x-show="$store.sidebar.isOpen" class="min-w-0 flex-1">
                         {{ \Filament\Support\Facades\FilamentView::renderHook(\Filament\View\PanelsRenderHook::SIDEBAR_LOGO_BEFORE) }}
                         <div class="fi-sidebar-header-logo-ctn transition-all duration-300 transform">
                             @php
@@ -312,7 +311,15 @@
             @endphp
 
             @if ($shouldRenderFooter)
-                <div class="fi-sidebar-footer shrink-0 px-2 pt-3 pb-3 lg:pb-2 border-t border-gray-100 dark:border-white/5">
+                <div class="fi-sidebar-footer relative shrink-0 border-t border-gray-100 px-2 pt-3 pb-3 dark:border-white/5 lg:pb-2">
+                    <div
+                        @class([
+                            'absolute top-0 h-px w-px bg-gray-200 dark:bg-gray-800',
+                            'left-[66px]' => !$isRtl,
+                            'right-[66px]' => $isRtl,
+                        ])
+                    ></div>
+
                     <div class="flex flex-col gap-y-1">
 
                         @if ($hasUserMenuInSidebar)
@@ -322,28 +329,8 @@
                                     :items="$userMenuItems"
                                     :name="$userName"
                                     :description="$userDescription"
-                                    :meta="$userMeta"
                                     :user="$user"
                                 />
-
-                                <form
-                                    action="{{ filament()->getLogoutUrl() }}"
-                                    method="post"
-                                    class="shrink-0"
-                                >
-                                    @csrf
-
-                                    <x-filament::icon-button
-                                        color="danger"
-                                        icon="lucide-power"
-                                        icon-size="lg"
-                                        :label="__('filament-panels::layout.actions.logout.label')"
-                                        size="lg"
-                                        tag="button"
-                                        type="submit"
-                                        class="shrink-0"
-                                    />
-                                </form>
                             </div>
                         @endif
                     </div>

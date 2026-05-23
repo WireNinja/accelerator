@@ -1,7 +1,6 @@
 @props([
     'description' => '',
     'items' => [],
-    'meta' => '',
     'name' => '',
     'user' => filament()->auth()->user(),
 ])
@@ -55,11 +54,6 @@
                     </span>
                 @endif
 
-                @if (filled($meta))
-                    <span class="mt-0.5 block truncate text-xs text-gray-500 dark:text-gray-400">
-                        {{ $meta }}
-                    </span>
-                @endif
             </span>
         </button>
     </x-slot>
