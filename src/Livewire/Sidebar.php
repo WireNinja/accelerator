@@ -3,12 +3,15 @@
 namespace WireNinja\Accelerator\Livewire;
 
 use App\Enums\System\PanelEnum;
+use Filament\Actions\Action;
 use Filament\Actions\Concerns\InteractsWithActions;
 use Filament\Actions\Contracts\HasActions;
+use Filament\Facades\Filament;
 use Filament\Livewire\Concerns\HasTenantMenu;
 use Filament\Livewire\Concerns\HasUserMenu;
 use Filament\Schemas\Concerns\InteractsWithSchemas;
 use Filament\Schemas\Contracts\HasSchemas;
+use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Contracts\View\View;
 use Livewire\Attributes\On;
 use Livewire\Component;
@@ -40,7 +43,35 @@ class Sidebar extends Component implements HasActions, HasSchemas
 
     public function getCurrentPanelId(): string
     {
-        return filament()->getCurrentPanel()?->getId() ?? '';
+        return Filament::getCurrentPanel()?->getId() ?? '';
+    }
+
+    /**
+     * @return array<Action>
+     */
+    public function getAcceleratorUserMenuItems(): array
+    {
+        return $this->getUserMenuItems();
+    }
+
+    public function getUserDescription(?Authenticatable $user): string
+    {
+        if ($user === null) {
+            return '';
+        }
+
+        if (is_callable([$user, 'getRoleNames'])) {
+            $roleNames = call_user_func([$user, 'getRoleNames']);
+            $role = is_iterable($roleNames) ? collect($roleNames)->first() : null;
+
+            if (is_string($role) && filled($role)) {
+                return str($role)->replace(['_', '-'], ' ')->headline()->toString();
+            }
+        }
+
+        $email = data_get($user, 'email');
+
+        return is_string($email) ? $email : '';
     }
 
     /**

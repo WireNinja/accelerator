@@ -144,7 +144,7 @@ final class PanelPreset
                 fn() => view('accelerator::filament.sidebar.notice')
             )
             ->renderHook(
-                PanelsRenderHook::SIDEBAR_NAV_END,
+                AcceleratorPanelsRenderHook::SIDEBAR_SUPPORT,
                 fn() => view('accelerator::filament.sidebar.support')
             )
             ->renderHook(

@@ -10,6 +10,10 @@
         $panels = $this->getPanels();
 
         $isAuthenticated = filament()->auth()->check();
+        $user = filament()->auth()->user();
+        $userName = $user ? filament()->getUserName($user) : '';
+        $userDescription = $this->getUserDescription($user);
+        $userMenuItems = $isAuthenticated ? $this->getAcceleratorUserMenuItems() : [];
         $hasDatabaseNotificationsInSidebar = filament()->hasDatabaseNotifications() && filament()->getDatabaseNotificationsPosition() === \Filament\Enums\DatabaseNotificationsPosition::Sidebar;
         $hasUserMenuInSidebar = filament()->hasUserMenu() && filament()->getUserMenuPosition() === \Filament\Enums\UserMenuPosition::Sidebar;
     @endphp
@@ -152,6 +156,18 @@
                     ])
                 >
                     <div class="flex flex-col gap-y-3 py-2 w-full items-center">
+                        @if ($isAuthenticated && $hasUserMenuInSidebar)
+                            <x-accelerator::sidebar.user-menu
+                                compact
+                                :items="$userMenuItems"
+                                :name="$userName"
+                                :description="$userDescription"
+                                :user="$user"
+                            />
+
+                            <div class="h-px w-10 bg-gray-200 dark:bg-white/10 my-1"></div>
+                        @endif
+
                         @foreach($panels as $panel)
                             @php
                                 $isActive = $currentPanel === $panel->value;
@@ -300,6 +316,7 @@
                     </script>
 
                     {{ \Filament\Support\Facades\FilamentView::renderHook(\Filament\View\PanelsRenderHook::SIDEBAR_NAV_END) }}
+                    {{ \Filament\Support\Facades\FilamentView::renderHook(\WireNinja\Accelerator\Filament\AcceleratorPanelsRenderHook::SIDEBAR_SUPPORT) }}
                 </nav>
             </div>
 
@@ -312,8 +329,33 @@
                     <div class="flex flex-col gap-y-1">
 
                         @if ($hasUserMenuInSidebar)
-                            <div class="w-full">
-                                <x-filament-panels::user-menu />
+                            <div class="flex w-full items-center gap-2">
+                                <x-accelerator::sidebar.user-menu
+                                    class="min-w-0 flex-1"
+                                    :items="$userMenuItems"
+                                    :name="$userName"
+                                    :description="$userDescription"
+                                    :user="$user"
+                                />
+
+                                <form
+                                    action="{{ filament()->getLogoutUrl() }}"
+                                    method="post"
+                                    class="shrink-0"
+                                >
+                                    @csrf
+
+                                    <button
+                                        aria-label="{{ __('filament-panels::layout.actions.logout.label') }}"
+                                        type="submit"
+                                        class="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-sm transition-colors duration-200 hover:bg-emerald-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600"
+                                    >
+                                        <x-filament::icon
+                                            icon="lucide-power"
+                                            class="h-5 w-5"
+                                        />
+                                    </button>
+                                </form>
                             </div>
                         @endif
                     </div>
