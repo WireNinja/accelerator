@@ -11,6 +11,24 @@ Format per entry:
 
 ---
 
+## v1.1.70
+
+No deployment contract changes beyond v1.1.66.
+
+### 🟡 AWARENESS — Fresh seed preserves the configured runtime environment
+
+The confirmed `deploy-fresh-seed` one-shot process now calls Laravel's `DB::prohibitDestructiveCommands(false)` before `migrate:fresh --seed --force`. This enables its nested `db:wipe` command while retaining the stage's real `APP_ENV` and runtime env selection.
+
+Patch `v1.1.69` used a temporary `APP_ENV=local` override. It did not edit `.env`, but Laravel may use an exported `APP_ENV` to select an existing `.env.local` file and it can change environment-sensitive boot/seeder behavior. Upgrade before running fresh-seed.
+
+### 🟡 AWARENESS — PHP-FPM root requests reach Laravel
+
+Generated PHP-FPM Nginx locations now set `index index.php`, preventing a request for `/` from resolving as a forbidden public directory while `/up` still appears healthy.
+
+**Action required**: FPM deployments affected by root-page 403 must upgrade and re-run `vendor/bin/envoy run bootstrap --stage={stage}`.
+
+---
+
 ## v1.1.69
 
 No deployment contract changes beyond v1.1.66.
@@ -21,7 +39,7 @@ No deployment contract changes beyond v1.1.66.
 
 All Envoy Composer install phases now require `composer.lock` and continue to use `composer install`, never dependency resolution via `composer update`. A deploy therefore installs the exact versions reviewed during development instead of accepting newly resolved dependency versions on the server, reducing supply-chain exposure.
 
-**Action required**: Keep `composer.lock` committed. Use an upgraded patch before retrying a confirmed `deploy-fresh-seed` in a production-environment stage.
+**Action required**: Keep `composer.lock` committed. For fresh-seed, upgrade to v1.1.70 or later before retrying in any stage.
 
 ---
 

@@ -39,7 +39,7 @@ WireNinja Accelerator provides reusable Laravel application conventions, built-i
 - `vendor/bin/envoy run init --stage=test` for the first deploy (skips db-backup, maintenance, prune by design).
 - `vendor/bin/envoy run deploy --stage=test` for continuous releases.
 - `vendor/bin/envoy run deploy-slim --stage=test` for backend hot-patch (no JS/CSS rebuild).
-- `vendor/bin/envoy run deploy-fresh-seed --stage=test --i-understand-this-will-drop-and-reseed-database="aku mengkonfirmasi remigrate fresh seed"` intentionally drops and reseeds the database after backup. Its destructive command runs under a temporary non-production `APP_ENV` override only inside that confirmed command scope; normal runtime protection remains enabled.
+- `vendor/bin/envoy run deploy-fresh-seed --stage=test --i-understand-this-will-drop-and-reseed-database="aku mengkonfirmasi remigrate fresh seed"` intentionally drops and reseeds the database after backup. Its confirmed one-shot process temporarily disables Laravel destructive-command protection without changing `APP_ENV` or selecting another runtime env file.
 - `vendor/bin/envoy run rollback --stage=test` switches `current` back to the latest valid release (validated for `vendor/autoload.php` + `.env` symlink). No maintenance window during rollback — Octane restart is fast.
 - `vendor/bin/envoy run releases --stage=test` prints the release history and prune target.
 

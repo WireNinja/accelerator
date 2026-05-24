@@ -307,6 +307,9 @@ NGINX, ['octane_port' => $octanePort]);
     } else {
         $dynamicFallback = '/index.php?$query_string';
         $applicationLocations = $replaceVars(<<<'NGINX'
+    # Resolve the document-root request through Laravel's front controller.
+    index index.php;
+
     # Static assets - nginx serves directly, fallback to PHP-FPM
     location ~* \.(css|js|png|jpg|jpeg|gif|ico|svg|webp|woff|woff2|ttf|eot|map|txt)$ {
         try_files $uri /index.php?$query_string;
@@ -894,12 +897,8 @@ CONF, [
     @endif
     cd {{ $releasePath }}
     larahelp --setfacl
-    (
-        export APP_ENV=local
-        trap 'unset APP_ENV' EXIT
-        larahelp --reoptimize
-        {{ $phpBin }} artisan migrate:fresh --seed --force --no-interaction --ansi
-    )
+    larahelp --reoptimize
+    {{ $phpBin }} -r 'require "vendor/autoload.php"; $app = require "bootstrap/app.php"; $kernel = $app->make(Illuminate\Contracts\Console\Kernel::class); $kernel->bootstrap(); Illuminate\Support\Facades\DB::prohibitDestructiveCommands(false); $status = $kernel->call("migrate:fresh", ["--seed" => true, "--force" => true, "--no-interaction" => true, "--ansi" => true]); echo $kernel->output(); exit($status);'
     {{ $phpBin }} artisan storage:link --force --no-interaction --ansi
 @endtask
 
