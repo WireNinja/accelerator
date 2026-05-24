@@ -11,6 +11,18 @@ Format per entry:
 
 ---
 
+## v1.1.71
+
+No deployment contract changes beyond v1.1.66.
+
+### 🟡 AWARENESS — Fresh-seed removes stale dev-only provider manifests
+
+Fresh-seed releases are optimized while dev dependencies are installed for seeding. An auto-discovered dev-only package such as `laravel/boost` can therefore be recorded in Laravel's bootstrap caches. Once the locked production install removes dev dependencies, those caches must not be booted. `prune-dev-dependencies` now deletes bootstrap PHP cache files after `composer install --no-dev --no-scripts` and before production re-optimization.
+
+**Action required**: Upgrade before using `deploy-fresh-seed` on applications with auto-discovered dev-only packages. A deployment that failed after seeding remains in maintenance mode until a corrected deployment completes or the operator explicitly restores service.
+
+---
+
 ## v1.1.70
 
 No deployment contract changes beyond v1.1.66.

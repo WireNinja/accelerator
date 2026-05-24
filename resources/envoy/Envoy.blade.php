@@ -907,6 +907,9 @@ CONF, [
     cd {{ $releasePath }}
     test -s composer.lock || { echo "[prune-dev-dependencies] composer.lock is required; refusing dependency resolution during deployment."; exit 1; }
     composer install --no-dev --no-scripts --optimize-autoloader --classmap-authoritative --no-interaction --no-progress --quiet --ansi
+    # The seeded release was optimized while dev providers were installed.
+    # Remove boot manifests before Laravel boots against the pruned vendor tree.
+    find bootstrap/cache -maxdepth 1 -type f -name '*.php' -delete
     larahelp --reoptimize
     larahelp --setfacl
 @endtask

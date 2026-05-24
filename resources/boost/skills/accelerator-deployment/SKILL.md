@@ -475,7 +475,7 @@ Flow differences from `deploy`:
 2. `build-release-with-dev` requires `composer.lock` and runs `composer install` with dev dependencies available so seeders, factories, and Laravel's `fake()` helper can work, using the exact versions reviewed in development.
 3. `migration-safety` is skipped because this story is already explicitly destructive.
 4. `prepare-laravel-fresh-seed` reoptimizes the release under its real environment, then disables Laravel destructive-command protection only inside the confirmed one-shot PHP process before calling `migrate:fresh --seed --force`. It does not override `APP_ENV` or select an alternative runtime env file.
-5. `prune-dev-dependencies` immediately runs `composer install` from the same required lockfile with `--no-dev --optimize-autoloader --classmap-authoritative`, then reoptimizes the app under its real production environment before `switch-current`.
+5. `prune-dev-dependencies` immediately runs `composer install` from the same required lockfile with `--no-dev --optimize-autoloader --classmap-authoritative`, removes bootstrap PHP cache files that may reference removed dev-only providers, then reoptimizes the app under its real production environment before `switch-current`.
 
 Do not use this story for production unless the operator explicitly asks for data loss and accepts restoring from backup if seeders fail. If anything fails after `maintenance-on`, maintenance mode stays enabled for triage, matching the normal deploy failure posture.
 
