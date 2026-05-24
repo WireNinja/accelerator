@@ -162,6 +162,32 @@
     $reverbPort = $value($envoy, "OPS_DEPLOY_{$stageKey}_REVERB_PORT", '0');
     $sslEmail = $value($envoy, 'OPS_DEPLOY_SSL_EMAIL', 'admin@'.$domain);
     $runtime = $value($envoy, "OPS_DEPLOY_{$stageKey}_RUNTIME", 'swoole');
+    $octaneWorkers = $value($envoy, "OPS_DEPLOY_{$stageKey}_OCTANE_WORKERS", '1');
+    $octaneTaskWorkers = $value($envoy, "OPS_DEPLOY_{$stageKey}_OCTANE_TASK_WORKERS", '0');
+
+    if (! in_array($runtime, ['swoole', 'roadrunner', 'frankenphp'], true)) {
+        throw new RuntimeException("Invalid Octane runtime [{$runtime}] for stage [{$stage}].");
+    }
+
+    if (! ctype_digit($octaneWorkers) || (int) $octaneWorkers < 1) {
+        throw new RuntimeException("OPS_DEPLOY_{$stageKey}_OCTANE_WORKERS must be an integer greater than zero.");
+    }
+
+    if (! ctype_digit($octaneTaskWorkers)) {
+        throw new RuntimeException("OPS_DEPLOY_{$stageKey}_OCTANE_TASK_WORKERS must be an integer greater than or equal to zero.");
+    }
+
+    /*
+     * The public `octane:start` command converts `--task-workers=0` back to
+     * Octane's `auto` default. Call the registered Swoole command directly so
+     * zero genuinely disables optional task workers.
+     */
+    $octaneServerCommand = $runtime === 'swoole'
+        ? 'octane:swoole'
+        : "octane:start --server={$runtime}";
+    $octaneTaskWorkersOption = $runtime === 'swoole'
+        ? "--task-workers={$octaneTaskWorkers}"
+        : '';
 
     /*
      * Render bootstrap stubs locally so we can scp the rendered output to the
@@ -187,8 +213,10 @@
         'run_user' => $runUser,
         'php_bin' => $phpBin,
         'octane_port' => $octanePort,
+        'octane_workers' => $octaneWorkers,
+        'octane_task_workers_option' => $octaneTaskWorkersOption,
+        'octane_server_command' => $octaneServerCommand,
         'reverb_port' => $reverbPort,
-        'runtime' => $runtime,
         'ssl_email' => $sslEmail,
     ];
 

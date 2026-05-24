@@ -122,9 +122,10 @@ When comparing env files, compare keys first. Values may intentionally differ be
 - `OPS_DEPLOY_DEFAULT_STAGE`
 - shared deploy defaults (repo, branch, PHP/Bun bin, run user, SSL email, KEEP_RELEASES)
 - per-stage `TEST` / `PROD` domain, root, group, runtime
-- per-stage Octane / Reverb / Nightwatch ports
+- per-stage Octane port, explicit Octane worker counts, and Reverb / Nightwatch ports
 - per-stage enable flags
 
 Per-stage `OPS_DEPLOY_{STAGE}_OCTANE_PORT` is REQUIRED — Envoy `health-check` curls Octane directly using that port.
+`OPS_DEPLOY_{STAGE}_OCTANE_WORKERS` defaults to `1`. For Swoole, `OPS_DEPLOY_{STAGE}_OCTANE_TASK_WORKERS` defaults to `0`; set a positive task-worker count only when the application dispatches Octane tasks.
 
 Runtime deploy intent belongs only in `.env.envoy` via explicit `OPS_DEPLOY_{STAGE}_RUNTIME`. Do not add runtime selector keys back to Laravel runtime `.env` files.

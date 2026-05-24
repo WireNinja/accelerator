@@ -30,6 +30,7 @@ WireNinja Accelerator provides reusable Laravel application conventions, built-i
 - Do not bootstrap Laravel config from Envoy.
 - Envoy reads deploy configuration from project-root `.env.envoy`, which contains only `OPS_DEPLOY_*` keys and must not be committed.
 - Per-stage `OPS_DEPLOY_{STAGE}_OCTANE_PORT` is REQUIRED — Envoy `health-check` curls Octane directly.
+- Supervisor Octane concurrency is explicit: `OPS_DEPLOY_{STAGE}_OCTANE_WORKERS` defaults to `1`; Swoole-only `OPS_DEPLOY_{STAGE}_OCTANE_TASK_WORKERS` defaults to `0`. Increase intentionally when capacity or `Octane::concurrently()` requires it.
 - Do not put `OPS_DEPLOY_*` keys in `.env`, `.env.staging`, `.env.production`, `.env.example`, or `.base-env.example`.
 - Envoy syncs the selected runtime env seed to `{root}/shared/.env` on every deploy; old shared env is archived first.
 - Use the package Envoy bridge at `vendor/wireninja/accelerator/resources/envoy/Envoy.blade.php`; project Envoy files only define server aliases.

@@ -81,6 +81,8 @@ Per stage (`TEST` / `PROD`):
 - `OPS_DEPLOY_{STAGE}_GROUP` (Supervisor group, stage-scoped)
 - `OPS_DEPLOY_{STAGE}_RUNTIME` (`swoole` etc.)
 - `OPS_DEPLOY_{STAGE}_OCTANE_PORT` **REQUIRED**
+- `OPS_DEPLOY_{STAGE}_OCTANE_WORKERS` (request workers; default `1`, must be >= `1`)
+- `OPS_DEPLOY_{STAGE}_OCTANE_TASK_WORKERS` (Swoole task workers; default `0`, set >= `1` only when tasks are used)
 - `OPS_DEPLOY_{STAGE}_REVERB_PORT`
 - `OPS_DEPLOY_{STAGE}_NIGHTWATCH_PORT`
 - `OPS_DEPLOY_{STAGE}_NIGHTWATCH_ENABLED`
@@ -136,6 +138,8 @@ wss_test:wss_test_scheduler
 ```
 
 Nightwatch is opt-in. Do not add it unless the stage flag enables it.
+
+Octane concurrency is opt-in beyond the minimum request worker. The generated Supervisor command never uses `auto`: it starts with one request worker and, for Swoole, zero task workers. Apps that call `Octane::concurrently()` or otherwise dispatch Swoole tasks must set `OPS_DEPLOY_{STAGE}_OCTANE_TASK_WORKERS` to an intentional positive count and re-run `bootstrap`.
 
 ## DB Backup During Deploy
 
@@ -271,7 +275,7 @@ vendor/bin/envoy run bootstrap --stage=prod
 
 What happens:
 - `bootstrap-nginx`: Checks if SSL cert exists at `/etc/letsencrypt/live/{domain}/`. If yes → uses SSL+QUIC stub. If no → uses HTTP-only stub. Archives existing config before overwriting. Validates `nginx -t` and reloads.
-- `bootstrap-supervisor`: Writes `/etc/supervisor/conf.d/{group}.conf`, runs `reread + update`.
+- `bootstrap-supervisor`: Writes `/etc/supervisor/conf.d/{group}.conf` with the configured Octane worker limits, runs `reread + update`.
 
 **Guard**: If existing Nginx config has `ssl_certificate` but no cert file is found, bootstrap skips to avoid downgrading a working SSL config.
 
@@ -524,6 +528,8 @@ Do NOT:
 - Log to `{root}/shared/storage/logs/{service}.log`
 - Run as `www-data` (or configured run user)
 - One group containing only this stage's programs
+- Never use `--workers=auto` or `--task-workers=auto`; keep explicit counts in `.env.envoy`.
+- For Swoole, task workers default to `0`. Set a positive count before using Octane task dispatch/concurrency.
 - NEVER use generic names (`octane`, `horizon`, `reverb`)
 
 ## OPcache
@@ -560,7 +566,7 @@ Never delete shared app uploads casually. Check `{root}/shared/storage/app` firs
 
 Local:
 
-- `.env.envoy` has the stage keys including OCTANE_PORT
+- `.env.envoy` has the stage keys including OCTANE_PORT and explicit Octane worker counts
 - target stage is enabled
 - runtime seed exists and has no `OPS_DEPLOY_*`
 - `.env`, `.env.staging`, `.env.production` have compatible key sets

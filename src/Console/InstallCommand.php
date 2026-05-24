@@ -287,7 +287,7 @@ class InstallCommand extends Command
         // only selected one component.
         $configsForSelection = $this->configsForComponents($selectedComponents);
         foreach ($configsForSelection as $configFile) {
-            $targetFile = 'config/' . $configFile;
+            $targetFile = 'config/'.$configFile;
             if (File::exists(base_path($targetFile))) {
                 $conflicts[] = $targetFile;
             }
@@ -339,7 +339,7 @@ class InstallCommand extends Command
     protected function syncEnvironment(): void
     {
         $this->components->task('Synchronizing environment from .base-env.example', function () {
-            $baseEnvPath = __DIR__ . '/../../.base-env.example';
+            $baseEnvPath = __DIR__.'/../../.base-env.example';
             $examplePath = base_path('.env.example');
             $envPath = base_path('.env');
 
@@ -349,7 +349,7 @@ class InstallCommand extends Command
 
             if (! File::exists($examplePath) || $this->option('force') || in_array('.env.example', $this->allowedOverwrites)) {
                 if (File::exists($examplePath)) {
-                    $backupPath = base_path('.env.example.backup_' . now()->format('Y_m_d_His'));
+                    $backupPath = base_path('.env.example.backup_'.now()->format('Y_m_d_His'));
                     if ($this->option('dry')) {
                         $this->components->info("Would backup existing .env.example to {$backupPath}");
                     } else {
@@ -392,7 +392,7 @@ class InstallCommand extends Command
             ];
 
             foreach ($defaults as $file) {
-                $path = $migrationsPath . '/' . $file;
+                $path = $migrationsPath.'/'.$file;
                 if (File::exists($path)) {
                     if ($this->option('dry')) {
                         $this->components->info("Would delete default migration: {$file}");
@@ -418,7 +418,7 @@ class InstallCommand extends Command
 
         $selected = multiselect(
             label: 'Which components would you like to install?',
-            options: array_map(fn($c) => $c['label'], $this->wizardComponents),
+            options: array_map(fn ($c) => $c['label'], $this->wizardComponents),
             default: array_keys($this->wizardComponents),
             hint: 'Use space to toggle select, enter to confirm'
         );
@@ -449,7 +449,7 @@ class InstallCommand extends Command
 
         foreach ([...$selected, ...$without] as $component) {
             if (! in_array($component, $valid, true)) {
-                throw new RuntimeException("Unknown Accelerator install component [{$component}]. Valid components: " . implode(', ', $valid));
+                throw new RuntimeException("Unknown Accelerator install component [{$component}]. Valid components: ".implode(', ', $valid));
             }
         }
 
@@ -474,14 +474,14 @@ class InstallCommand extends Command
                     }
 
                     if ($this->option('dry')) {
-                        $this->components->info('Would run command: ' . implode(' ', $cmd));
+                        $this->components->info('Would run command: '.implode(' ', $cmd));
                     } else {
                         $this->runProcess($cmd, failOnError: false);
                     }
                 }
 
                 foreach ($component['stubs'] as $stubPath => $targetPath) {
-                    $source = __DIR__ . '/../../stubs/' . $stubPath;
+                    $source = __DIR__.'/../../stubs/'.$stubPath;
                     $dest = base_path($targetPath);
 
                     if (! File::exists($source)) {
@@ -551,7 +551,7 @@ class InstallCommand extends Command
 
         foreach ($commands as $cmd) {
             if ($this->option('dry')) {
-                $this->components->info('Would run command: ' . implode(' ', $cmd));
+                $this->components->info('Would run command: '.implode(' ', $cmd));
             } else {
                 $this->runProcess($cmd, failOnError: false);
             }
@@ -649,7 +649,7 @@ class InstallCommand extends Command
         try {
             $redacted = EnvReader::redacted();
         } catch (Throwable $e) {
-            $this->components->warn('Could not generate env summary: ' . $e->getMessage());
+            $this->components->warn('Could not generate env summary: '.$e->getMessage());
 
             return;
         }
@@ -658,7 +658,7 @@ class InstallCommand extends Command
             return;
         }
 
-        $missing = array_keys(array_filter($redacted, static fn($v): bool => $v === '[EMPTY]' || $v === '[MISSING]'));
+        $missing = array_keys(array_filter($redacted, static fn ($v): bool => $v === '[EMPTY]' || $v === '[MISSING]'));
 
         $this->newLine();
         $this->components->info(sprintf(
@@ -668,7 +668,7 @@ class InstallCommand extends Command
         ));
 
         if ($missing !== []) {
-            $this->components->warn('Empty/missing keys (review .env): ' . implode(', ', array_slice($missing, 0, 20)) . (count($missing) > 20 ? ', ...' : ''));
+            $this->components->warn('Empty/missing keys (review .env): '.implode(', ', array_slice($missing, 0, 20)).(count($missing) > 20 ? ', ...' : ''));
         }
     }
 
@@ -727,8 +727,8 @@ class InstallCommand extends Command
 
         $this->components->warn(
             'Sensitive keys detected in local .env (blanked in seed files): '
-                . implode(', ', $populated)
-                . '. Review .env.staging and .env.production before scp / deploy.'
+                .implode(', ', $populated)
+                .'. Review .env.staging and .env.production before scp / deploy.'
         );
     }
 
@@ -800,7 +800,7 @@ class InstallCommand extends Command
         }
 
         $this->components->task('Generating .github/workflows/deploy.yml', function (): bool {
-            $stub = __DIR__ . '/../../stubs/.github/workflows/deploy.yml';
+            $stub = __DIR__.'/../../stubs/.github/workflows/deploy.yml';
             $target = base_path('.github/workflows/deploy.yml');
 
             if (! is_file($stub)) {
@@ -842,7 +842,7 @@ class InstallCommand extends Command
         }
 
         $this->components->task('Installing git pre-commit hook', function (): bool {
-            $stub = __DIR__ . '/../../stubs/git-hooks/pre-commit';
+            $stub = __DIR__.'/../../stubs/git-hooks/pre-commit';
             $target = base_path('.git/hooks/pre-commit');
 
             if (! is_file($stub)) {
@@ -909,7 +909,7 @@ class InstallCommand extends Command
             return;
         }
 
-        File::put($path, json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . PHP_EOL);
+        File::put($path, json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES).PHP_EOL);
     }
 
     protected function envoyBridgeContent(): string
@@ -920,7 +920,7 @@ class InstallCommand extends Command
 @servers(['vps' => ['{$sshHost}'], 'localhost' => '127.0.0.1'])
 
 @import('vendor/wireninja/accelerator/resources/envoy/Envoy.blade.php')
-BLADE . PHP_EOL;
+BLADE.PHP_EOL;
     }
 
     protected function envoyEnvContent(): string
@@ -973,6 +973,8 @@ OPS_DEPLOY_TEST_ROOT=/var/www/test.{$domain}
 OPS_DEPLOY_TEST_GROUP={$project}_test
 OPS_DEPLOY_TEST_RUNTIME=swoole
 OPS_DEPLOY_TEST_OCTANE_PORT=9012
+OPS_DEPLOY_TEST_OCTANE_WORKERS=1
+OPS_DEPLOY_TEST_OCTANE_TASK_WORKERS=0
 OPS_DEPLOY_TEST_REVERB_PORT=9013
 OPS_DEPLOY_TEST_NIGHTWATCH_PORT=2412
 OPS_DEPLOY_TEST_NIGHTWATCH_ENABLED=false
@@ -984,15 +986,17 @@ OPS_DEPLOY_PROD_ROOT={$root}
 OPS_DEPLOY_PROD_GROUP={$group}
 OPS_DEPLOY_PROD_RUNTIME=swoole
 OPS_DEPLOY_PROD_OCTANE_PORT={$octanePort}
+OPS_DEPLOY_PROD_OCTANE_WORKERS=1
+OPS_DEPLOY_PROD_OCTANE_TASK_WORKERS=0
 OPS_DEPLOY_PROD_REVERB_PORT={$reverbPort}
 OPS_DEPLOY_PROD_NIGHTWATCH_PORT={$nightwatchPort}
 OPS_DEPLOY_PROD_NIGHTWATCH_ENABLED=false
-ENV . PHP_EOL;
+ENV.PHP_EOL;
     }
 
     protected function runtimeEnvSeedContent(string $environment): string
     {
-        $source = File::exists(base_path('.env')) ? base_path('.env') : __DIR__ . '/../../.base-env.example';
+        $source = File::exists(base_path('.env')) ? base_path('.env') : __DIR__.'/../../.base-env.example';
         $content = File::get($source);
 
         $content = $this->stripOpsDeployKeys($content);
@@ -1000,7 +1004,7 @@ ENV . PHP_EOL;
 
         return str_replace(
             ['APP_ENV=local', 'APP_ENV=production', 'APP_DEBUG=true'],
-            ['APP_ENV=' . ($environment === 'production' ? 'production' : 'staging'), 'APP_ENV=' . ($environment === 'production' ? 'production' : 'staging'), 'APP_DEBUG=' . ($environment === 'production' ? 'false' : 'true')],
+            ['APP_ENV='.($environment === 'production' ? 'production' : 'staging'), 'APP_ENV='.($environment === 'production' ? 'production' : 'staging'), 'APP_DEBUG='.($environment === 'production' ? 'false' : 'true')],
             $content,
         );
     }
@@ -1021,19 +1025,19 @@ ENV . PHP_EOL;
             [$key] = explode('=', $trimmed, 2);
             $key = trim($key);
             if (in_array($key, $this->sensitiveSeedKeys, true)) {
-                $lines[$i] = $key . '=';
+                $lines[$i] = $key.'=';
             }
         }
 
-        return rtrim(implode(PHP_EOL, $lines)) . PHP_EOL;
+        return rtrim(implode(PHP_EOL, $lines)).PHP_EOL;
     }
 
     protected function stripOpsDeployKeys(string $content): string
     {
         $lines = preg_split('/\R/', $content) ?: [];
-        $kept = array_filter($lines, fn(string $line): bool => ! str_starts_with(trim($line), 'OPS_DEPLOY_'));
+        $kept = array_filter($lines, fn (string $line): bool => ! str_starts_with(trim($line), 'OPS_DEPLOY_'));
 
-        return rtrim(implode(PHP_EOL, $kept)) . PHP_EOL;
+        return rtrim(implode(PHP_EOL, $kept)).PHP_EOL;
     }
 
     protected function ensureGitignoreEntries(array $entries): void
@@ -1054,7 +1058,7 @@ ENV . PHP_EOL;
             return;
         }
 
-        File::put($path, rtrim(implode(PHP_EOL, $lines)) . PHP_EOL);
+        File::put($path, rtrim(implode(PHP_EOL, $lines)).PHP_EOL);
     }
 
     protected function writeFile(string $relativePath, string $content, bool $overwrite): void
@@ -1123,7 +1127,7 @@ ENV . PHP_EOL;
         }
 
         $this->components->task('Publishing internal configurations', function () use ($configsToPublish) {
-            $source = __DIR__ . '/../../stubs/config';
+            $source = __DIR__.'/../../stubs/config';
             $dest = base_path('config');
 
             if (! File::isDirectory($source)) {
@@ -1131,21 +1135,21 @@ ENV . PHP_EOL;
             }
 
             foreach ($configsToPublish as $configFile) {
-                $sourceFile = $source . '/' . $configFile;
+                $sourceFile = $source.'/'.$configFile;
 
                 if (! File::exists($sourceFile)) {
                     continue;
                 }
 
-                $targetFile = $dest . '/' . $configFile;
+                $targetFile = $dest.'/'.$configFile;
 
-                if (File::exists($targetFile) && ! $this->option('force') && ! in_array('config/' . $configFile, $this->allowedOverwrites)) {
+                if (File::exists($targetFile) && ! $this->option('force') && ! in_array('config/'.$configFile, $this->allowedOverwrites)) {
                     continue;
                 }
 
                 if ($this->option('dry')) {
                     $action = File::exists($targetFile) ? 'overwrite existing' : 'create new';
-                    $this->components->info("Would {$action} config file: config/" . $configFile);
+                    $this->components->info("Would {$action} config file: config/".$configFile);
 
                     continue;
                 }

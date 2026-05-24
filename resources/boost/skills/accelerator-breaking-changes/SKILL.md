@@ -11,6 +11,25 @@ Format per entry:
 
 ---
 
+## Unreleased
+
+### 🔴 BREAKING — Supervisor no longer starts automatic Octane workers
+
+Generated Supervisor configuration no longer uses `--workers=auto --task-workers=auto`. On the next `bootstrap`, missing values use conservative defaults:
+
+```dotenv
+OPS_DEPLOY_{STAGE}_OCTANE_WORKERS=1
+OPS_DEPLOY_{STAGE}_OCTANE_TASK_WORKERS=0
+```
+
+For Swoole, Envoy renders `octane:swoole` so `0` genuinely disables task workers; Laravel Octane's public dispatcher otherwise converts `--task-workers=0` back to its `auto` fallback. Non-Swoole runtimes ignore the task-worker setting.
+
+**Action required**: Before re-running `vendor/bin/envoy run bootstrap --stage={stage}`, add explicit worker values to `.env.envoy`. Set `OPS_DEPLOY_{STAGE}_OCTANE_TASK_WORKERS` to a positive number when the application uses `Octane::concurrently()` or Swoole task dispatch.
+
+No patch tag is assigned until an explicit release command is given.
+
+---
+
 ## v1.1.65
 
 No breaking changes.
