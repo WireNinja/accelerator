@@ -1129,9 +1129,7 @@ CONF, [
     echo "═══════════════════════════════════════════════════════════════"
     predeploy_dir="${backup_base}/${app_name}-predeploy"
     if [ -d "$predeploy_dir" ]; then
-        find "$predeploy_dir" -name "*.zip" -printf "%T@ %Tc %s %p\n" 2>/dev/null | sort -rn | head -10 | while IFS= read -r line; do
-            size=$(echo "$line" | awk '{print $4}')
-            path=$(echo "$line" | awk '{for(i=5;i<=NF;i++) printf "%s ", $i; print ""}')
+        find "$predeploy_dir" -type f -name "*.zip" -printf "%T@ %s %p\n" 2>/dev/null | sort -rn | head -10 | while read -r modified size path; do
             size_kb=$((size / 1024))
             printf "  %6s KB  %s\n" "$size_kb" "$(basename "$path")"
         done
@@ -1145,9 +1143,7 @@ CONF, [
     echo "═══════════════════════════════════════════════════════════════"
     scheduled_dir="${backup_base}/${app_name}"
     if [ -d "$scheduled_dir" ]; then
-        find "$scheduled_dir" -name "*.zip" -printf "%T@ %Tc %s %p\n" 2>/dev/null | sort -rn | head -10 | while IFS= read -r line; do
-            size=$(echo "$line" | awk '{print $4}')
-            path=$(echo "$line" | awk '{for(i=5;i<=NF;i++) printf "%s ", $i; print ""}')
+        find "$scheduled_dir" -type f -name "*.zip" -printf "%T@ %s %p\n" 2>/dev/null | sort -rn | head -10 | while read -r modified size path; do
             size_kb=$((size / 1024))
             printf "  %6s KB  %s\n" "$size_kb" "$(basename "$path")"
         done

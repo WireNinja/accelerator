@@ -11,6 +11,18 @@ Format per entry:
 
 ---
 
+## v1.1.68
+
+No deployment contract changes beyond v1.1.66.
+
+### 🟡 AWARENESS — Backup listing handles application names with spaces
+
+The Envoy `backups` story now parses backup paths without splitting an application name such as `Supervisi Akademik` into invalid size fields. This fixes `unbound variable` failures while listing predeploy or scheduled backup files.
+
+**Action required**: None. Upgrade before using `vendor/bin/envoy run backups` for applications whose `APP_NAME` contains spaces.
+
+---
+
 ## v1.1.67
 
 No deployment contract changes beyond v1.1.66.
