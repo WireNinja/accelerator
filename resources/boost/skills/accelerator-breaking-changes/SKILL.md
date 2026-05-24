@@ -11,6 +11,18 @@ Format per entry:
 
 ---
 
+## v1.1.67
+
+No deployment contract changes beyond v1.1.66.
+
+### 🟡 AWARENESS — Nginx bootstrap preserves existing SSL vhosts
+
+`bootstrap-nginx` and `bootstrap-ssl` now inspect Let's Encrypt certificates through `sudo` and use a boolean SSL-config guard. This prevents a configured HTTPS vhost from being replaced with the HTTP-only template merely because the deploy user cannot stat root-owned certificate links.
+
+**Action required**: Upgrade to this patch before re-running `bootstrap` on an HTTPS stage.
+
+---
+
 ## v1.1.66
 
 ### 🔴 BREAKING — Deployment runtime and managed services are now explicit
@@ -116,7 +128,7 @@ Both stubs now use the `@octane` named location pattern (`try_files $uri @octane
 
 If existing Nginx config has `ssl_certificate` but no cert file is found at `/etc/letsencrypt/live/{domain}/`, bootstrap will **skip** instead of overwriting. This prevents accidental SSL → HTTP downgrade.
 
-**Action required**: None if certs are in place. If bootstrap skips unexpectedly, verify cert path or use `--force`.
+**Action required**: None if certs are in place. If bootstrap skips unexpectedly, verify the certificate path and restore the archived vhost before retrying.
 
 ### 🟡 AWARENESS — New `bootstrap-ssl` story
 

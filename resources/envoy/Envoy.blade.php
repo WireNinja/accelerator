@@ -1165,7 +1165,7 @@ CONF, [
     set -euo pipefail
 
     # Determine which stub to use: if cert already exists on VPS, use SSL stub
-    has_cert=$(ssh {{ $sshHost }} 'test -f /etc/letsencrypt/live/{{ $domain }}/fullchain.pem && echo yes || echo no')
+    has_cert=$(ssh {{ $sshHost }} 'sudo test -f /etc/letsencrypt/live/{{ $domain }}/fullchain.pem && echo yes || echo no')
 
     if [ "$has_cert" = "yes" ]; then
         test -s {{ $localNginxSsl }}
@@ -1178,10 +1178,10 @@ CONF, [
     fi
 
     # Guard: if existing config has ssl_certificate, warn and require confirmation
-    has_ssl_config=$(ssh {{ $sshHost }} 'grep -l "ssl_certificate" /etc/nginx/sites-available/{{ $domain }}.conf 2>/dev/null && echo yes || echo no')
+    has_ssl_config=$(ssh {{ $sshHost }} 'sudo grep -q "ssl_certificate" /etc/nginx/sites-available/{{ $domain }}.conf 2>/dev/null && echo yes || echo no')
     if [ "$has_ssl_config" = "yes" ] && [ "$has_cert" = "no" ]; then
         echo "[bootstrap-nginx] WARNING: existing config has SSL but no cert found."
-        echo "[bootstrap-nginx] Skipping to avoid downgrading SSL config. Use --force or fix cert path."
+        echo "[bootstrap-nginx] Skipping to avoid downgrading SSL config. Fix the certificate path or restore the archived vhost."
         exit 0
     fi
 
@@ -1250,7 +1250,7 @@ CONF, [
 @task('obtain-cert', ['on' => 'localhost'])
     set -euo pipefail
     # Check if cert already exists
-    has_cert=$(ssh {{ $sshHost }} 'test -f /etc/letsencrypt/live/{{ $domain }}/fullchain.pem && echo yes || echo no')
+    has_cert=$(ssh {{ $sshHost }} 'sudo test -f /etc/letsencrypt/live/{{ $domain }}/fullchain.pem && echo yes || echo no')
     if [ "$has_cert" = "yes" ]; then
         echo "[obtain-cert] Certificate already exists for {{ $domain }}. Skipping."
         exit 0
@@ -1274,7 +1274,7 @@ CONF, [
 @task('upgrade-nginx-ssl', ['on' => 'localhost'])
     set -euo pipefail
     # Verify cert exists after obtain-cert
-    has_cert=$(ssh {{ $sshHost }} 'test -f /etc/letsencrypt/live/{{ $domain }}/fullchain.pem && echo yes || echo no')
+    has_cert=$(ssh {{ $sshHost }} 'sudo test -f /etc/letsencrypt/live/{{ $domain }}/fullchain.pem && echo yes || echo no')
     if [ "$has_cert" != "yes" ]; then
         echo "[upgrade-nginx-ssl] No certificate found. Run obtain-cert first or check certbot output."
         exit 1
