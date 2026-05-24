@@ -21,6 +21,7 @@ Adding or reviewing Accelerator config keys, `.env.example`, `.base-env.example`
 - Keep `.env`, `.env.staging`, `.env.production`, `.env.example`, and `.base-env.example` key-compatible for runtime application keys.
 - Do not put `OPS_DEPLOY_*` keys in runtime env files or examples. Those keys belong only in `.env.envoy`.
 - Keep `.env.envoy` limited to `OPS_DEPLOY_*` keys and formatted into readable sections.
+- Package deploy defaults live in `.base-env.envoy.example`; `accelerator:install --with-deploy` renders it into the ignored project-root `.env.envoy`.
 - Do not use nested references for `VITE_*` keys (e.g. `VITE_REVERB_APP_KEY="${REVERB_APP_KEY}"`). Vite may expose the literal string. Use explicit frontend-safe values.
 
 ## Accelerator Config Keys
@@ -117,7 +118,7 @@ When comparing env files, compare keys first. Values may intentionally differ be
 
 ## `.env.envoy` Shape
 
-`.env.envoy` carries deploy wiring. Required:
+`.base-env.envoy.example` is the package template; installed projects receive its rendered output as `.env.envoy`, which carries deploy wiring. Required:
 
 - `OPS_DEPLOY_DEFAULT_STAGE`
 - shared deploy defaults (repo, branch, PHP/Bun bin, run user, SSL email, KEEP_RELEASES)

@@ -151,7 +151,7 @@ Envoy.blade.php
 .env.production
 ```
 
-The installer also adds the three env seed files to `.gitignore`.
+The installer renders the package `.base-env.envoy.example` template into `.env.envoy` using the CLI options above, and adds the three env seed files to `.gitignore`.
 
 Generated deployment configuration defaults to PHP-FPM and leaves Horizon, plain queue workers, Reverb, Scheduler, and Nightwatch disabled. Enable only the programs that the application requires in `.env.envoy`.
 

@@ -48,7 +48,7 @@ First deployment, continuous deployment, deployment cleanup, Envoy release folde
 
 ```text
 Envoy.blade.php
-.env.envoy
+.env.envoy          # rendered from package `.base-env.envoy.example`
 .env.staging
 .env.production
 ```

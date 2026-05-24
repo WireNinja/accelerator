@@ -11,7 +11,7 @@ Format per entry:
 
 ---
 
-## Unreleased
+## v1.1.66
 
 ### 🔴 BREAKING — Deployment runtime and managed services are now explicit
 
@@ -43,7 +43,11 @@ OPS_DEPLOY_{STAGE}_QUEUE_WORKER_PROCESSES=1
 
 **Action required**: Before re-running `vendor/bin/envoy run bootstrap --stage={stage}`, set `_HTTP_RUNTIME` and explicit service flags in `.env.envoy`. Do not enable Horizon and `QUEUE_WORKER_ENABLED` together. When Nightwatch is enabled, set runtime `NIGHTWATCH_ENABLED=true` and keep `NIGHTWATCH_INGEST_URI` aligned with `_NIGHTWATCH_PORT`.
 
-No patch tag is assigned until an explicit release command is given.
+### 🟡 AWARENESS — Deploy env has a package-owned base template
+
+The package now ships `.base-env.envoy.example`, and `accelerator:install --with-deploy` renders project `.env.envoy` from it. Existing projects can retain their manually configured deploy env; no overwrite occurs without `--force`.
+
+The base runtime example now defaults to `NIGHTWATCH_ENABLED=false` with `LOG_STACK=daily`. Projects enabling Nightwatch must opt into both the collector and `daily,nightwatch` logging stack.
 
 ---
 

@@ -28,7 +28,7 @@ WireNinja Accelerator provides reusable Laravel application conventions, built-i
 
 - Use Envoy as the deployment orchestrator. Run `vendor/bin/envoy run bootstrap --stage=test` once per VPS to write Nginx vhost + Supervisor config; continuous deploys just restart/reload.
 - Do not bootstrap Laravel config from Envoy.
-- Envoy reads deploy configuration from project-root `.env.envoy`, which contains only `OPS_DEPLOY_*` keys and must not be committed.
+- Envoy reads deploy configuration from project-root `.env.envoy`, rendered from package `.base-env.envoy.example`; it contains only `OPS_DEPLOY_*` keys and must not be committed.
 - Per-stage `OPS_DEPLOY_{STAGE}_HTTP_RUNTIME` selects `fpm` or `octane`. FPM is the scaffold default and requires `_FPM_SOCKET`; Octane requires `_OCTANE_PORT`.
 - Supervisor services are opt-in through per-stage flags: `_HORIZON_ENABLED`, `_QUEUE_WORKER_ENABLED`, `_REVERB_ENABLED`, `_SCHEDULER_ENABLED`, and `_NIGHTWATCH_ENABLED`. Never enable Horizon and the plain queue worker together.
 - Octane concurrency is explicit: `_OCTANE_WORKERS` defaults to `1`; Swoole-only `_OCTANE_TASK_WORKERS` defaults to `0`. Increase intentionally when capacity or `Octane::concurrently()` requires it.

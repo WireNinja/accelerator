@@ -961,64 +961,33 @@ BLADE.PHP_EOL;
         $sslEmail = $this->option('ssl-email') ?: "admin@{$domain}";
         $testEnabled = $stageMode === 'dual' || $defaultStage === 'test' ? 'true' : 'false';
         $prodEnabled = $stageMode === 'dual' || $defaultStage === 'prod' ? 'true' : 'false';
+        $templatePath = __DIR__.'/../../.base-env.envoy.example';
 
-        return <<<ENV
-# Global
-OPS_DEPLOY_DEFAULT_STAGE={$defaultStage}
-OPS_DEPLOY_PROJECT={$project}
-OPS_DEPLOY_SSH_HOST={$sshHost}
-OPS_DEPLOY_REPO={$repo}
-OPS_DEPLOY_BRANCH={$branch}
-OPS_DEPLOY_KEEP_RELEASES=5
-OPS_DEPLOY_PHP_BIN={$phpBin}
-OPS_DEPLOY_NPM_BIN={$npmBin}
-OPS_DEPLOY_RUN_USER={$runUser}
-OPS_DEPLOY_SSL_EMAIL={$sslEmail}
+        if (! File::exists($templatePath)) {
+            throw new RuntimeException('.base-env.envoy.example not found in accelerator package. Cannot prepare deployment environment.');
+        }
 
-# Test Stage
-OPS_DEPLOY_TEST_ENABLED={$testEnabled}
-OPS_DEPLOY_TEST_DOMAIN=test.{$domain}
-OPS_DEPLOY_TEST_ROOT=/var/www/test.{$domain}
-OPS_DEPLOY_TEST_GROUP={$project}_test
-OPS_DEPLOY_TEST_HTTP_RUNTIME={$httpRuntime}
-OPS_DEPLOY_TEST_FPM_SOCKET={$fpmSocket}
-OPS_DEPLOY_TEST_RUNTIME=swoole
-OPS_DEPLOY_TEST_OCTANE_PORT=9012
-OPS_DEPLOY_TEST_OCTANE_WORKERS=1
-OPS_DEPLOY_TEST_OCTANE_TASK_WORKERS=0
-OPS_DEPLOY_TEST_HORIZON_ENABLED=false
-OPS_DEPLOY_TEST_QUEUE_WORKER_ENABLED=false
-OPS_DEPLOY_TEST_QUEUE_WORKER_CONNECTION=redis
-OPS_DEPLOY_TEST_QUEUE_WORKER_QUEUE=default
-OPS_DEPLOY_TEST_QUEUE_WORKER_PROCESSES=1
-OPS_DEPLOY_TEST_REVERB_ENABLED=false
-OPS_DEPLOY_TEST_REVERB_PORT=9013
-OPS_DEPLOY_TEST_SCHEDULER_ENABLED=false
-OPS_DEPLOY_TEST_NIGHTWATCH_PORT=2412
-OPS_DEPLOY_TEST_NIGHTWATCH_ENABLED=false
-
-# Production Stage
-OPS_DEPLOY_PROD_ENABLED={$prodEnabled}
-OPS_DEPLOY_PROD_DOMAIN={$domain}
-OPS_DEPLOY_PROD_ROOT={$root}
-OPS_DEPLOY_PROD_GROUP={$group}
-OPS_DEPLOY_PROD_HTTP_RUNTIME={$httpRuntime}
-OPS_DEPLOY_PROD_FPM_SOCKET={$fpmSocket}
-OPS_DEPLOY_PROD_RUNTIME=swoole
-OPS_DEPLOY_PROD_OCTANE_PORT={$octanePort}
-OPS_DEPLOY_PROD_OCTANE_WORKERS=1
-OPS_DEPLOY_PROD_OCTANE_TASK_WORKERS=0
-OPS_DEPLOY_PROD_HORIZON_ENABLED=false
-OPS_DEPLOY_PROD_QUEUE_WORKER_ENABLED=false
-OPS_DEPLOY_PROD_QUEUE_WORKER_CONNECTION=redis
-OPS_DEPLOY_PROD_QUEUE_WORKER_QUEUE=default
-OPS_DEPLOY_PROD_QUEUE_WORKER_PROCESSES=1
-OPS_DEPLOY_PROD_REVERB_ENABLED=false
-OPS_DEPLOY_PROD_REVERB_PORT={$reverbPort}
-OPS_DEPLOY_PROD_SCHEDULER_ENABLED=false
-OPS_DEPLOY_PROD_NIGHTWATCH_PORT={$nightwatchPort}
-OPS_DEPLOY_PROD_NIGHTWATCH_ENABLED=false
-ENV.PHP_EOL;
+        return strtr(File::get($templatePath), [
+            '{{ default_stage }}' => $defaultStage,
+            '{{ project }}' => $project,
+            '{{ ssh_host }}' => $sshHost,
+            '{{ repo }}' => $repo,
+            '{{ branch }}' => $branch,
+            '{{ php_bin }}' => $phpBin,
+            '{{ npm_bin }}' => $npmBin,
+            '{{ run_user }}' => $runUser,
+            '{{ ssl_email }}' => $sslEmail,
+            '{{ test_enabled }}' => $testEnabled,
+            '{{ domain }}' => $domain,
+            '{{ http_runtime }}' => $httpRuntime,
+            '{{ fpm_socket }}' => $fpmSocket,
+            '{{ prod_enabled }}' => $prodEnabled,
+            '{{ root }}' => $root,
+            '{{ group }}' => $group,
+            '{{ octane_port }}' => $octanePort,
+            '{{ reverb_port }}' => $reverbPort,
+            '{{ nightwatch_port }}' => $nightwatchPort,
+        ]);
     }
 
     protected function runtimeEnvSeedContent(string $environment): string
