@@ -88,10 +88,13 @@ sudo nginx -t
 sudo supervisorctl status {group}:*
 ss -ltnp
 curl -I -L https://{domain}
+# HTTP_RUNTIME=octane only:
 curl -s -o /dev/null -w "%{http_code}" -H "Host: {domain}" http://127.0.0.1:{octane_port}/up
+# HTTP_RUNTIME=fpm:
+curl -s -o /dev/null -w "%{http_code}" -L https://{domain}/up
 ```
 
-The last command mirrors the Envoy `health-check` task — useful for manual verification post-rollback.
+Use the health command matching `OPS_DEPLOY_{STAGE}_HTTP_RUNTIME`. Envoy checks Octane directly, while FPM is checked through the Nginx vhost.
 
 ## Reaudit After Cleanup
 
@@ -122,7 +125,8 @@ Expected clean state:
 
 ## Nightwatch
 
-- Opt-in. Use explicit host and port via `.env.envoy` per-stage Nightwatch keys.
+- Opt-in. `NIGHTWATCH_ENABLED=true` renders the managed `nightwatch:agent` process; use explicit per-stage port configuration in `.env.envoy`.
+- Runtime `.env.staging` / `.env.production` must set `NIGHTWATCH_ENABLED=true` and `NIGHTWATCH_INGEST_URI` to the matching listener.
 - Do not assume the Nightwatch port is free — check listeners before enabling.
 
 ## Static Asset 404s

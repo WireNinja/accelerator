@@ -133,11 +133,13 @@ php artisan accelerator:install --no-interaction --preset=none --with-deploy --w
   --domain=ssm.pgsduksw.web.id \
   --root=/var/www/ssm.pgsduksw.web.id \
   --group=ssm_prod \
+  --http-runtime=fpm \
+  --fpm-socket=/run/php/php8.5-fpm.sock \
   --octane-port=9020 \
   --reverb-port=9021 \
   --nightwatch-port=2420 \
   --php-bin=/usr/bin/php8.5 \
-  --bun-bin=/home/adhi/.bun/bin/bun
+  --npm-bin=pnpm
 ```
 
 Generated files:
@@ -150,6 +152,24 @@ Envoy.blade.php
 ```
 
 The installer also adds the three env seed files to `.gitignore`.
+
+Generated deployment configuration defaults to PHP-FPM and leaves Horizon, plain queue workers, Reverb, Scheduler, and Nightwatch disabled. Enable only the programs that the application requires in `.env.envoy`.
+
+For an Octane application that requires Horizon, Reverb, Scheduler, and Nightwatch:
+
+```dotenv
+OPS_DEPLOY_PROD_HTTP_RUNTIME=octane
+OPS_DEPLOY_PROD_RUNTIME=swoole
+OPS_DEPLOY_PROD_OCTANE_WORKERS=1
+OPS_DEPLOY_PROD_OCTANE_TASK_WORKERS=0
+OPS_DEPLOY_PROD_HORIZON_ENABLED=true
+OPS_DEPLOY_PROD_QUEUE_WORKER_ENABLED=false
+OPS_DEPLOY_PROD_REVERB_ENABLED=true
+OPS_DEPLOY_PROD_SCHEDULER_ENABLED=true
+OPS_DEPLOY_PROD_NIGHTWATCH_ENABLED=true
+```
+
+For a PHP-FPM application with Redis queue workers but no Horizon, set `QUEUE_WORKER_ENABLED=true` and keep `HORIZON_ENABLED=false`.
 
 ### Sensitive credential handling in seed files
 

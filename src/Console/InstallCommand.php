@@ -44,6 +44,8 @@ use function Laravel\Prompts\multiselect;
     {--domain= : Single-stage domain}
     {--root= : Single-stage deploy root}
     {--group= : Single-stage Supervisor group}
+    {--http-runtime=fpm : HTTP runtime: fpm or octane}
+    {--fpm-socket=/run/php/php8.5-fpm.sock : PHP-FPM socket for FPM runtime}
     {--octane-port= : Single-stage Octane port}
     {--reverb-port= : Single-stage Reverb port}
     {--nightwatch-port= : Single-stage Nightwatch port}
@@ -936,10 +938,17 @@ BLADE.PHP_EOL;
             throw new RuntimeException('Deployment default stage must be [test] or [prod].');
         }
 
+        $httpRuntime = (string) $this->option('http-runtime');
+
+        if (! in_array($httpRuntime, ['fpm', 'octane'], true)) {
+            throw new RuntimeException('Deployment HTTP runtime must be [fpm] or [octane].');
+        }
+
         $project = $this->option('project') ?: strtolower((string) config('app.name', 'laravel'));
         $domain = $this->option('domain') ?: 'example.com';
         $root = $this->option('root') ?: "/var/www/{$domain}";
         $group = $this->option('group') ?: "{$project}_{$defaultStage}";
+        $fpmSocket = $this->option('fpm-socket') ?: '/run/php/php8.5-fpm.sock';
         $octanePort = $this->option('octane-port') ?: '9010';
         $reverbPort = $this->option('reverb-port') ?: '9011';
         $nightwatchPort = $this->option('nightwatch-port') ?: '2410';
@@ -971,11 +980,20 @@ OPS_DEPLOY_TEST_ENABLED={$testEnabled}
 OPS_DEPLOY_TEST_DOMAIN=test.{$domain}
 OPS_DEPLOY_TEST_ROOT=/var/www/test.{$domain}
 OPS_DEPLOY_TEST_GROUP={$project}_test
+OPS_DEPLOY_TEST_HTTP_RUNTIME={$httpRuntime}
+OPS_DEPLOY_TEST_FPM_SOCKET={$fpmSocket}
 OPS_DEPLOY_TEST_RUNTIME=swoole
 OPS_DEPLOY_TEST_OCTANE_PORT=9012
 OPS_DEPLOY_TEST_OCTANE_WORKERS=1
 OPS_DEPLOY_TEST_OCTANE_TASK_WORKERS=0
+OPS_DEPLOY_TEST_HORIZON_ENABLED=false
+OPS_DEPLOY_TEST_QUEUE_WORKER_ENABLED=false
+OPS_DEPLOY_TEST_QUEUE_WORKER_CONNECTION=redis
+OPS_DEPLOY_TEST_QUEUE_WORKER_QUEUE=default
+OPS_DEPLOY_TEST_QUEUE_WORKER_PROCESSES=1
+OPS_DEPLOY_TEST_REVERB_ENABLED=false
 OPS_DEPLOY_TEST_REVERB_PORT=9013
+OPS_DEPLOY_TEST_SCHEDULER_ENABLED=false
 OPS_DEPLOY_TEST_NIGHTWATCH_PORT=2412
 OPS_DEPLOY_TEST_NIGHTWATCH_ENABLED=false
 
@@ -984,11 +1002,20 @@ OPS_DEPLOY_PROD_ENABLED={$prodEnabled}
 OPS_DEPLOY_PROD_DOMAIN={$domain}
 OPS_DEPLOY_PROD_ROOT={$root}
 OPS_DEPLOY_PROD_GROUP={$group}
+OPS_DEPLOY_PROD_HTTP_RUNTIME={$httpRuntime}
+OPS_DEPLOY_PROD_FPM_SOCKET={$fpmSocket}
 OPS_DEPLOY_PROD_RUNTIME=swoole
 OPS_DEPLOY_PROD_OCTANE_PORT={$octanePort}
 OPS_DEPLOY_PROD_OCTANE_WORKERS=1
 OPS_DEPLOY_PROD_OCTANE_TASK_WORKERS=0
+OPS_DEPLOY_PROD_HORIZON_ENABLED=false
+OPS_DEPLOY_PROD_QUEUE_WORKER_ENABLED=false
+OPS_DEPLOY_PROD_QUEUE_WORKER_CONNECTION=redis
+OPS_DEPLOY_PROD_QUEUE_WORKER_QUEUE=default
+OPS_DEPLOY_PROD_QUEUE_WORKER_PROCESSES=1
+OPS_DEPLOY_PROD_REVERB_ENABLED=false
 OPS_DEPLOY_PROD_REVERB_PORT={$reverbPort}
+OPS_DEPLOY_PROD_SCHEDULER_ENABLED=false
 OPS_DEPLOY_PROD_NIGHTWATCH_PORT={$nightwatchPort}
 OPS_DEPLOY_PROD_NIGHTWATCH_ENABLED=false
 ENV.PHP_EOL;

@@ -13,18 +13,35 @@ Format per entry:
 
 ## Unreleased
 
-### 🔴 BREAKING — Supervisor no longer starts automatic Octane workers
+### 🔴 BREAKING — Deployment runtime and managed services are now explicit
 
-Generated Supervisor configuration no longer uses `--workers=auto --task-workers=auto`. On the next `bootstrap`, missing values use conservative defaults:
+New generated deploy env files default to PHP-FPM and no Supervisor-managed application services. Existing Octane deployments must declare their runtime and enabled programs before the next `bootstrap`:
 
 ```dotenv
+OPS_DEPLOY_{STAGE}_HTTP_RUNTIME=octane
 OPS_DEPLOY_{STAGE}_OCTANE_WORKERS=1
 OPS_DEPLOY_{STAGE}_OCTANE_TASK_WORKERS=0
+OPS_DEPLOY_{STAGE}_HORIZON_ENABLED=true
+OPS_DEPLOY_{STAGE}_REVERB_ENABLED=true
+OPS_DEPLOY_{STAGE}_SCHEDULER_ENABLED=true
+OPS_DEPLOY_{STAGE}_NIGHTWATCH_ENABLED=true
 ```
 
-For Swoole, Envoy renders `octane:swoole` so `0` genuinely disables task workers; Laravel Octane's public dispatcher otherwise converts `--task-workers=0` back to its `auto` fallback. Non-Swoole runtimes ignore the task-worker setting.
+`OPS_DEPLOY_{STAGE}_HTTP_RUNTIME=fpm` instead renders PHP-FPM Nginx locations using `OPS_DEPLOY_{STAGE}_FPM_SOCKET` and does not start Octane. Reverb websocket Nginx configuration is emitted only when Reverb is enabled. Nightwatch now actually renders `nightwatch:agent` when enabled.
 
-**Action required**: Before re-running `vendor/bin/envoy run bootstrap --stage={stage}`, add explicit worker values to `.env.envoy`. Set `OPS_DEPLOY_{STAGE}_OCTANE_TASK_WORKERS` to a positive number when the application uses `Octane::concurrently()` or Swoole task dispatch.
+For Swoole, Envoy renders `octane:swoole` so `0` genuinely disables task workers; Laravel Octane's public dispatcher otherwise converts `--task-workers=0` back to its `auto` fallback.
+
+Apps using Redis queue without Horizon may set:
+
+```dotenv
+OPS_DEPLOY_{STAGE}_HORIZON_ENABLED=false
+OPS_DEPLOY_{STAGE}_QUEUE_WORKER_ENABLED=true
+OPS_DEPLOY_{STAGE}_QUEUE_WORKER_CONNECTION=redis
+OPS_DEPLOY_{STAGE}_QUEUE_WORKER_QUEUE=default
+OPS_DEPLOY_{STAGE}_QUEUE_WORKER_PROCESSES=1
+```
+
+**Action required**: Before re-running `vendor/bin/envoy run bootstrap --stage={stage}`, set `_HTTP_RUNTIME` and explicit service flags in `.env.envoy`. Do not enable Horizon and `QUEUE_WORKER_ENABLED` together. When Nightwatch is enabled, set runtime `NIGHTWATCH_ENABLED=true` and keep `NIGHTWATCH_INGEST_URI` aligned with `_NIGHTWATCH_PORT`.
 
 No patch tag is assigned until an explicit release command is given.
 

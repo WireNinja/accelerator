@@ -22,6 +22,8 @@ First deployment, continuous deployment, deployment cleanup, Envoy release folde
 - Never touch unrelated domains, Nginx files, Supervisor groups, `/var/www` roots, ports, or services.
 - Do not serve Laravel from legacy `{root}/html/public`; Nginx must serve `{root}/current/public`.
 - Envoy does NOT auto-generate Nginx vhost or Supervisor config on every deploy. Run the one-shot `bootstrap` story per VPS to write them once (operator can edit later); continuous deploy just restarts/reloads.
+- Generated deployments default to PHP-FPM with no optional Supervisor services. Enable Octane, Horizon/queue worker, Reverb, Scheduler, and Nightwatch explicitly in `.env.envoy`.
+- Use Horizon or the plain queue worker, never both on the same stage.
 - `deploy-fresh-seed` is destructive and must only run with the exact explicit Envoy flag shown below. It temporarily installs Composer dev dependencies so seeders/factories can use `fake()`, then prunes dev packages before switching current.
 
 ## Stories Cheatsheet
@@ -63,7 +65,7 @@ Do not copy deployment shell scripts into the project.
 
 ## Required `.env.envoy` Keys
 
-Per stage (TEST and PROD), `_OCTANE_PORT` is REQUIRED. Health check curls Octane directly.
+Per stage, `OPS_DEPLOY_{STAGE}_HTTP_RUNTIME` selects `fpm` or `octane`. FPM health-checks through Nginx; Octane health-checks its direct port.
 
 Global keys:
 
@@ -79,13 +81,17 @@ Per stage (`TEST` / `PROD`):
 - `OPS_DEPLOY_{STAGE}_ENABLED`
 - `OPS_DEPLOY_{STAGE}_DOMAIN`, `OPS_DEPLOY_{STAGE}_ROOT`
 - `OPS_DEPLOY_{STAGE}_GROUP` (Supervisor group, stage-scoped)
-- `OPS_DEPLOY_{STAGE}_RUNTIME` (`swoole` etc.)
-- `OPS_DEPLOY_{STAGE}_OCTANE_PORT` **REQUIRED**
+- `OPS_DEPLOY_{STAGE}_HTTP_RUNTIME` (`fpm` default, or `octane`)
+- `OPS_DEPLOY_{STAGE}_FPM_SOCKET` (required for FPM, default `/run/php/php8.5-fpm.sock`)
+- `OPS_DEPLOY_{STAGE}_RUNTIME` (Octane only: `swoole`, `roadrunner`, or `frankenphp`)
+- `OPS_DEPLOY_{STAGE}_OCTANE_PORT` (required for Octane)
 - `OPS_DEPLOY_{STAGE}_OCTANE_WORKERS` (request workers; default `1`, must be >= `1`)
 - `OPS_DEPLOY_{STAGE}_OCTANE_TASK_WORKERS` (Swoole task workers; default `0`, set >= `1` only when tasks are used)
-- `OPS_DEPLOY_{STAGE}_REVERB_PORT`
-- `OPS_DEPLOY_{STAGE}_NIGHTWATCH_PORT`
-- `OPS_DEPLOY_{STAGE}_NIGHTWATCH_ENABLED`
+- `OPS_DEPLOY_{STAGE}_HORIZON_ENABLED`
+- `OPS_DEPLOY_{STAGE}_QUEUE_WORKER_ENABLED`, `_QUEUE_WORKER_CONNECTION`, `_QUEUE_WORKER_QUEUE`, `_QUEUE_WORKER_PROCESSES`
+- `OPS_DEPLOY_{STAGE}_REVERB_ENABLED`, `_REVERB_PORT`
+- `OPS_DEPLOY_{STAGE}_SCHEDULER_ENABLED`
+- `OPS_DEPLOY_{STAGE}_NIGHTWATCH_ENABLED`, `_NIGHTWATCH_PORT`
 
 `.env.staging` and `.env.production` carry runtime application keys, key-compatible with `.env`.
 
@@ -123,9 +129,10 @@ Programs MUST be group-prefixed to avoid cross-project Supervisor collisions.
 ```text
 {group}_octane
 {group}_horizon
+{group}_queue_worker  (alternative to Horizon, never together)
 {group}_reverb
 {group}_scheduler
-{group}_nightwatch  (only when stage explicitly enables it)
+{group}_nightwatch
 ```
 
 Examples for `wss_test`:
@@ -137,7 +144,7 @@ wss_test:wss_test_reverb
 wss_test:wss_test_scheduler
 ```
 
-Nightwatch is opt-in. Do not add it unless the stage flag enables it.
+Every listed program is conditional. In FPM mode there is no Octane program; the system PHP-FPM service is outside the generated Supervisor group. Reverb also controls whether its websocket Nginx location exists. Nightwatch runs `nightwatch:agent` only when enabled; runtime env must set `NIGHTWATCH_ENABLED=true` and `NIGHTWATCH_INGEST_URI` to the configured port.
 
 Octane concurrency is opt-in beyond the minimum request worker. The generated Supervisor command never uses `auto`: it starts with one request worker and, for Swoole, zero task workers. Apps that call `Octane::concurrently()` or otherwise dispatch Swoole tasks must set `OPS_DEPLOY_{STAGE}_OCTANE_TASK_WORKERS` to an intentional positive count and re-run `bootstrap`.
 
@@ -170,7 +177,7 @@ Visit ONCE in your browser to set the bypass cookie, then preview while deploy c
 
 If the deploy fails between `maintenance-on` and `maintenance-off` (e.g. health-check returns non-200), the app stays in maintenance until the operator runs `php artisan up` manually or rolls back. This is intentional — better to keep traffic blocked than to expose a broken release.
 
-`rollback` does NOT use a maintenance window. Octane restart < 5s; nginx queues requests during restart. Adding maintenance overlay just slows down the emergency path.
+`rollback` does NOT use a maintenance window. It swaps the release, restarts only enabled Supervisor programs, then runs the runtime-specific health check. Adding a maintenance overlay slows down the emergency path.
 
 ## Migration Safety
 
@@ -194,7 +201,7 @@ The scan is heuristic — it greps source code, not parsed schema. False positiv
 
 ## Health Check
 
-`health-check` curls Octane directly (NOT through Nginx) so the assertion is "app booted", not "proxy still serves cached page":
+With `HTTP_RUNTIME=octane`, `health-check` curls Octane directly so the assertion is "long-running app booted":
 
 ```bash
 curl -s -o /dev/null -w "%{http_code}" --max-time 5 \
@@ -203,6 +210,8 @@ curl -s -o /dev/null -w "%{http_code}" --max-time 5 \
 ```
 
 Expected 200. Anything else fails the deploy and leaves the app in maintenance for operator intervention.
+
+With `HTTP_RUNTIME=fpm`, Envoy curls `/up` through the configured Nginx vhost because PHP-FPM is not an Accelerator Supervisor process.
 
 `/up` is Laravel's default health endpoint, configured via `bootstrap/app.php` `health: '/up'`.
 
@@ -253,7 +262,7 @@ Before running the 3-command sequence above, ensure these are done once on the V
 
 Before touching the VPS:
 
-1. `.env.envoy` exists with all required stage keys, especially `_OCTANE_PORT`.
+1. `.env.envoy` exists with `HTTP_RUNTIME`, required backend values, and explicit service flags.
 2. `.env.staging` or `.env.production` exists, non-empty, key-compatible with `.env`.
 3. Runtime env files have NO `OPS_DEPLOY_*` keys.
 4. `pnpm run build` (or your configured npm bin) works locally without errors.
@@ -275,7 +284,7 @@ vendor/bin/envoy run bootstrap --stage=prod
 
 What happens:
 - `bootstrap-nginx`: Checks if SSL cert exists at `/etc/letsencrypt/live/{domain}/`. If yes → uses SSL+QUIC stub. If no → uses HTTP-only stub. Archives existing config before overwriting. Validates `nginx -t` and reloads.
-- `bootstrap-supervisor`: Writes `/etc/supervisor/conf.d/{group}.conf` with the configured Octane worker limits, runs `reread + update`.
+- `bootstrap-supervisor`: Writes `/etc/supervisor/conf.d/{group}.conf` containing only enabled programs, or removes a previous group file when none are enabled; then runs `reread + update`.
 
 **Guard**: If existing Nginx config has `ssl_certificate` but no cert file is found, bootstrap skips to avoid downgrading a working SSL config.
 
@@ -298,12 +307,12 @@ What it does (in order):
 8. `prepare-laravel` — `larahelp --reoptimize`, `larahelp --setfacl`, `migrate --force`, `storage:link`
 9. `switch-current` — atomic symlink swap
 10. `invalidate-opcache` — per-file invalidation
-11. `restart-service` — supervisor restart + FATAL check
-12. `health-check` — curl Octane `/up` expecting 200
+11. `restart-service` — restart enabled Supervisor programs + FATAL check, or no-op for pure FPM
+12. `health-check` — curl Octane directly or Nginx/PHP-FPM according to `HTTP_RUNTIME`
 
 `init` intentionally SKIPS: db-backup (nothing to backup), maintenance-on (no traffic), migration-safety (no previous release), prune (no old releases).
 
-After `init`, app is accessible via HTTP. Supervisor programs should all be RUNNING.
+After `init`, app is accessible via HTTP. Every enabled Supervisor program should be RUNNING; a pure FPM deployment with no optional services has no generated Supervisor programs.
 
 ### Step 4: SSL (one-shot, after init)
 
@@ -327,7 +336,7 @@ curl -I https://{domain}
 ```
 
 Check:
-- All supervisor programs RUNNING
+- All enabled Supervisor programs RUNNING; a pure FPM deployment may have none
 - HTTPS responds 200
 - Dynamic assets accessible: `/livewire/livewire.min.js`, `/build/manifest.webmanifest`
 
@@ -351,10 +360,10 @@ Two stubs ship with the library:
 
 | Stub | When used | Features |
 |---|---|---|
-| `nginx-vhost-http.conf.stub` | No SSL cert found | HTTP-only, certbot webroot challenge path, @octane pattern |
-| `nginx-vhost-ssl.conf.stub` | SSL cert exists | HTTPS redirect, HTTP/2+3, QUIC, Alt-Svc header, @octane pattern |
+| `nginx-vhost-http.conf.stub` | No SSL cert found | HTTP-only, certbot webroot challenge path, selected HTTP runtime locations |
+| `nginx-vhost-ssl.conf.stub` | SSL cert exists | HTTPS redirect, HTTP/2+3, QUIC, Alt-Svc header, selected HTTP runtime locations |
 
-Both stubs use the **@octane named location pattern**:
+With `HTTP_RUNTIME=octane`, both stubs render the **@octane named location pattern**:
 ```nginx
 location / { try_files $uri @octane; }
 location @octane {
@@ -363,7 +372,17 @@ location @octane {
 }
 ```
 
-This ensures nginx serves static files directly and only proxies to Octane when needed. Do NOT use the old `upstream` block + `proxy_pass` directly in `location /` pattern.
+With `HTTP_RUNTIME=fpm`, both stubs instead render PHP-FPM routing:
+
+```nginx
+location / { try_files $uri $uri/ /index.php?$query_string; }
+location ~ \.php$ {
+    fastcgi_pass unix:{FPM_SOCKET};
+    ...
+}
+```
+
+Static files are served directly in both modes. Reverb websocket routing is emitted only when `REVERB_ENABLED=true`.
 
 `bootstrap-nginx` auto-detects which stub to use based on cert existence. Re-running `bootstrap` after SSL is set up will use the SSL stub (safe to re-run).
 
@@ -395,7 +414,7 @@ VPS-side, one-shot bootstrap (rendered from `.env.envoy`):
 vendor/bin/envoy run bootstrap --stage=test
 ```
 
-This writes `/etc/nginx/sites-available/{domain}.conf` (auto-detects HTTP-only or SSL+QUIC based on cert existence) and `/etc/supervisor/conf.d/{group}.conf` (stage-scoped programs), validates `nginx -t`, runs `supervisorctl reread && update`. Existing files are archived under `{root}/archive/` first.
+This writes `/etc/nginx/sites-available/{domain}.conf` (auto-detects HTTP-only or SSL+QUIC based on cert existence) and writes `/etc/supervisor/conf.d/{group}.conf` only when managed programs are enabled. With no managed programs, it removes a previous generated group file. Existing files are archived under `{root}/archive/` first.
 
 See **Initial Deployment (Step-by-Step)** above for the full flow including VPS prerequisites.
 
@@ -405,7 +424,7 @@ Pre-flight (auto-checked, but operator should know):
 
 - `current` symlink valid (`readlink -f current` returns a release path)
 - `shared/.env` exists
-- Octane port still listening
+- The selected runtime is healthy: Octane port listening in Octane mode, or PHP-FPM/Nginx serving `/up` in FPM mode
 - Disk space free for at least 1 release + 1 backup
 
 Run:
@@ -433,8 +452,8 @@ Flow (sandbox to risky zone):
 10. `prepare-laravel` — `larahelp --reoptimize`, `larahelp --setfacl`, `migrate --force`.
 11. `switch-current` — atomic symlink swap, archive previous.
 12. `invalidate-opcache` — per-file opcache invalidate on the new release.
-13. `restart-service` — supervisor restart + sleep 2 + grep FATAL fail-fast.
-14. `health-check` — curl Octane `/up`, fail if not 200.
+13. `restart-service` — restart enabled Supervisor programs + FATAL fail-fast, or no-op when none are enabled.
+14. `health-check` — curl Octane directly or Nginx/PHP-FPM according to `HTTP_RUNTIME`; fail if not 200.
 15. `maintenance-off` — `php artisan up`.
 16. `prune-releases` — keep N latest, preserve current.
 
@@ -464,7 +483,7 @@ Do not use this story for production unless the operator explicitly asks for dat
 vendor/bin/envoy run rollback --stage=test
 ```
 
-Picks the newest release (excluding current) that has `vendor/autoload.php` AND a `.env` symlink. Skips incomplete releases (e.g. failed mid-build). Performs symlink swap + opcache invalidate + supervisor restart + health-check.
+Picks the newest release (excluding current) that has `vendor/autoload.php` AND a `.env` symlink. Skips incomplete releases (e.g. failed mid-build). Performs symlink swap + OPcache invalidate + enabled-service restart + health-check.
 
 If no valid previous release exists, rollback aborts with a clear message — operator must restore from a backup zip manually.
 
@@ -490,7 +509,7 @@ Use this before manual rollback or to confirm prune behaviour.
 
 ## Nginx Requirements
 
-The active Nginx vhost uses the `@octane` named location pattern:
+In Octane mode, the active Nginx vhost uses the `@octane` named location pattern:
 
 ```nginx
 location / { try_files $uri @octane; }
@@ -504,26 +523,29 @@ location @octane {
 }
 ```
 
+In FPM mode, it renders `try_files $uri $uri/ /index.php?$query_string` with a PHP handler directed to `OPS_DEPLOY_{STAGE}_FPM_SOCKET`.
+
 Key properties:
 - `server_name {domain}`
 - `root {root}/current/public`
-- `try_files $uri @octane` — nginx serves static files directly, only proxies dynamic requests
+- static files served directly; dynamic requests routed through the selected HTTP runtime
 - HTTPS redirect (301 from port 80) once SSL is active
 - HTTP/2 + HTTP/3 (QUIC) with `Alt-Svc` header for SSL config
-- Reverb websocket at `location ~ ^/(app|apps|pusher)/`
+- Reverb websocket at `location ~ ^/(app|apps|pusher)/` only when Reverb is enabled
 - Static asset caching with `expires 365d` + `Cache-Control: public, immutable`
 - Domain-specific access/error logs
 - `client_max_body_size 100m`
 
 Do NOT:
 - Use `upstream` block + `proxy_pass` directly in `location /` (old pattern)
-- Add `location ~ \.php$ { fastcgi_pass ... }` (shadows Livewire/Filament dynamic JS)
+- Add a PHP-FPM handler while `HTTP_RUNTIME=octane`; the generated handler is required only in FPM mode
 - Point Nginx to `{root}/html/public` after migrating to release layout
 - Manually run `certbot --nginx` (use `bootstrap-ssl` instead to avoid QUIC conflicts)
 
 ## Supervisor Requirements
 
-- One file: `/etc/supervisor/conf.d/{group}.conf`
+- When at least one managed service is enabled, one file: `/etc/supervisor/conf.d/{group}.conf`
+- Pure FPM deployments without optional managed services intentionally have no generated Supervisor group file
 - Run commands from `{root}/current`
 - Log to `{root}/shared/storage/logs/{service}.log`
 - Run as `www-data` (or configured run user)
@@ -566,7 +588,8 @@ Never delete shared app uploads casually. Check `{root}/shared/storage/app` firs
 
 Local:
 
-- `.env.envoy` has the stage keys including OCTANE_PORT and explicit Octane worker counts
+- `.env.envoy` has `HTTP_RUNTIME`, its required backend values, and explicit enabled-service flags
+- Octane stages have `OCTANE_PORT` and explicit Octane worker counts
 - target stage is enabled
 - runtime seed exists and has no `OPS_DEPLOY_*`
 - `.env`, `.env.staging`, `.env.production` have compatible key sets
@@ -576,8 +599,8 @@ Remote:
 
 - Nginx config passes `nginx -t`
 - Nginx root is `{root}/current/public`
-- stage ports are owned only by this project after deploy
-- Supervisor group names are stage-scoped
+- enabled stage ports are owned only by this project after deploy
+- Supervisor group names are stage-scoped when managed programs are enabled
 - `{root}/current` points to an existing release with `vendor/autoload.php` and `.env` symlink
 - `{root}/shared/.env` exists and has no `OPS_DEPLOY_*`
 - SQLite DB, if used, is under `{root}/shared/database`
@@ -590,9 +613,9 @@ vendor/bin/envoy tasks
 vendor/bin/envoy run status --stage=test
 vendor/bin/envoy run releases --stage=test
 ssh <host> 'sudo nginx -t'
-ssh <host> 'sudo supervisorctl status {group}:*'
+ssh <host> 'sudo supervisorctl status {group}:*' # only when managed programs are enabled
 ssh <host> 'readlink -f {root}/current'
-ssh <host> "ss -ltnp | grep -E ':(9012|9013|2412)\b'"
+ssh <host> "ss -ltnp | grep -E ':(9012|9013|2412)\b'" # only enabled service ports
 curl -I -L https://{domain}
 ```
 

@@ -121,11 +121,13 @@ When comparing env files, compare keys first. Values may intentionally differ be
 
 - `OPS_DEPLOY_DEFAULT_STAGE`
 - shared deploy defaults (repo, branch, PHP/Bun bin, run user, SSL email, KEEP_RELEASES)
-- per-stage `TEST` / `PROD` domain, root, group, runtime
-- per-stage Octane port, explicit Octane worker counts, and Reverb / Nightwatch ports
-- per-stage enable flags
+- per-stage `TEST` / `PROD` domain, root, group, and `HTTP_RUNTIME` (`fpm` or `octane`)
+- `_FPM_SOCKET` for FPM; Octane runtime, port, and explicit worker counts for Octane
+- service flags for Horizon or plain queue worker, Reverb, Scheduler, and Nightwatch
+- Reverb and Nightwatch ports when those services are enabled
 
-Per-stage `OPS_DEPLOY_{STAGE}_OCTANE_PORT` is REQUIRED — Envoy `health-check` curls Octane directly using that port.
+`OPS_DEPLOY_{STAGE}_HTTP_RUNTIME=fpm` routes Nginx through the configured FPM socket and health-checks through Nginx. `octane` requires `OPS_DEPLOY_{STAGE}_OCTANE_PORT` and health-checks the Octane process directly.
 `OPS_DEPLOY_{STAGE}_OCTANE_WORKERS` defaults to `1`. For Swoole, `OPS_DEPLOY_{STAGE}_OCTANE_TASK_WORKERS` defaults to `0`; set a positive task-worker count only when the application dispatches Octane tasks.
+Use either `OPS_DEPLOY_{STAGE}_HORIZON_ENABLED=true` or `OPS_DEPLOY_{STAGE}_QUEUE_WORKER_ENABLED=true`, never both. The latter renders a bounded `queue:work` Supervisor program suitable for Redis queue apps without Horizon.
 
-Runtime deploy intent belongs only in `.env.envoy` via explicit `OPS_DEPLOY_{STAGE}_RUNTIME`. Do not add runtime selector keys back to Laravel runtime `.env` files.
+Runtime deploy intent belongs only in `.env.envoy` via `OPS_DEPLOY_{STAGE}_HTTP_RUNTIME` and, for Octane, `OPS_DEPLOY_{STAGE}_RUNTIME`. Do not add deploy runtime selector keys back to Laravel runtime `.env` files.

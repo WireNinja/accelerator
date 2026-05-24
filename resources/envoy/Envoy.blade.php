@@ -18,7 +18,8 @@
     rollback    Atomic switch back to a verified previous release. NO maintenance
                  window — emergency speed prioritised.
     releases     Print release history + current pointer + prune target.
-    status, restart, logs unchanged.
+    status, restart, logs
+                 Operate only on programs configured for the selected stage.
 --}}
 
 @setup
@@ -92,7 +93,22 @@
     }
     $runUser = $value($envoy, "OPS_DEPLOY_{$stageKey}_RUN_USER", $value($envoy, 'OPS_DEPLOY_RUN_USER', 'www-data'));
     $sshHost = $value($envoy, "OPS_DEPLOY_{$stageKey}_SSH_HOST", $value($envoy, 'OPS_DEPLOY_SSH_HOST', 'onidel'));
+    $httpRuntime = $value($envoy, "OPS_DEPLOY_{$stageKey}_HTTP_RUNTIME", 'fpm');
+    $runtime = $value($envoy, "OPS_DEPLOY_{$stageKey}_RUNTIME", 'swoole');
+    $fpmSocket = $value($envoy, "OPS_DEPLOY_{$stageKey}_FPM_SOCKET", '/run/php/php8.5-fpm.sock');
     $octanePort = $value($envoy, "OPS_DEPLOY_{$stageKey}_OCTANE_PORT");
+    $octaneWorkers = $value($envoy, "OPS_DEPLOY_{$stageKey}_OCTANE_WORKERS", '1');
+    $octaneTaskWorkers = $value($envoy, "OPS_DEPLOY_{$stageKey}_OCTANE_TASK_WORKERS", '0');
+    $horizonEnabled = $truthy($value($envoy, "OPS_DEPLOY_{$stageKey}_HORIZON_ENABLED", 'false'));
+    $queueWorkerEnabled = $truthy($value($envoy, "OPS_DEPLOY_{$stageKey}_QUEUE_WORKER_ENABLED", 'false'));
+    $queueWorkerConnection = $value($envoy, "OPS_DEPLOY_{$stageKey}_QUEUE_WORKER_CONNECTION", 'redis');
+    $queueWorkerQueue = $value($envoy, "OPS_DEPLOY_{$stageKey}_QUEUE_WORKER_QUEUE", 'default');
+    $queueWorkerProcesses = $value($envoy, "OPS_DEPLOY_{$stageKey}_QUEUE_WORKER_PROCESSES", '1');
+    $reverbEnabled = $truthy($value($envoy, "OPS_DEPLOY_{$stageKey}_REVERB_ENABLED", 'false'));
+    $reverbPort = $value($envoy, "OPS_DEPLOY_{$stageKey}_REVERB_PORT");
+    $schedulerEnabled = $truthy($value($envoy, "OPS_DEPLOY_{$stageKey}_SCHEDULER_ENABLED", 'false'));
+    $nightwatchEnabled = $truthy($value($envoy, "OPS_DEPLOY_{$stageKey}_NIGHTWATCH_ENABLED", 'false'));
+    $nightwatchPort = $value($envoy, "OPS_DEPLOY_{$stageKey}_NIGHTWATCH_PORT");
     $keepReleases = (int) $value($envoy, 'OPS_DEPLOY_KEEP_RELEASES', '5');
     $service = isset($service) ? $service : 'all';
     $seedEnvFile = $root.'/'.($stage === 'prod' ? '.env.production' : '.env.staging');
@@ -111,10 +127,58 @@
         );
     }
 
-    foreach (['domain' => $domain, 'root' => $deployRoot, 'repo' => $repo, 'group' => $group, 'octane port' => $octanePort] as $name => $required) {
+    foreach (['domain' => $domain, 'root' => $deployRoot, 'repo' => $repo, 'group' => $group] as $name => $required) {
         if ($required === '') {
             throw new RuntimeException("Missing OPS deploy {$name} for stage [{$stage}] in .env.envoy.");
         }
+    }
+
+    if (! in_array($httpRuntime, ['fpm', 'octane'], true)) {
+        throw new RuntimeException("Invalid HTTP runtime [{$httpRuntime}] for stage [{$stage}]. Expected [fpm] or [octane].");
+    }
+
+    if ($httpRuntime === 'fpm' && $fpmSocket === '') {
+        throw new RuntimeException("Missing OPS_DEPLOY_{$stageKey}_FPM_SOCKET for FPM stage [{$stage}].");
+    }
+
+    if ($httpRuntime === 'octane') {
+        if ($octanePort === '') {
+            throw new RuntimeException("Missing OPS_DEPLOY_{$stageKey}_OCTANE_PORT for Octane stage [{$stage}].");
+        }
+
+        if (! in_array($runtime, ['swoole', 'roadrunner', 'frankenphp'], true)) {
+            throw new RuntimeException("Invalid Octane runtime [{$runtime}] for stage [{$stage}].");
+        }
+
+        if (! ctype_digit($octaneWorkers) || (int) $octaneWorkers < 1) {
+            throw new RuntimeException("OPS_DEPLOY_{$stageKey}_OCTANE_WORKERS must be an integer greater than zero.");
+        }
+
+        if (! ctype_digit($octaneTaskWorkers)) {
+            throw new RuntimeException("OPS_DEPLOY_{$stageKey}_OCTANE_TASK_WORKERS must be an integer greater than or equal to zero.");
+        }
+    }
+
+    if ($horizonEnabled && $queueWorkerEnabled) {
+        throw new RuntimeException("OPS_DEPLOY_{$stageKey}_HORIZON_ENABLED and OPS_DEPLOY_{$stageKey}_QUEUE_WORKER_ENABLED cannot both be true.");
+    }
+
+    if ($queueWorkerEnabled) {
+        if (! preg_match('/^[A-Za-z0-9_.-]+$/', $queueWorkerConnection) || ! preg_match('/^[A-Za-z0-9_,.-]+$/', $queueWorkerQueue)) {
+            throw new RuntimeException("Invalid queue worker connection or queue for stage [{$stage}].");
+        }
+
+        if (! ctype_digit($queueWorkerProcesses) || (int) $queueWorkerProcesses < 1) {
+            throw new RuntimeException("OPS_DEPLOY_{$stageKey}_QUEUE_WORKER_PROCESSES must be an integer greater than zero.");
+        }
+    }
+
+    if ($reverbEnabled && (! ctype_digit($reverbPort) || (int) $reverbPort < 1)) {
+        throw new RuntimeException("OPS_DEPLOY_{$stageKey}_REVERB_PORT must be an integer greater than zero when Reverb is enabled.");
+    }
+
+    if ($nightwatchEnabled && (! ctype_digit($nightwatchPort) || (int) $nightwatchPort < 1)) {
+        throw new RuntimeException("OPS_DEPLOY_{$stageKey}_NIGHTWATCH_PORT must be an integer greater than zero when Nightwatch is enabled.");
     }
 
     $sharedPath = $deployRoot.'/shared';
@@ -159,23 +223,7 @@
         $supervisorStub = $root.'/packages/accelerator/stubs/vps/supervisor.conf.stub';
     }
 
-    $reverbPort = $value($envoy, "OPS_DEPLOY_{$stageKey}_REVERB_PORT", '0');
     $sslEmail = $value($envoy, 'OPS_DEPLOY_SSL_EMAIL', 'admin@'.$domain);
-    $runtime = $value($envoy, "OPS_DEPLOY_{$stageKey}_RUNTIME", 'swoole');
-    $octaneWorkers = $value($envoy, "OPS_DEPLOY_{$stageKey}_OCTANE_WORKERS", '1');
-    $octaneTaskWorkers = $value($envoy, "OPS_DEPLOY_{$stageKey}_OCTANE_TASK_WORKERS", '0');
-
-    if (! in_array($runtime, ['swoole', 'roadrunner', 'frankenphp'], true)) {
-        throw new RuntimeException("Invalid Octane runtime [{$runtime}] for stage [{$stage}].");
-    }
-
-    if (! ctype_digit($octaneWorkers) || (int) $octaneWorkers < 1) {
-        throw new RuntimeException("OPS_DEPLOY_{$stageKey}_OCTANE_WORKERS must be an integer greater than zero.");
-    }
-
-    if (! ctype_digit($octaneTaskWorkers)) {
-        throw new RuntimeException("OPS_DEPLOY_{$stageKey}_OCTANE_TASK_WORKERS must be an integer greater than or equal to zero.");
-    }
 
     /*
      * The public `octane:start` command converts `--task-workers=0` back to
@@ -193,18 +241,244 @@
      * Render bootstrap stubs locally so we can scp the rendered output to the
      * VPS. Pure str_replace — keeps stubs framework-free and reviewable.
      */
-    $renderStub = function (string $stubPath, array $vars): string {
-        if (! is_file($stubPath)) {
-            throw new RuntimeException("Bootstrap stub not found: {$stubPath}");
-        }
-
-        $content = file_get_contents($stubPath);
+    $replaceVars = function (string $content, array $vars): string {
         foreach ($vars as $key => $value) {
             $content = str_replace('{' . '{ ' . $key . ' }' . '}', (string) $value, $content);
+            $content = str_replace('%%'.$key.'%%', (string) $value, $content);
         }
 
         return $content;
     };
+
+    $renderStub = function (string $stubPath, array $vars) use ($replaceVars): string {
+        if (! is_file($stubPath)) {
+            throw new RuntimeException("Bootstrap stub not found: {$stubPath}");
+        }
+
+        return $replaceVars(file_get_contents($stubPath), $vars);
+    };
+
+    $reverbLocation = $reverbEnabled ? $replaceVars(<<<'NGINX'
+    # Reverb websocket
+    location ~ ^/(app|apps|pusher)/ {
+        proxy_pass http://127.0.0.1:%%reverb_port%%;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Port $server_port;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "Upgrade";
+    }
+
+NGINX, ['reverb_port' => $reverbPort]) : '';
+
+    if ($httpRuntime === 'octane') {
+        $dynamicFallback = '@octane';
+        $applicationLocations = $replaceVars(<<<'NGINX'
+    # Static assets - nginx serves directly, fallback to Octane
+    location = /index.php { try_files /not_exists @octane; }
+    location ~* \.(css|js|png|jpg|jpeg|gif|ico|svg|webp|woff|woff2|ttf|eot|map|txt)$ {
+        try_files $uri @octane;
+        expires 365d;
+        add_header Cache-Control "public, immutable";
+    }
+
+    location / { try_files $uri @octane; }
+
+    location @octane {
+        set $suffix "";
+        if ($uri = /index.php) { set $suffix ?$query_string; }
+        proxy_pass http://127.0.0.1:%%octane_port%%$suffix;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "";
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Port $server_port;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_buffering off;
+        proxy_read_timeout 60s;
+    }
+NGINX, ['octane_port' => $octanePort]);
+    } else {
+        $dynamicFallback = '/index.php?$query_string';
+        $applicationLocations = $replaceVars(<<<'NGINX'
+    # Static assets - nginx serves directly, fallback to PHP-FPM
+    location ~* \.(css|js|png|jpg|jpeg|gif|ico|svg|webp|woff|woff2|ttf|eot|map|txt)$ {
+        try_files $uri /index.php?$query_string;
+        expires 365d;
+        add_header Cache-Control "public, immutable";
+    }
+
+    location / { try_files $uri $uri/ /index.php?$query_string; }
+
+    location ~ \.php$ {
+        try_files $uri =404;
+        fastcgi_pass unix:%%fpm_socket%%;
+        fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;
+        include fastcgi_params;
+        fastcgi_hide_header X-Powered-By;
+    }
+NGINX, ['fpm_socket' => $fpmSocket]);
+    }
+
+    $serviceWorkerLocation = $replaceVars(<<<'NGINX'
+    # SW served from /build/ but must be at root scope for PWA
+    location = /build/sw.js {
+        rewrite ^ /sw.js break;
+        expires 0;
+        add_header Cache-Control "no-cache";
+        default_type application/javascript;
+        try_files $uri %%dynamic_fallback%%;
+    }
+
+NGINX, ['dynamic_fallback' => $dynamicFallback]);
+
+    $supervisorProgramNames = [];
+    $supervisorDefinitions = [];
+    $addSupervisorProgram = function (string $program, string $definition) use (&$supervisorProgramNames, &$supervisorDefinitions): void {
+        $supervisorProgramNames[] = $program;
+        $supervisorDefinitions[] = $definition;
+    };
+
+    if ($httpRuntime === 'octane') {
+        $addSupervisorProgram("{$group}_octane", $replaceVars(<<<'CONF'
+[program:%%group%%_octane]
+command=%%php_bin%% %%root%%/current/artisan %%octane_server_command%% --host=127.0.0.1 --port=%%octane_port%% --workers=%%octane_workers%% %%octane_task_workers_option%%
+directory=%%root%%/current
+user=%%run_user%%
+autostart=true
+autorestart=true
+stopasgroup=true
+killasgroup=true
+stdout_logfile=%%root%%/shared/storage/logs/octane.log
+stdout_logfile_maxbytes=20MB
+stdout_logfile_backups=5
+redirect_stderr=true
+CONF, [
+            'group' => $group,
+            'php_bin' => $phpBin,
+            'root' => $deployRoot,
+            'octane_server_command' => $octaneServerCommand,
+            'octane_port' => $octanePort,
+            'octane_workers' => $octaneWorkers,
+            'octane_task_workers_option' => $octaneTaskWorkersOption,
+            'run_user' => $runUser,
+        ]));
+    }
+
+    if ($horizonEnabled) {
+        $addSupervisorProgram("{$group}_horizon", $replaceVars(<<<'CONF'
+[program:%%group%%_horizon]
+command=%%php_bin%% %%root%%/current/artisan horizon
+directory=%%root%%/current
+user=%%run_user%%
+autostart=true
+autorestart=true
+stopwaitsecs=3600
+stopasgroup=true
+killasgroup=true
+stdout_logfile=%%root%%/shared/storage/logs/horizon.log
+stdout_logfile_maxbytes=20MB
+stdout_logfile_backups=5
+redirect_stderr=true
+CONF, ['group' => $group, 'php_bin' => $phpBin, 'root' => $deployRoot, 'run_user' => $runUser]));
+    }
+
+    if ($queueWorkerEnabled) {
+        $addSupervisorProgram("{$group}_queue_worker", $replaceVars(<<<'CONF'
+[program:%%group%%_queue_worker]
+process_name=%(program_name)s_%(process_num)02d
+command=%%php_bin%% %%root%%/current/artisan queue:work %%queue_connection%% --queue=%%queue_queue%% --sleep=3 --tries=3 --timeout=60 --max-time=3600
+directory=%%root%%/current
+user=%%run_user%%
+numprocs=%%queue_processes%%
+autostart=true
+autorestart=true
+stopwaitsecs=3600
+stopasgroup=true
+killasgroup=true
+stdout_logfile=%%root%%/shared/storage/logs/queue_worker.log
+stdout_logfile_maxbytes=20MB
+stdout_logfile_backups=5
+redirect_stderr=true
+CONF, [
+            'group' => $group,
+            'php_bin' => $phpBin,
+            'root' => $deployRoot,
+            'queue_connection' => $queueWorkerConnection,
+            'queue_queue' => $queueWorkerQueue,
+            'queue_processes' => $queueWorkerProcesses,
+            'run_user' => $runUser,
+        ]));
+    }
+
+    if ($reverbEnabled) {
+        $addSupervisorProgram("{$group}_reverb", $replaceVars(<<<'CONF'
+[program:%%group%%_reverb]
+command=%%php_bin%% %%root%%/current/artisan reverb:start
+directory=%%root%%/current
+user=%%run_user%%
+autostart=true
+autorestart=true
+stopasgroup=true
+killasgroup=true
+stdout_logfile=%%root%%/shared/storage/logs/reverb.log
+stdout_logfile_maxbytes=20MB
+stdout_logfile_backups=5
+redirect_stderr=true
+CONF, ['group' => $group, 'php_bin' => $phpBin, 'root' => $deployRoot, 'run_user' => $runUser]));
+    }
+
+    if ($schedulerEnabled) {
+        $addSupervisorProgram("{$group}_scheduler", $replaceVars(<<<'CONF'
+[program:%%group%%_scheduler]
+command=%%php_bin%% %%root%%/current/artisan schedule:work
+directory=%%root%%/current
+user=%%run_user%%
+autostart=true
+autorestart=true
+stopasgroup=true
+killasgroup=true
+stdout_logfile=%%root%%/shared/storage/logs/scheduler.log
+stdout_logfile_maxbytes=20MB
+stdout_logfile_backups=5
+redirect_stderr=true
+CONF, ['group' => $group, 'php_bin' => $phpBin, 'root' => $deployRoot, 'run_user' => $runUser]));
+    }
+
+    if ($nightwatchEnabled) {
+        $addSupervisorProgram("{$group}_nightwatch", $replaceVars(<<<'CONF'
+[program:%%group%%_nightwatch]
+command=%%php_bin%% %%root%%/current/artisan nightwatch:agent --listen-on=127.0.0.1:%%nightwatch_port%% --server=%%domain%% --silent
+directory=%%root%%/current
+user=%%run_user%%
+autostart=true
+autorestart=true
+stopasgroup=true
+killasgroup=true
+stdout_logfile=%%root%%/shared/storage/logs/nightwatch.log
+stdout_logfile_maxbytes=20MB
+stdout_logfile_backups=5
+redirect_stderr=true
+CONF, [
+            'group' => $group,
+            'php_bin' => $phpBin,
+            'root' => $deployRoot,
+            'nightwatch_port' => $nightwatchPort,
+            'domain' => $domain,
+            'run_user' => $runUser,
+        ]));
+    }
+
+    $hasSupervisorPrograms = $supervisorProgramNames !== [];
+    $supervisorPrograms = $hasSupervisorPrograms
+        ? implode(PHP_EOL.PHP_EOL, $supervisorDefinitions).PHP_EOL.PHP_EOL."[group:{$group}]".PHP_EOL.'programs='.implode(',', $supervisorProgramNames).PHP_EOL
+        : '';
 
     $stubVars = [
         'group' => $group,
@@ -213,16 +487,16 @@
         'run_user' => $runUser,
         'php_bin' => $phpBin,
         'octane_port' => $octanePort,
-        'octane_workers' => $octaneWorkers,
-        'octane_task_workers_option' => $octaneTaskWorkersOption,
-        'octane_server_command' => $octaneServerCommand,
-        'reverb_port' => $reverbPort,
         'ssl_email' => $sslEmail,
+        'reverb_location' => $reverbLocation,
+        'service_worker_location' => $serviceWorkerLocation,
+        'application_locations' => $applicationLocations,
+        'supervisor_programs' => $supervisorPrograms,
     ];
 
     $renderedNginxConf = is_file($nginxStub) ? $renderStub($nginxStub, $stubVars) : '';
     $renderedNginxSslConf = is_file($nginxSslStub) ? $renderStub($nginxSslStub, $stubVars) : '';
-    $renderedSupervisorConf = is_file($supervisorStub) ? $renderStub($supervisorStub, $stubVars) : '';
+    $renderedSupervisorConf = $hasSupervisorPrograms && is_file($supervisorStub) ? $renderStub($supervisorStub, $stubVars) : '';
 
     $localTmp = sys_get_temp_dir().'/accelerator-bootstrap-'.bin2hex(random_bytes(4));
     $localNginx = $localTmp.'-nginx.conf';
@@ -655,35 +929,50 @@
 
 @task('restart-service', ['on' => 'vps'])
     set -euo pipefail
-    @if($service === 'all')
-        sudo supervisorctl restart {{ $group }}:*
-        sleep 2
-        # Fail-fast: kalau ada program yang FATAL setelah restart, batalkan deploy.
-        if sudo supervisorctl status {{ $group }}:* | grep -E '\sFATAL\s' >/dev/null 2>&1; then
-            echo "[restart-service] One or more programs are FATAL after restart:"
-            sudo supervisorctl status {{ $group }}:*
-            exit 1
-        fi
+    @if(! $hasSupervisorPrograms)
+        echo "[restart-service] No Supervisor-managed programs enabled for {{ $stage }}."
     @else
-        sudo supervisorctl restart {{ $group }}:{{ $group }}_{{ $service }}
-        sleep 2
-        if sudo supervisorctl status {{ $group }}:{{ $group }}_{{ $service }} | grep -E '\sFATAL\s' >/dev/null 2>&1; then
-            echo "[restart-service] {{ $service }} is FATAL after restart."
-            exit 1
-        fi
+        @if($service === 'all')
+            sudo supervisorctl restart {{ $group }}:*
+            sleep 2
+            # Fail fast if an enabled program cannot boot after deployment.
+            if sudo supervisorctl status {{ $group }}:* | grep -E '\sFATAL\s' >/dev/null 2>&1; then
+                echo "[restart-service] One or more programs are FATAL after restart:"
+                sudo supervisorctl status {{ $group }}:*
+                exit 1
+            fi
+        @else
+            sudo supervisorctl restart {{ $group }}:{{ $group }}_{{ $service }}
+            sleep 2
+            if sudo supervisorctl status {{ $group }}:{{ $group }}_{{ $service }} | grep -E '\sFATAL\s' >/dev/null 2>&1; then
+                echo "[restart-service] {{ $service }} is FATAL after restart."
+                exit 1
+            fi
+        @endif
     @endif
 @endtask
 
 @task('health-check', ['on' => 'vps'])
     set -euo pipefail
-    # Curl directly to Octane (bypass nginx) so we verify app boot, not proxy cache.
-    status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 -H "Host: {{ $domain }}" http://127.0.0.1:{{ $octanePort }}/up || echo "000")
-    if [ "$status" != "200" ]; then
-        echo "[health-check] /up returned HTTP $status from 127.0.0.1:{{ $octanePort }} (expected 200)."
-        echo "[health-check] App did NOT boot cleanly. Maintenance mode is still ON if this was deploy."
-        exit 1
-    fi
-    echo "[health-check] OK: 127.0.0.1:{{ $octanePort }}/up returned 200."
+    @if($httpRuntime === 'octane')
+        # Curl Octane directly to validate the long-running application process.
+        status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 -H "Host: {{ $domain }}" http://127.0.0.1:{{ $octanePort }}/up || echo "000")
+        if [ "$status" != "200" ]; then
+            echo "[health-check] /up returned HTTP $status from Octane at 127.0.0.1:{{ $octanePort }} (expected 200)."
+            echo "[health-check] App did NOT boot cleanly. Maintenance mode is still ON if this was deploy."
+            exit 1
+        fi
+        echo "[health-check] OK: Octane at 127.0.0.1:{{ $octanePort }}/up returned 200."
+    @else
+        # FPM is managed by the OS service; validate it through the active Nginx vhost.
+        status=$(curl -L -s -o /dev/null -w "%{http_code}" --max-time 8 --resolve "{{ $domain }}:80:127.0.0.1" --resolve "{{ $domain }}:443:127.0.0.1" http://{{ $domain }}/up || echo "000")
+        if [ "$status" != "200" ]; then
+            echo "[health-check] /up returned HTTP $status through Nginx/PHP-FPM for {{ $domain }} (expected 200)."
+            echo "[health-check] App did NOT boot cleanly. Maintenance mode is still ON if this was deploy."
+            exit 1
+        fi
+        echo "[health-check] OK: Nginx/PHP-FPM served {{ $domain }}/up with HTTP 200."
+    @endif
 @endtask
 
 @task('maintenance-off', ['on' => 'vps'])
@@ -730,9 +1019,14 @@
     echo "Stage: {{ $stage }}"
     echo "Domain: {{ $domain }}"
     echo "Root: {{ $deployRoot }}"
+    echo "HTTP runtime: {{ $httpRuntime }}"
     echo "Current: $(readlink -f {{ $currentPath }} 2>/dev/null || true)"
     echo "Shared .env: $(test -f {{ $sharedPath }}/.env && echo present || echo missing)"
-    sudo supervisorctl status {{ $group }}:*
+    @if($hasSupervisorPrograms)
+        sudo supervisorctl status {{ $group }}:*
+    @else
+        echo "Supervisor programs: none enabled"
+    @endif
 @endtask
 
 @task('view-logs', ['on' => 'vps'])
@@ -891,7 +1185,7 @@
         exit 0
     fi
 
-    echo "[bootstrap-nginx] uploading rendered vhost to {{ $sshHost }}…"
+    echo "[bootstrap-nginx] uploading rendered {{ $httpRuntime }} vhost to {{ $sshHost }}…"
     scp "$conf_file" {{ $sshHost }}:/tmp/{{ $domain }}.conf
     ssh {{ $sshHost }} 'set -euo pipefail
         sudo mkdir -p /etc/nginx/sites-available /etc/nginx/sites-enabled
@@ -920,24 +1214,37 @@
 
 @task('bootstrap-supervisor', ['on' => 'localhost'])
     set -euo pipefail
-    test -s {{ $localSupervisor }}
-    echo "[bootstrap-supervisor] uploading rendered conf to {{ $sshHost }}…"
-    scp {{ $localSupervisor }} {{ $sshHost }}:/tmp/{{ $group }}.conf
-    ssh {{ $sshHost }} 'set -euo pipefail
-        sudo mkdir -p /etc/supervisor/conf.d
-        if [ -f /etc/supervisor/conf.d/{{ $group }}.conf ]; then
-            sudo mkdir -p {{ $archivePath }}
-            sudo cp /etc/supervisor/conf.d/{{ $group }}.conf {{ $archivePath }}/supervisor-{{ $group }}.conf.before-bootstrap-$(date +%Y-%m-%d_%H-%M-%S)
-        fi
-        sudo mv /tmp/{{ $group }}.conf /etc/supervisor/conf.d/{{ $group }}.conf
-        sudo chown root:root /etc/supervisor/conf.d/{{ $group }}.conf
-        sudo chmod 644 /etc/supervisor/conf.d/{{ $group }}.conf
-        sudo supervisorctl reread
-        sudo supervisorctl update
-        echo "[bootstrap-supervisor] {{ $group }} group registered. Programs:"
-        sudo supervisorctl status {{ $group }}:* || true
-    '
-    rm -f {{ $localSupervisor }}
+    @if($hasSupervisorPrograms)
+        test -s {{ $localSupervisor }}
+        echo "[bootstrap-supervisor] uploading rendered conf to {{ $sshHost }}…"
+        scp {{ $localSupervisor }} {{ $sshHost }}:/tmp/{{ $group }}.conf
+        ssh {{ $sshHost }} 'set -euo pipefail
+            sudo mkdir -p /etc/supervisor/conf.d
+            if [ -f /etc/supervisor/conf.d/{{ $group }}.conf ]; then
+                sudo mkdir -p {{ $archivePath }}
+                sudo cp /etc/supervisor/conf.d/{{ $group }}.conf {{ $archivePath }}/supervisor-{{ $group }}.conf.before-bootstrap-$(date +%Y-%m-%d_%H-%M-%S)
+            fi
+            sudo mv /tmp/{{ $group }}.conf /etc/supervisor/conf.d/{{ $group }}.conf
+            sudo chown root:root /etc/supervisor/conf.d/{{ $group }}.conf
+            sudo chmod 644 /etc/supervisor/conf.d/{{ $group }}.conf
+            sudo supervisorctl reread
+            sudo supervisorctl update
+            echo "[bootstrap-supervisor] {{ $group }} group registered. Programs:"
+            sudo supervisorctl status {{ $group }}:* || true
+        '
+        rm -f {{ $localSupervisor }}
+    @else
+        echo "[bootstrap-supervisor] No managed services enabled; removing any old {{ $group }} config."
+        ssh {{ $sshHost }} 'set -euo pipefail
+            if [ -f /etc/supervisor/conf.d/{{ $group }}.conf ]; then
+                sudo mkdir -p {{ $archivePath }}
+                sudo cp /etc/supervisor/conf.d/{{ $group }}.conf {{ $archivePath }}/supervisor-{{ $group }}.conf.before-disable-$(date +%Y-%m-%d_%H-%M-%S)
+                sudo rm /etc/supervisor/conf.d/{{ $group }}.conf
+                sudo supervisorctl reread
+                sudo supervisorctl update
+            fi
+        '
+    @endif
 @endtask
 
 @task('obtain-cert', ['on' => 'localhost'])
