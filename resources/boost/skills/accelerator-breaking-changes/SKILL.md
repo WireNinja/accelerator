@@ -11,6 +11,20 @@ Format per entry:
 
 ---
 
+## v1.1.69
+
+No deployment contract changes beyond v1.1.66.
+
+### 🟡 AWARENESS — Confirmed fresh-seed uses scoped environment override and locked dependencies
+
+`deploy-fresh-seed` now runs re-optimization and `migrate:fresh --seed --force` inside a temporary `APP_ENV=local` override that is removed when that command scope exits. This avoids production destructive-command guards blocking the internal `db:wipe` operation while keeping ordinary production commands protected.
+
+All Envoy Composer install phases now require `composer.lock` and continue to use `composer install`, never dependency resolution via `composer update`. A deploy therefore installs the exact versions reviewed during development instead of accepting newly resolved dependency versions on the server, reducing supply-chain exposure.
+
+**Action required**: Keep `composer.lock` committed. Use an upgraded patch before retrying a confirmed `deploy-fresh-seed` in a production-environment stage.
+
+---
+
 ## v1.1.68
 
 No deployment contract changes beyond v1.1.66.

@@ -740,6 +740,7 @@ CONF, [
     set -euo pipefail
     cd {{ $releasePath }}
     mkdir -p resources/svg
+    test -s composer.lock || { echo "[build-release] composer.lock is required; refusing dependency resolution during deployment."; exit 1; }
     composer validate --no-check-all --strict --ansi
     composer install --no-dev --no-scripts --optimize-autoloader --classmap-authoritative --no-interaction --no-progress --quiet --ansi
     @if(str_contains($npmBin, 'bun'))
@@ -758,6 +759,7 @@ CONF, [
     set -euo pipefail
     cd {{ $releasePath }}
     mkdir -p resources/svg
+    test -s composer.lock || { echo "[build-release-with-dev] composer.lock is required; refusing dependency resolution during deployment."; exit 1; }
     composer validate --no-check-all --strict --ansi
     composer install --no-scripts --no-interaction --no-progress --quiet --ansi
     @if(str_contains($npmBin, 'bun'))
@@ -891,15 +893,20 @@ CONF, [
         exit 1
     @endif
     cd {{ $releasePath }}
-    larahelp --reoptimize
     larahelp --setfacl
-    {{ $phpBin }} -r 'require "vendor/autoload.php"; $app = require "bootstrap/app.php"; $kernel = $app->make(Illuminate\Contracts\Console\Kernel::class); $kernel->bootstrap(); Illuminate\Database\Console\Migrations\FreshCommand::prohibit(false); $status = $kernel->call("migrate:fresh", ["--seed" => true, "--force" => true, "--no-interaction" => true, "--ansi" => true]); echo $kernel->output(); exit($status);'
+    (
+        export APP_ENV=local
+        trap 'unset APP_ENV' EXIT
+        larahelp --reoptimize
+        {{ $phpBin }} artisan migrate:fresh --seed --force --no-interaction --ansi
+    )
     {{ $phpBin }} artisan storage:link --force --no-interaction --ansi
 @endtask
 
 @task('prune-dev-dependencies', ['on' => 'vps'])
     set -euo pipefail
     cd {{ $releasePath }}
+    test -s composer.lock || { echo "[prune-dev-dependencies] composer.lock is required; refusing dependency resolution during deployment."; exit 1; }
     composer install --no-dev --no-scripts --optimize-autoloader --classmap-authoritative --no-interaction --no-progress --quiet --ansi
     larahelp --reoptimize
     larahelp --setfacl

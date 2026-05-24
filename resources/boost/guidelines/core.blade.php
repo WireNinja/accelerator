@@ -35,9 +35,11 @@ WireNinja Accelerator provides reusable Laravel application conventions, built-i
 - Do not put `OPS_DEPLOY_*` keys in `.env`, `.env.staging`, `.env.production`, `.env.example`, or `.base-env.example`.
 - Envoy syncs the selected runtime env seed to `{root}/shared/.env` on every deploy; old shared env is archived first.
 - Use the package Envoy bridge at `vendor/wireninja/accelerator/resources/envoy/Envoy.blade.php`; project Envoy files only define server aliases.
+- Every release build requires the committed `composer.lock` and runs `composer install`, never `composer update`, on the VPS. This installs the same dependency versions reviewed in development instead of resolving unreviewed versions during deployment.
 - `vendor/bin/envoy run init --stage=test` for the first deploy (skips db-backup, maintenance, prune by design).
 - `vendor/bin/envoy run deploy --stage=test` for continuous releases.
 - `vendor/bin/envoy run deploy-slim --stage=test` for backend hot-patch (no JS/CSS rebuild).
+- `vendor/bin/envoy run deploy-fresh-seed --stage=test --i-understand-this-will-drop-and-reseed-database="aku mengkonfirmasi remigrate fresh seed"` intentionally drops and reseeds the database after backup. Its destructive command runs under a temporary non-production `APP_ENV` override only inside that confirmed command scope; normal runtime protection remains enabled.
 - `vendor/bin/envoy run rollback --stage=test` switches `current` back to the latest valid release (validated for `vendor/autoload.php` + `.env` symlink). No maintenance window during rollback — Octane restart is fast.
 - `vendor/bin/envoy run releases --stage=test` prints the release history and prune target.
 

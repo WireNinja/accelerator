@@ -25,6 +25,7 @@ First deployment, continuous deployment, deployment cleanup, Envoy release folde
 - Generated deployments default to PHP-FPM with no optional Supervisor services. Enable Octane, Horizon/queue worker, Reverb, Scheduler, and Nightwatch explicitly in `.env.envoy`.
 - Use Horizon or the plain queue worker, never both on the same stage.
 - `deploy-fresh-seed` is destructive and must only run with the exact explicit Envoy flag shown below. It temporarily installs Composer dev dependencies so seeders/factories can use `fake()`, then prunes dev packages before switching current.
+- Every release build requires committed `composer.lock` and installs from that lockfile with `composer install`, never `composer update`. Deployment must use exactly the dependency versions reviewed in development; resolving newer package versions on the VPS expands supply-chain exposure.
 
 ## Stories Cheatsheet
 
@@ -470,10 +471,10 @@ This is not a migration-safety bypass. It intentionally runs `php artisan migrat
 Flow differences from `deploy`:
 
 1. `assert-fresh-seed-confirmed` refuses to continue unless the exact long flag value is present.
-2. `build-release-with-dev` runs Composer with dev dependencies available so seeders, factories, and Laravel's `fake()` helper can work.
+2. `build-release-with-dev` requires `composer.lock` and runs `composer install` with dev dependencies available so seeders, factories, and Laravel's `fake()` helper can work, using the exact versions reviewed in development.
 3. `migration-safety` is skipped because this story is already explicitly destructive.
-4. `prepare-laravel-fresh-seed` explicitly unprohibits Laravel's `FreshCommand` inside the confirmed deploy process, then runs `migrate:fresh --seed --force`.
-5. `prune-dev-dependencies` immediately runs Composer again with `--no-dev --optimize-autoloader --classmap-authoritative`, then reoptimizes the app before `switch-current`.
+4. `prepare-laravel-fresh-seed` runs release re-optimization and `migrate:fresh --seed --force` inside a scoped `APP_ENV=local` shell override, then unsets it on exit. This permits the explicitly confirmed destructive action without weakening production command protection for normal runtime or later deploy steps.
+5. `prune-dev-dependencies` immediately runs `composer install` from the same required lockfile with `--no-dev --optimize-autoloader --classmap-authoritative`, then reoptimizes the app under its real production environment before `switch-current`.
 
 Do not use this story for production unless the operator explicitly asks for data loss and accepts restoring from backup if seeders fail. If anything fails after `maintenance-on`, maintenance mode stays enabled for triage, matching the normal deploy failure posture.
 
