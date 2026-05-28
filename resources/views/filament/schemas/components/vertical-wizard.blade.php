@@ -55,7 +55,7 @@
     />
 
     <!-- Main Wizard Canvas -->
-    <div class="grid grid-cols-1 md:grid-cols-12 gap-8 lg:gap-12 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4 sm:p-6 lg:p-8">
+    <div class="grid grid-cols-1 md:grid-cols-12 gap-8 lg:gap-12 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4 sm:p-6 lg:p-8">
         
         @if (! $isHeaderHidden)
             <!-- Navigation Sidebar (Vertical Tabs) -->
@@ -111,7 +111,7 @@
                                     x-bind:disabled="! isStepAccessible(@js($step->getKey())) || @js($previousAction->isDisabled())"
                                     class="relative flex items-center w-full py-2.5 px-3 text-left rounded-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-gray-900 dark:focus:ring-white"
                                     x-bind:class="{
-                                        'bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-800 shadow-none': getStepIndex(step) === {{ $loop->index }},
+                                        'bg-white dark:bg-gray-800/50 border border-gray-200 dark:border-gray-800 shadow-none': getStepIndex(step) === {{ $loop->index }},
                                         'border border-transparent hover:bg-gray-100 dark:hover:bg-gray-800/30': getStepIndex(step) !== {{ $loop->index }}
                                     }"
                                 >
@@ -225,7 +225,7 @@
             @endforeach
 
             <!-- Footer / Actions -->
-            <div x-cloak class="fi-sc-wizard-footer flex items-center justify-between gap-3 pt-2">
+            <div x-cloak class="fi-sc-wizard-footer flex items-center justify-between gap-3 pt-0">
                 <div class="flex items-center gap-3">
                     <div
                         x-cloak

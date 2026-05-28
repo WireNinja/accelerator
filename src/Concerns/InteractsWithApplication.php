@@ -8,6 +8,10 @@ use BezhanSalleh\FilamentShield\Commands\SeederCommand;
 use BezhanSalleh\FilamentShield\Commands\SetupCommand;
 use BezhanSalleh\FilamentShield\Commands\SuperAdminCommand;
 use Carbon\CarbonImmutable;
+use Filament\Actions\Action;
+use Filament\Actions\CreateAction;
+use Filament\Actions\DeleteAction;
+use Filament\Actions\EditAction;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
@@ -132,7 +136,12 @@ trait InteractsWithApplication
                 ->persistColumnsInSession(false)
                 ->persistFiltersInSession(false)
                 ->persistSearchInSession(false)
-                ->persistSortInSession(false);
+                ->persistSortInSession(false)
+                ->filtersApplyAction(static function (Action $action) {
+                    $action
+                        ->label('Terapkan')
+                        ->icon('lucide-database-search');
+                });
         });
 
         FileUpload::configureUsing(static function (FileUpload $fileUpload): void {
@@ -164,5 +173,21 @@ trait InteractsWithApplication
         Step::configureUsing(static function (Step $step) {
             $step->completedIcon('lucide-thumbs-up');
         });
+
+        CreateAction::configureUsing(static function (CreateAction $action) {
+            $action->icon('lucide-circle-fading-plus');
+        });
+
+        EditAction::configureUsing(static function (EditAction $action) {
+            $action->icon('lucide-notebook-pen');
+        });
+
+        DeleteAction::configureUsing(static function (DeleteAction $action) {
+            $action->icon('lucide-shredder');
+        });
+
+        //  BetterActionGroup::configureUsing(static function (BetterActionGroup $actionGroup) {
+        //     $actionGroup->icon('lucide-dots-vertical');
+        //  });
     }
 }

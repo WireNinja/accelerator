@@ -33,7 +33,7 @@
         ])
         x-bind:style="$store.sidebar.isOpen ? 'width: {{ filament()->getSidebarWidth() }}' : 'width: {{ filament()->getCollapsedSidebarWidth() }}'"
     >
-        <div class="flex-1 mx-2.5 mt-2 mb-[calc(0.5rem+env(safe-area-inset-bottom))] lg:mb-2 flex flex-col bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl shadow-2xl shadow-gray-200/50 dark:shadow-none rounded-2xl border border-gray-200/50 dark:border-white/10 transition-all duration-300 overflow-hidden">
+        <div class="flex-1 ml-4.5 mr-1 mb-4 mt-4 flex flex-col rounded-xl bg-white shadow-sm ring-1 ring-gray-950/5 transition-all duration-300 overflow-hidden dark:bg-gray-900 dark:ring-white/10">
             {{ \Filament\Support\Facades\FilamentView::renderHook(\Filament\View\PanelsRenderHook::SIDEBAR_START) }}
 
             <div class="fi-sidebar-header-ctn shrink-0 border-b border-gray-100 dark:border-white/5">
@@ -139,106 +139,112 @@
                 </div>
             @endif
 
-            <div @class([
-                'flex flex-1 overflow-hidden h-full',
-                'flex-row' => !$isRtl,
-                'flex-row-reverse' => $isRtl,
-            ])>
-                <!-- Parent Panels Column -->
-                <div
-                    x-show="$store.sidebar.isOpen"
-                    @class([
-                        'fi-sidebar-parent flex h-full w-[66px] shrink-0 flex-col py-2 justify-between',
-                        'border-r border-gray-200 dark:border-gray-800' => !$isRtl,
-                        'border-l border-gray-200 dark:border-gray-800' => $isRtl,
-                    ])
-                >
-                    <div class="flex flex-col gap-y-3 py-2 w-full items-center">
-                        @foreach($panels as $panel)
-                            @php
-                                $isActive = $currentPanel === $panel->value;
-                            @endphp
+            <div class="relative flex min-h-0 flex-1 flex-col">
+                <div @class([
+                    'relative flex min-h-0 flex-1 overflow-hidden',
+                    'flex-row' => !$isRtl,
+                    'flex-row-reverse' => $isRtl,
+                ])>
+                    <div
+                        x-show="$store.sidebar.isOpen"
+                        @class([
+                            'pointer-events-none absolute top-0 -bottom-px z-10 w-px bg-gray-200 dark:bg-white/10',
+                            'left-[66px]' => !$isRtl,
+                            'right-[66px]' => $isRtl,
+                        ])
+                    ></div>
 
-                            <a
-                                href="{{ $panel->getUrl() }}"
-                                class="group relative flex h-9 w-9 items-center justify-center rounded-xl transition-all duration-300 transform-gpu hover:scale-110 active:scale-95"
-                                x-data="{}"
-                                x-tooltip.content="'{{ $panel->getLabel() }}'"
-                            >
-                                <!-- Active Indicator -->
-                                <div @class([
-                                    'absolute h-5 w-1 rounded-full transition-all duration-500',
-                                    'bg-primary-500 scale-y-100 opacity-100 shadow-[0_0_10px_rgba(var(--primary-500),0.6)]' => $isActive,
-                                    'bg-gray-400 scale-y-0 opacity-0 group-hover:scale-y-50 group-hover:opacity-50' => !$isActive,
-                                    '-left-1' => !$isRtl,
-                                    '-right-1' => $isRtl,
-                                ])></div>
+                    <!-- Parent Panels Column -->
+                    <div
+                        x-show="$store.sidebar.isOpen"
+                        class="fi-sidebar-parent flex h-full w-[66px] shrink-0 flex-col py-2 justify-between"
+                    >
+                        <div class="flex flex-col gap-y-3 py-2 w-full items-center">
+                            @foreach($panels as $panel)
+                                @php
+                                    $isActive = $currentPanel === $panel->value;
+                                @endphp
 
-                                <!-- Icon Background Layer -->
-                                <div @class([
-                                    'absolute inset-0 rounded-xl transition-all duration-300',
-                                    'bg-primary-500/10 dark:bg-primary-500/20 ring-1 ring-primary-500/20' => $isActive,
-                                    'bg-transparent group-hover:bg-gray-200 dark:group-hover:bg-white/10' => !$isActive,
-                                ])></div>
-
-                                <!-- Icon -->
-                                <div @class([
-                                    'relative z-10 transition-colors duration-300',
-                                    'text-primary-600 dark:text-primary-400' => $isActive,
-                                    'text-gray-500 group-hover:text-gray-900 dark:text-gray-400 dark:group-hover:text-white' => !$isActive,
-                                ])>
-                                    <x-filament::icon
-                                        :icon="$panel->getIcon()"
-                                        class="h-4.5 w-4.5"
-                                    />
-                                </div>
-                            </a>
-                        @endforeach
-
-                        @php
-                            $launchers = $this->getLaunchers();
-                        @endphp
-
-                        @if (count($launchers) > 0)
-                            <div class="h-px w-10 bg-gray-200 dark:bg-white/10 my-2"></div>
-
-                            @foreach ($launchers as $launcher)
                                 <a
-                                    href="{{ $launcher->getUrl() }}"
-                                    target="_blank"
+                                    href="{{ $panel->getUrl() }}"
                                     class="group relative flex h-9 w-9 items-center justify-center rounded-xl transition-all duration-300 transform-gpu hover:scale-110 active:scale-95"
                                     x-data="{}"
-                                    x-tooltip.content="'{{ $launcher->getLabel() }}'"
+                                    x-tooltip.content="'{{ $panel->getLabel() }}'"
                                 >
+                                    <!-- Active Indicator -->
+                                    <div @class([
+                                        'absolute h-5 w-1 rounded-full transition-all duration-500',
+                                        'bg-primary-500 scale-y-100 opacity-100 shadow-[0_0_10px_rgba(var(--primary-500),0.6)]' => $isActive,
+                                        'bg-gray-400 scale-y-0 opacity-0 group-hover:scale-y-50 group-hover:opacity-50' => !$isActive,
+                                        '-left-1' => !$isRtl,
+                                        '-right-1' => $isRtl,
+                                    ])></div>
+
                                     <!-- Icon Background Layer -->
-                                    <div class="absolute inset-0 rounded-xl transition-all duration-300 bg-transparent group-hover:bg-gray-200 dark:group-hover:bg-white/10"></div>
+                                    <div @class([
+                                        'absolute inset-0 rounded-xl transition-all duration-300',
+                                        'bg-primary-500/10 dark:bg-primary-500/20 ring-1 ring-primary-500/20' => $isActive,
+                                        'bg-transparent group-hover:bg-gray-200 dark:group-hover:bg-white/10' => !$isActive,
+                                    ])></div>
 
                                     <!-- Icon -->
-                                    <div class="relative z-10 transition-colors duration-300 text-gray-500 group-hover:text-gray-900 dark:text-gray-400 dark:group-hover:text-white">
+                                    <div @class([
+                                        'relative z-10 transition-colors duration-300',
+                                        'text-primary-600 dark:text-primary-400' => $isActive,
+                                        'text-gray-500 group-hover:text-gray-900 dark:text-gray-400 dark:group-hover:text-white' => !$isActive,
+                                    ])>
                                         <x-filament::icon
-                                            :icon="$launcher->getIcon()"
+                                            :icon="$panel->getIcon()"
                                             class="h-4.5 w-4.5"
                                         />
                                     </div>
                                 </a>
                             @endforeach
+
+                            @php
+                                $launchers = $this->getLaunchers();
+                            @endphp
+
+                            @if (count($launchers) > 0)
+                                <div class="h-px w-10 bg-gray-200 dark:bg-white/10 my-2"></div>
+
+                                @foreach ($launchers as $launcher)
+                                    <a
+                                        href="{{ $launcher->getUrl() }}"
+                                        target="_blank"
+                                        class="group relative flex h-9 w-9 items-center justify-center rounded-xl transition-all duration-300 transform-gpu hover:scale-110 active:scale-95"
+                                        x-data="{}"
+                                        x-tooltip.content="'{{ $launcher->getLabel() }}'"
+                                    >
+                                        <!-- Icon Background Layer -->
+                                        <div class="absolute inset-0 rounded-xl transition-all duration-300 bg-transparent group-hover:bg-gray-200 dark:group-hover:bg-white/10"></div>
+
+                                        <!-- Icon -->
+                                        <div class="relative z-10 transition-colors duration-300 text-gray-500 group-hover:text-gray-900 dark:text-gray-400 dark:group-hover:text-white">
+                                            <x-filament::icon
+                                                :icon="$launcher->getIcon()"
+                                                class="h-4.5 w-4.5"
+                                            />
+                                        </div>
+                                    </a>
+                                @endforeach
+                            @endif
+                        </div>
+
+                        @if ($hasDatabaseNotificationsInSidebar)
+                            <div class="flex flex-col items-center pb-2">
+                                <div class="fi-sidebar-parent-notifications">
+                                    @livewire(filament()->getDatabaseNotificationsLivewireComponent(), [
+                                        'lazy' => filament()->hasLazyLoadedDatabaseNotifications(),
+                                    ])
+                                </div>
+                            </div>
                         @endif
                     </div>
 
-                    @if ($hasDatabaseNotificationsInSidebar)
-                        <div class="flex flex-col items-center pb-2">
-                            <div class="fi-sidebar-parent-notifications">
-                                @livewire(filament()->getDatabaseNotificationsLivewireComponent(), [
-                                    'lazy' => filament()->hasLazyLoadedDatabaseNotifications(),
-                                ])
-                            </div>
-                        </div>
-                    @endif
-                </div>
-
-                <!-- Main Navigation Column -->
-                <nav class="fi-sidebar-nav flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar pt-4 pb-2">
-                    {{ \Filament\Support\Facades\FilamentView::renderHook(\Filament\View\PanelsRenderHook::SIDEBAR_NAV_START) }}
+                    <!-- Main Navigation Column -->
+                    <nav class="fi-sidebar-nav flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar pt-4 pb-6">
+                        {{ \Filament\Support\Facades\FilamentView::renderHook(\Filament\View\PanelsRenderHook::SIDEBAR_NAV_START) }}
 
                     <ul class="fi-sidebar-nav-groups flex flex-col gap-y-1 px-0">
                         @foreach ($navigation as $group)
@@ -301,41 +307,37 @@
                             })
                     </script>
 
-                    {{ \Filament\Support\Facades\FilamentView::renderHook(\Filament\View\PanelsRenderHook::SIDEBAR_NAV_END) }}
-                    {{ \Filament\Support\Facades\FilamentView::renderHook(\WireNinja\Accelerator\Filament\AcceleratorPanelsRenderHook::SIDEBAR_SUPPORT) }}
-                </nav>
-            </div>
-
-            @php
-                $shouldRenderFooter = $isAuthenticated && $hasUserMenuInSidebar;
-            @endphp
-
-            @if ($shouldRenderFooter)
-                <div class="fi-sidebar-footer relative shrink-0 border-t border-gray-100 px-2 pt-3 pb-3 dark:border-white/5 lg:pb-2">
-                    <div
-                        @class([
-                            'absolute top-0 h-px w-px bg-gray-200 dark:bg-gray-800',
-                            'left-[66px]' => !$isRtl,
-                            'right-[66px]' => $isRtl,
-                        ])
-                    ></div>
-
-                    <div class="flex flex-col gap-y-1">
-
-                        @if ($hasUserMenuInSidebar)
-                            <div class="flex w-full items-center gap-2">
-                                <x-accelerator::sidebar.user-menu
-                                    class="min-w-0 flex-1"
-                                    :items="$userMenuItems"
-                                    :name="$userName"
-                                    :description="$userDescription"
-                                    :user="$user"
-                                />
-                            </div>
-                        @endif
-                    </div>
+                        {{ \Filament\Support\Facades\FilamentView::renderHook(\Filament\View\PanelsRenderHook::SIDEBAR_NAV_END) }}
+                        {{ \Filament\Support\Facades\FilamentView::renderHook(\WireNinja\Accelerator\Filament\AcceleratorPanelsRenderHook::SIDEBAR_SUPPORT) }}
+                    </nav>
                 </div>
-            @endif
+
+                @php
+                    $shouldRenderFooter = $isAuthenticated && $hasUserMenuInSidebar;
+                @endphp
+
+                @if ($shouldRenderFooter)
+                    <div class="h-px w-full shrink-0 bg-gray-200 dark:bg-white/10"></div>
+
+                    <div class="fi-sidebar-footer relative shrink-0 pb-1">
+                        <div class="flex min-w-0">
+                            <div class="flex min-w-0 flex-1 flex-col gap-y-1">
+                                @if ($hasUserMenuInSidebar)
+                                    <div class="flex w-full items-center gap-2">
+                                        <x-accelerator::sidebar.user-menu
+                                            class="min-w-0 flex-1 bg-gray-200/50 dark:bg-white/10 rounded-xl"
+                                            :items="$userMenuItems"
+                                            :name="$userName"
+                                            :description="$userDescription"
+                                            :user="$user"
+                                        />
+                                    </div>
+                                @endif
+                            </div>
+                        </div>
+                    </div>
+                @endif
+            </div>
 
             {{ \Filament\Support\Facades\FilamentView::renderHook(\Filament\View\PanelsRenderHook::SIDEBAR_FOOTER) }}
         </div>

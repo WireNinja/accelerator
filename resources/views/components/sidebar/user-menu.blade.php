@@ -28,13 +28,13 @@
 
 <x-filament::dropdown
     placement="top-end"
-    :attributes="\Filament\Support\prepare_inherited_attributes($attributes)->class(['fi-user-menu accelerator-user-menu'])"
+    :attributes="\Filament\Support\prepare_inherited_attributes($attributes)->class(['fi-user-menu accelerator-user-menu w-full'])"
 >
     <x-slot name="trigger">
         <button
             aria-label="{{ __('filament-panels::layout.actions.open_user_menu.label') }}"
             type="button"
-            class="group flex min-w-0 flex-1 items-center gap-3 rounded-2xl px-2 py-2 text-left transition-colors duration-200 hover:bg-gray-50 dark:hover:bg-white/5"
+            class="group flex w-full min-w-0 items-center gap-3 rounded-xl px-2 py-2 text-left transition-colors duration-200 hover:bg-gray-50 dark:hover:bg-white/5"
         >
             <x-filament-panels::avatar.user
                 size="h-16 w-16"

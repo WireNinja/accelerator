@@ -21,6 +21,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use NotificationChannels\WebPush\HasPushSubscriptions;
 use Spatie\Permission\Traits\HasRoles;
+use WireNinja\Accelerator\Filament\AvatarProviders\DiceBearAvatarProvider;
 use WireNinja\Accelerator\Services\AcceleratedUserService;
 
 /**
@@ -77,7 +78,7 @@ class AcceleratedUser extends Authenticatable implements FilamentUser, HasAppAut
         return Str::of($this->name)
             ->explode(' ')
             ->take(2)
-            ->map(fn ($word) => Str::substr($word, 0, 1))
+            ->map(fn($word) => Str::substr($word, 0, 1))
             ->implode('');
     }
 
@@ -98,7 +99,7 @@ class AcceleratedUser extends Authenticatable implements FilamentUser, HasAppAut
 
     public function getFilamentAvatarUrl(): ?string
     {
-        return $this->avatar ? Storage::url($this->avatar) : null;
+        return $this->avatar ? Storage::url($this->avatar) : (new DiceBearAvatarProvider())->get($this);
     }
 
     public function isSuspended(): bool

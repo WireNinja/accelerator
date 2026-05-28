@@ -11,7 +11,11 @@ reference;
 
 /* widen the content by reducing padding x */
 .fi-main {
-    @apply !px-5;
+    @apply !px-5 sm:px-6 pt-4.5;
+}
+
+.fi-page-header-main-ctn {
+    @apply gap-4 py-6;
 }
 
 /* hide topbar when sidebar is hidden. sidebar toggler replaced with other methods */

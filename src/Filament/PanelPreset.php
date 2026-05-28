@@ -149,7 +149,7 @@ final class PanelPreset
             )
             ->renderHook(
                 PanelsRenderHook::PAGE_START,
-                fn() => view('accelerator::filament.sidebar.toggle')
+                fn() => view('accelerator::filament.sidebar.topbar')
             )
             ->renderHook(
                 PanelsRenderHook::HEAD_END,
