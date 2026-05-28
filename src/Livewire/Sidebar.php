@@ -60,13 +60,10 @@ class Sidebar extends Component implements HasActions, HasSchemas
             return '';
         }
 
-        if (is_callable([$user, 'getRoleNames'])) {
-            $roleNames = call_user_func([$user, 'getRoleNames']);
-            $role = is_iterable($roleNames) ? collect($roleNames)->first() : null;
+        $role = $user->getRoleNames()->first();
 
-            if (is_string($role) && filled($role)) {
-                return str($role)->replace(['_', '-'], ' ')->headline()->toString();
-            }
+        if (is_string($role) && filled($role)) {
+            return str($role)->replace(['_', '-'], ' ')->headline()->toString();
         }
 
         $username = data_get($user, 'username');
