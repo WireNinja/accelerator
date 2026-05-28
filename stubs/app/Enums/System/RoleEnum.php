@@ -1,14 +1,17 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Enums\System;
 
+use Filament\Support\Contracts\HasColor;
 use Filament\Support\Contracts\HasDescription;
 use Filament\Support\Contracts\HasIcon;
 use Filament\Support\Contracts\HasLabel;
 use WireNinja\Accelerator\Concerns\BetterEnum;
 use WireNinja\Accelerator\Concerns\RoleEnumPermissions;
 
-enum RoleEnum: string implements HasDescription, HasIcon, HasLabel
+enum RoleEnum: string implements HasColor, HasDescription, HasIcon, HasLabel
 {
     use BetterEnum;
     use RoleEnumPermissions;

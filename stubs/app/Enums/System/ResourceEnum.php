@@ -1,16 +1,19 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Enums\System;
 
 use BezhanSalleh\FilamentShield\Resources\Roles\RoleResource;
+use Filament\Support\Contracts\HasColor;
 use WireNinja\Accelerator\Concerns\BetterEnum;
 use WireNinja\Accelerator\Concerns\HasBasicCrudPermissions;
 use WireNinja\Accelerator\Enums\BuiltinSystemResource;
 use WireNinja\Accelerator\Enums\Concerns\MustBeResourceEnum;
-use WireNinja\Accelerator\Filament\Resources\TicketBoards\TicketBoardResource;
-use WireNinja\Accelerator\Filament\Resources\Tickets\TicketResource;
+use WireNinja\Accelerator\Filament\Resources\Support\TicketBoards\TicketBoardResource;
+use WireNinja\Accelerator\Filament\Resources\Support\Tickets\TicketResource;
 
-enum ResourceEnum: string implements MustBeResourceEnum
+enum ResourceEnum: string implements HasColor, MustBeResourceEnum
 {
     use BetterEnum;
     use HasBasicCrudPermissions;
@@ -30,11 +33,7 @@ enum ResourceEnum: string implements MustBeResourceEnum
 
     public function getResource(): string
     {
-        return match ($this) {
-            self::RoleResource => RoleResource::class,
-            self::TicketBoardResource => TicketBoardResource::class,
-            self::TicketResource => TicketResource::class,
-        };
+        return $this->value;
     }
 
     public function getNavigationIcon(): string
@@ -58,21 +57,15 @@ enum ResourceEnum: string implements MustBeResourceEnum
     public function getPanelGroup(): string
     {
         return match ($this) {
-            self::RoleResource => 'admin',
-            self::TicketBoardResource => 'admin',
-            self::TicketResource => 'admin',
+            self::RoleResource => PanelEnum::System->value,
+            self::TicketBoardResource => PanelEnum::Support->value,
+            self::TicketResource => PanelEnum::Support->value,
         };
     }
 
     public static function fromResource(string $resource): ?self
     {
-        foreach (self::cases() as $case) {
-            if ($case->getResource() === $resource) {
-                return $case;
-            }
-        }
-
-        return null;
+        return self::tryFrom($resource);
     }
 
     /**

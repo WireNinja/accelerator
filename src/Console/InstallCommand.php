@@ -152,6 +152,7 @@ class InstallCommand extends Command
                 'app/Enums/System/ResourceEnum.php' => 'app/Enums/System/ResourceEnum.php',
                 'app/Enums/System/RoleEnum.php' => 'app/Enums/System/RoleEnum.php',
                 'app/Enums/System/PanelEnum.php' => 'app/Enums/System/PanelEnum.php',
+                'app/Enums/System/LauncherEnum.php' => 'app/Enums/System/LauncherEnum.php',
                 'bootstrap/app.php' => 'bootstrap/app.php',
                 'bootstrap/providers.php' => 'bootstrap/providers.php',
                 'routes/console.php' => 'routes/console.php',

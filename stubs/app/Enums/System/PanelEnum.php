@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Enums\System;
 
 use Filament\Support\Contracts\HasColor;
@@ -18,6 +20,7 @@ enum PanelEnum: string implements HasColor, HasIcon, HasLabel
     case Accounting = 'accounting';
     case App = 'app';
     case Support = 'support';
+    case System = 'system';
 
     public function getLabel(): string
     {
@@ -28,6 +31,7 @@ enum PanelEnum: string implements HasColor, HasIcon, HasLabel
             self::Accounting => 'Accounting Panel',
             self::App => 'App Panel',
             self::Support => 'Support Panel',
+            self::System => 'System Panel',
         };
     }
 
@@ -40,6 +44,7 @@ enum PanelEnum: string implements HasColor, HasIcon, HasLabel
             self::Accounting => 'lucide-banknote',
             self::App => 'lucide-layout-grid',
             self::Support => 'lucide-life-buoy',
+            self::System => 'lucide-settings-2',
         };
     }
 
@@ -52,6 +57,7 @@ enum PanelEnum: string implements HasColor, HasIcon, HasLabel
             self::Accounting => PanelColor::Success,
             self::App => PanelColor::Primary,
             self::Support => PanelColor::Info,
+            self::System => PanelColor::Gray,
         };
     }
 
