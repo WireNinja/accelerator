@@ -16,7 +16,8 @@
         $userMenuItems = $isAuthenticated ? $this->getAcceleratorUserMenuItems() : [];
         $hasDatabaseNotificationsInSidebar = filament()->hasDatabaseNotifications() && filament()->getDatabaseNotificationsPosition() === \Filament\Enums\DatabaseNotificationsPosition::Sidebar;
         $hasUserMenuInSidebar = filament()->hasUserMenu() && filament()->getUserMenuPosition() === \Filament\Enums\UserMenuPosition::Sidebar;
-        $shouldRenderTenantMenu = filament()->hasTenancy() && filament()->hasTenantMenu();
+        $currentTenant = filament()->getTenant();
+        $shouldRenderTenantMenu = filament()->hasTenancy() && filament()->hasTenantMenu() && $currentTenant instanceof \Illuminate\Database\Eloquent\Model;
     @endphp
 
     {{-- format-ignore-start --}}

@@ -11,6 +11,18 @@ Format per entry:
 
 ---
 
+## v1.1.74
+
+No deployment contract changes beyond v1.1.66.
+
+### 🟡 AWARENESS — Tenant menu is hidden on tenantless routes
+
+The Accelerator sidebar now renders Filament's native tenant menu only when the current request has a concrete tenant model. Tenant-enabled panels can still serve tenantless routes such as profile pages, and Filament's tenant menu component calls `getTenantName()` with the current tenant immediately during render.
+
+**Action required**: Upgrade if tenant-enabled panels hit `Filament\FilamentManager::getTenantName(): Argument #1 ($tenant) must be of type Illuminate\Database\Eloquent\Model, null given` on tenantless pages such as `/admin/profile`.
+
+---
+
 ## v1.1.73
 
 No deployment contract changes beyond v1.1.66.
