@@ -16,6 +16,7 @@
         $userMenuItems = $isAuthenticated ? $this->getAcceleratorUserMenuItems() : [];
         $hasDatabaseNotificationsInSidebar = filament()->hasDatabaseNotifications() && filament()->getDatabaseNotificationsPosition() === \Filament\Enums\DatabaseNotificationsPosition::Sidebar;
         $hasUserMenuInSidebar = filament()->hasUserMenu() && filament()->getUserMenuPosition() === \Filament\Enums\UserMenuPosition::Sidebar;
+        $shouldRenderTenantMenu = filament()->hasTenancy() && filament()->hasTenantMenu();
     @endphp
 
     {{-- format-ignore-start --}}
@@ -122,8 +123,8 @@
                 </header>
             </div>
 
-            @if (filament()->hasTenancy() && filament()->hasTenantMenu() && filament()->getTenantMenuPosition() === \Filament\Enums\TenantMenuPosition::Sidebar)
-                <div class="px-2 py-2 border-b border-gray-100 dark:border-white/5">
+            @if ($shouldRenderTenantMenu)
+                <div class="accelerator-sidebar-tenant-menu shrink-0 border-b border-gray-100 px-2 py-2 dark:border-white/5">
                     <x-filament-panels::tenant-menu />
                 </div>
             @endif
