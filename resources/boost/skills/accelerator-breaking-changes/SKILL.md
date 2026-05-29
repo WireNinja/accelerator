@@ -11,15 +11,27 @@ Format per entry:
 
 ---
 
+## v1.1.75
+
+No deployment contract changes beyond v1.1.66.
+
+### 🟡 AWARENESS — v1.1.74 tenantless-route note narrowed to sidebar only
+
+Patch `v1.1.74` only guards Accelerator's custom sidebar tenant menu. It does not override Filament's native topbar, profile page layout, or any userland topbar behavior. Do not introduce a custom topbar component to solve tenantless profile routes unless the exact compiled view proves the topbar is the failing renderer.
+
+**Action required**: If `getTenantName(null)` still appears on `/admin/profile`, inspect the application's compiled Blade stack and tenant/profile panel configuration before changing Accelerator UI surfaces. The Accelerator sidebar no longer calls `getTenantName(null)`.
+
+---
+
 ## v1.1.74
 
 No deployment contract changes beyond v1.1.66.
 
-### 🟡 AWARENESS — Tenant menu is hidden on tenantless routes
+### 🟡 AWARENESS — Sidebar tenant menu is hidden on tenantless routes
 
-The Accelerator sidebar now renders Filament's native tenant menu only when the current request has a concrete tenant model. Tenant-enabled panels can still serve tenantless routes such as profile pages, and Filament's tenant menu component calls `getTenantName()` with the current tenant immediately during render.
+The Accelerator sidebar now renders Filament's native tenant menu only when the current request has a concrete tenant model. Filament's tenant menu component calls `getTenantName()` with the current tenant immediately during render, so the sidebar must not render it while `filament()->getTenant()` is `null`.
 
-**Action required**: Upgrade if tenant-enabled panels hit `Filament\FilamentManager::getTenantName(): Argument #1 ($tenant) must be of type Illuminate\Database\Eloquent\Model, null given` on tenantless pages such as `/admin/profile`.
+**Action required**: Upgrade if a tenant-enabled panel hits `Filament\FilamentManager::getTenantName(): Argument #1 ($tenant) must be of type Illuminate\Database\Eloquent\Model, null given` from the Accelerator sidebar on tenantless routes.
 
 ---
 
