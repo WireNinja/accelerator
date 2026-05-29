@@ -11,6 +11,44 @@ Format per entry:
 
 ---
 
+## v1.1.72
+
+No deployment contract changes beyond v1.1.66.
+
+### 🔴 BREAKING — Sidebar toggle view replaced by topbar view
+
+The old `accelerator::filament.sidebar.toggle` view has been removed and the panel preset now renders `accelerator::filament.sidebar.topbar` at `PanelsRenderHook::PAGE_START`.
+
+**Action required**: If an application references or overrides `accelerator::filament.sidebar.toggle`, move that customization to `accelerator::filament.sidebar.topbar` before upgrading.
+
+### 🔴 BREAKING — Sidebar user role lookup now requires `getRoleNames()`
+
+The Accelerator sidebar now calls `$user->getRoleNames()->first()` directly when building the sidebar user description. The previous defensive callable/iterable guards were removed because Accelerator's configured user contract expects Spatie role support.
+
+**Action required**: Custom authenticated user models used with the Accelerator sidebar must expose Spatie Permission's `getRoleNames()` collection API, typically by using `Spatie\Permission\Traits\HasRoles` or extending `WireNinja\Accelerator\Model\AcceleratedUser`.
+
+### 🟡 AWARENESS — Sidebar, topbar, wizard, and user menu visual refresh
+
+The bundled Filament sidebar markup was reorganized for a framed sidebar shell, topbar collapse trigger, parent-panel divider, footer divider, full-width user menu, adjusted page header spacing, and lighter vertical wizard canvas styling. This is an internal UI refresh, but projects with published or heavily customized Accelerator views should compare their overrides.
+
+### 🟡 AWARENESS — Timestamp summary table columns added
+
+New reusable Filament table columns are available: `TimestampSummaryColumn`, `CreatedAtColumn`, `UpdatedAtColumn`, and `DeletedAtColumn`. They render relative time plus translated date/time through the new `accelerator::filament.tables.columns.timestamp-summary-column` view. They are additive and do not replace existing columns automatically.
+
+### 🟡 AWARENESS — Global Filament action defaults changed
+
+Accelerator now sets a localized filter apply action label/icon and default icons for global create, edit, and delete actions. Existing per-resource action configuration still wins when explicitly set.
+
+### 🟡 AWARENESS — Users without uploaded avatars get DiceBear fallback
+
+`AcceleratedUser::getFilamentAvatarUrl()` now returns a generated DiceBear avatar URL when the user has no stored avatar. Projects that intentionally relied on a null avatar URL should override the method.
+
+### 🟡 AWARENESS — Starter system enum stubs updated
+
+Fresh Accelerator installs now publish `LauncherEnum`, add the `System` panel to `PanelEnum`, move support resource namespaces to `WireNinja\Accelerator\Filament\Resources\Support\...`, use enum values as resource class strings, and group resources by `PanelEnum` values. Existing application enums are not changed unless stubs are republished or overwritten.
+
+---
+
 ## v1.1.71
 
 No deployment contract changes beyond v1.1.66.
