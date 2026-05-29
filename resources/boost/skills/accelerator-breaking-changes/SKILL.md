@@ -11,6 +11,24 @@ Format per entry:
 
 ---
 
+## v1.1.73
+
+No deployment contract changes beyond v1.1.66.
+
+### 🔴 BREAKING — WebPush dependency upgraded to v11
+
+`laravel-notification-channels/webpush` is now constrained to `11.0`. This drops Laravel 11 support, casts `PushSubscription::$content_encoding` to `Minishlink\WebPush\ContentEncoding`, makes `MessageValidationFailed` final, and requires custom `WebPushMessageInterface` implementations to provide `getOptions()`.
+
+**Action required**: Before upgrading, check custom WebPush notifications, custom `PushSubscription` handling, classes extending `MessageValidationFailed`, and custom `WebPushMessageInterface` implementations. Applications only using Accelerator's default push subscription model, migration, and `HasPushSubscriptions` trait do not need a database migration.
+
+### 🟡 AWARENESS — Accelerator sidebar tenant menu now follows Filament v5 API
+
+The custom Accelerator sidebar no longer calls the removed `filament()->getTenantMenuPosition()` API. It now renders Filament's native `<x-filament-panels::tenant-menu />` whenever `filament()->hasTenancy()` and `filament()->hasTenantMenu()` are true, keeping Filament's tenant switcher, searchable tenant list, menu items, and render hooks intact while applying Accelerator sidebar styling.
+
+**Action required**: Projects that hit `Call to undefined method Filament\FilamentManager::getTenantMenuPosition()` on tenant-enabled panels should upgrade to this patch and rebuild frontend assets if the sidebar styling is not reflected.
+
+---
+
 ## v1.1.72
 
 No deployment contract changes beyond v1.1.66.
