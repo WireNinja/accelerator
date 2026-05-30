@@ -11,6 +11,30 @@ Format per entry:
 
 ---
 
+## v1.1.76
+
+No deployment contract changes beyond v1.1.66.
+
+### 🟡 AWARENESS — Profile page stays simple for tenant-enabled panels
+
+Accelerator now registers `ManageProfile` with Filament's simple profile layout. This keeps `/admin/profile` tenantless and prevents tenant-enabled panels from rendering tenant-scoped navigation while no `{tenant}` route parameter exists.
+
+**Action required**: If an application previously expected the user profile page to use the full panel shell, keep that customization in userland. Tenant-enabled panels should not switch the bundled profile page back to `isSimple: false` unless the profile route is made tenant-aware.
+
+### 🟡 AWARENESS — Profile form can show an optional Organization step
+
+`ManageProfile` now detects an active Filament tenant or a user relationship named `organization()` / `organizations()` and adds an `Organisasi` wizard step for editing the linked organization's `name`. Accelerator remains single-tenant by default; projects still opt into Filament tenancy from their own panel provider.
+
+**Action required**: None for single-tenant applications. Multi-tenant applications that want this bundled profile step should expose an `organization()` or `organizations()` relationship on the authenticated user model, or rely on Filament's current tenant when visiting the profile inside a tenant context.
+
+### 🟡 AWARENESS — Ticketing page now participates in Shield page permissions
+
+`TicketingPage` now uses Filament Shield's page trait so its visibility and access can be governed by generated page permissions.
+
+**Action required**: Projects using Shield should regenerate or review permissions after upgrading if `TicketingPage` is enabled in the panel.
+
+---
+
 ## v1.1.75
 
 No deployment contract changes beyond v1.1.66.

@@ -117,7 +117,7 @@ final class PanelPreset
                 Authenticate::class,
             ])
             ->databaseNotifications()
-            ->broadcasting(fn() => config('broadcasting.default') === 'reverb')
+            ->broadcasting(fn () => config('broadcasting.default') === 'reverb')
             ->spa()
             ->topbar(false)
             ->globalSearch(false)
@@ -126,9 +126,9 @@ final class PanelPreset
             ->collapsibleNavigationGroups()
             ->sidebarFullyCollapsibleOnDesktop()
             ->databaseTransactions()
-            ->unsavedChangesAlerts(fn() => resolve('app')->isProduction())
-            ->strictAuthorization(fn() => resolve('app')->isLocal())
-            ->profile(ManageProfile::class, isSimple: false)
+            ->unsavedChangesAlerts(fn () => resolve('app')->isProduction())
+            ->strictAuthorization(fn () => resolve('app')->isLocal())
+            ->profile(ManageProfile::class, isSimple: true)
             ->revealablePasswords()
             ->resourceCreatePageRedirect('index')
             ->resourceEditPageRedirect('index')
@@ -137,37 +137,37 @@ final class PanelPreset
             ->lazyLoadedDatabaseNotifications()
             ->renderHook(
                 PanelsRenderHook::AUTH_LOGIN_FORM_AFTER,
-                fn() => config('services.google.client_id') ? view('accelerator::filament.auth.google-login') : ''
+                fn () => config('services.google.client_id') ? view('accelerator::filament.auth.google-login') : ''
             )
             ->renderHook(
                 PanelsRenderHook::SIDEBAR_NAV_START,
-                fn() => view('accelerator::filament.sidebar.notice')
+                fn () => view('accelerator::filament.sidebar.notice')
             )
             ->renderHook(
                 AcceleratorPanelsRenderHook::SIDEBAR_SUPPORT,
-                fn() => view('accelerator::filament.sidebar.support')
+                fn () => view('accelerator::filament.sidebar.support')
             )
             ->renderHook(
                 PanelsRenderHook::PAGE_START,
-                fn() => view('accelerator::filament.sidebar.topbar')
+                fn () => view('accelerator::filament.sidebar.topbar')
             )
             ->renderHook(
                 PanelsRenderHook::HEAD_END,
-                fn() => view('accelerator::partials.pwa.head')
+                fn () => view('accelerator::partials.pwa.head')
             )
             ->renderHook(
                 PanelsRenderHook::BODY_END,
-                fn() => view('accelerator::filament.business-exception-handler', BuiltinExceptions::getFilamentBusinessExceptionViewData())
+                fn () => view('accelerator::filament.business-exception-handler', BuiltinExceptions::getFilamentBusinessExceptionViewData())
             )
             ->userMenuItems([
                 Action::make('whatsapp_support')
                     ->label('Whatsapp Support')
-                    ->url(fn() => sprintf('https://wa.me/%s', Profile::DEVELOPER_WHATSAPP))
+                    ->url(fn () => sprintf('https://wa.me/%s', Profile::DEVELOPER_WHATSAPP))
                     ->openUrlInNewTab()
                     ->icon('lucide-phone-outgoing'),
                 Action::make('telegram_support')
                     ->label('Telegram Support')
-                    ->url(fn() => sprintf('https://t.me/%s', Profile::DEVELOPER_TELEGRAM))
+                    ->url(fn () => sprintf('https://t.me/%s', Profile::DEVELOPER_TELEGRAM))
                     ->openUrlInNewTab()
                     ->icon('lucide-send'),
             ])
