@@ -75,7 +75,8 @@ Global keys:
 - `OPS_DEPLOY_DEFAULT_STAGE`, `OPS_DEPLOY_PROJECT`, `OPS_DEPLOY_SSH_HOST`
 - `OPS_DEPLOY_REPO`, `OPS_DEPLOY_BRANCH`
 - `OPS_DEPLOY_KEEP_RELEASES` (default 5)
-- `OPS_DEPLOY_PHP_BIN` (auto-detects if empty — fallback order: php8.5 → php8.4 → php8.3 → php)
+- `OPS_DEPLOY_PHP_VERSION` (preferred PHP intent, e.g. `8.5` or `8.4`; if empty, PHP auto-detects)
+- `OPS_DEPLOY_PHP_BIN` (advanced override; when empty, derives from `OPS_DEPLOY_PHP_VERSION` or auto-detects in order: php8.5 → php8.4 → php8.3 → php)
 - `OPS_DEPLOY_PACKAGE_MANAGER_BIN` (supports `pnpm`, `bun`, or `npm`; auto-detects if empty — fallback order: pnpm → bun → npm)
 - `OPS_DEPLOY_RUN_USER` (default `www-data`)
 - `OPS_DEPLOY_SSL_EMAIL`
@@ -86,7 +87,9 @@ Per stage (`TEST` / `PROD`):
 - `OPS_DEPLOY_{STAGE}_DOMAIN`, `OPS_DEPLOY_{STAGE}_ROOT`
 - `OPS_DEPLOY_{STAGE}_GROUP` (Supervisor group, stage-scoped)
 - `OPS_DEPLOY_{STAGE}_HTTP_RUNTIME` (`fpm` default, or `octane`)
-- `OPS_DEPLOY_{STAGE}_FPM_SOCKET` (FPM only; auto-detects from selected PHP if empty)
+- `OPS_DEPLOY_{STAGE}_FPM_POOL` (FPM only; optional pool name such as `wahyudi`; derives dedicated socket/service names when set)
+- `OPS_DEPLOY_{STAGE}_FPM_SOCKET` (advanced FPM socket override; when empty, derives from PHP version + pool, then falls back to selected PHP)
+- `OPS_DEPLOY_{STAGE}_FPM_SERVICE` (advanced FPM systemd service override; when empty, derives from PHP version + pool and falls back to shared `phpX.Y-fpm.service`)
 - `OPS_DEPLOY_{STAGE}_OCTANE_SERVER` (Octane only: `swoole`, `roadrunner`, or `frankenphp`)
 - `OPS_DEPLOY_{STAGE}_OCTANE_PORT` (required for Octane)
 - `OPS_DEPLOY_{STAGE}_OCTANE_WORKERS` (request workers; default `1`, must be >= `1`)
@@ -148,7 +151,7 @@ wss_test:wss_test_reverb
 wss_test:wss_test_scheduler
 ```
 
-Every listed program is conditional. In FPM mode there is no Octane program; the system PHP-FPM service is outside the generated Supervisor group. Reverb also controls whether its websocket Nginx location exists. Nightwatch runs `nightwatch:agent` only when enabled; runtime env must set `NIGHTWATCH_ENABLED=true` and `NIGHTWATCH_INGEST_URI` to the configured port.
+Every listed program is conditional. In FPM mode there is no Octane program; PHP-FPM is managed by systemd, not Supervisor. Envoy resolves the service from `OPS_DEPLOY_PHP_VERSION` and optional `OPS_DEPLOY_{STAGE}_FPM_POOL`, then reloads that service during `restart-service`. Reverb also controls whether its websocket Nginx location exists. Nightwatch runs `nightwatch:agent` only when enabled; runtime env must set `NIGHTWATCH_ENABLED=true` and `NIGHTWATCH_INGEST_URI` to the configured port.
 
 Octane concurrency is opt-in beyond the minimum request worker. The generated Supervisor command never uses `auto`: it starts with one request worker and, for Swoole, zero task workers. Apps that call `Octane::concurrently()` or otherwise dispatch Swoole tasks must set `OPS_DEPLOY_{STAGE}_OCTANE_TASK_WORKERS` to an intentional positive count and re-run `bootstrap`.
 
@@ -528,7 +531,7 @@ location @octane {
 }
 ```
 
-In FPM mode, it renders `index index.php` plus `try_files $uri $uri/ /index.php?$query_string` with a PHP handler directed to `OPS_DEPLOY_{STAGE}_FPM_SOCKET`, so `/` resolves through Laravel rather than returning an Nginx directory-index 403.
+In FPM mode, it renders `index index.php` plus `try_files $uri $uri/ /index.php?$query_string` with a PHP handler directed to the resolved FPM socket. The socket is derived from `OPS_DEPLOY_PHP_VERSION` plus optional `OPS_DEPLOY_{STAGE}_FPM_POOL` unless `OPS_DEPLOY_{STAGE}_FPM_SOCKET` is explicitly set. `/` resolves through Laravel rather than returning an Nginx directory-index 403.
 
 Key properties:
 - `server_name {domain}`

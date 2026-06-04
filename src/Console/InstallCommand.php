@@ -45,12 +45,15 @@ use function Laravel\Prompts\multiselect;
     {--root= : Single-stage deploy root}
     {--group= : Single-stage Supervisor group}
     {--http-runtime=fpm : HTTP runtime: fpm or octane}
-    {--fpm-socket= : PHP-FPM socket for FPM runtime; blank auto-detects from selected PHP}
+    {--php-version= : PHP version intent on the VPS, e.g. 8.5 or 8.4; blank auto-detects}
+    {--fpm-pool= : Optional PHP-FPM pool name for derived socket/service, e.g. wahyudi}
+    {--fpm-socket= : Advanced PHP-FPM socket override for FPM runtime; blank derives from PHP version/pool}
+    {--fpm-service= : Advanced PHP-FPM systemd service override; blank derives from PHP version/pool}
     {--octane-server=swoole : Octane server: swoole, roadrunner, or frankenphp}
     {--octane-port= : Single-stage Octane port}
     {--reverb-port= : Single-stage Reverb port}
     {--nightwatch-port= : Single-stage Nightwatch port}
-    {--php-bin= : PHP binary on the VPS; blank auto-detects php8.5, php8.4, php8.3, then php}
+    {--php-bin= : Advanced PHP binary override on the VPS; blank derives from PHP version or auto-detects}
     {--package-manager-bin= : JavaScript package manager binary on the VPS; blank auto-detects pnpm, bun, then npm}
     {--npm-bin= : Deprecated alias for --package-manager-bin}
     {--run-user=www-data : Runtime user for ACL and Supervisor}
@@ -951,7 +954,22 @@ BLADE.PHP_EOL;
         $domain = $this->option('domain') ?: 'example.com';
         $root = $this->option('root') ?: "/var/www/{$domain}";
         $group = $this->option('group') ?: "{$project}_{$defaultStage}";
+        $phpVersion = $this->option('php-version') ?: '';
+        $fpmPool = $this->option('fpm-pool') ?: '';
         $fpmSocket = $this->option('fpm-socket') ?: '';
+        $fpmService = $this->option('fpm-service') ?: '';
+
+        if ($phpVersion !== '' && preg_match('/^\d+\.\d+$/', $phpVersion) !== 1) {
+            throw new RuntimeException('Deployment PHP version must be a major.minor value such as [8.5] or [8.4].');
+        }
+
+        if ($fpmPool !== '' && preg_match('/^[A-Za-z0-9_.-]+$/', $fpmPool) !== 1) {
+            throw new RuntimeException('Deployment FPM pool may only contain letters, numbers, dots, underscores, or dashes.');
+        }
+
+        if ($fpmService !== '' && preg_match('/^[A-Za-z0-9_.@-]+\.service$/', $fpmService) !== 1) {
+            throw new RuntimeException('Deployment FPM service must be a systemd service unit name.');
+        }
         $octaneServer = $this->option('octane-server') ?: 'swoole';
 
         if (! in_array($octaneServer, ['swoole', 'roadrunner', 'frankenphp'], true)) {
@@ -982,6 +1000,7 @@ BLADE.PHP_EOL;
             '{{ ssh_host }}' => $sshHost,
             '{{ repo }}' => $repo,
             '{{ branch }}' => $branch,
+            '{{ php_version }}' => $phpVersion,
             '{{ php_bin }}' => $phpBin,
             '{{ package_manager_bin }}' => $packageManagerBin,
             '{{ run_user }}' => $runUser,
@@ -989,7 +1008,9 @@ BLADE.PHP_EOL;
             '{{ test_enabled }}' => $testEnabled,
             '{{ domain }}' => $domain,
             '{{ http_runtime }}' => $httpRuntime,
+            '{{ fpm_pool }}' => $fpmPool,
             '{{ fpm_socket }}' => $fpmSocket,
+            '{{ fpm_service }}' => $fpmService,
             '{{ octane_server }}' => $octaneServer,
             '{{ prod_enabled }}' => $prodEnabled,
             '{{ root }}' => $root,

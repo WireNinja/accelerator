@@ -84,12 +84,36 @@
         return trim((string) shell_exec('ssh '.escapeshellarg($sshHost).' '.escapeshellarg($script).' 2>/dev/null'));
     };
 
-    $remoteFpmSocket = function (string $sshHost, string $phpBin): string {
-        $socketCandidates = [];
+    $phpVersionFromBin = function (string $phpBin): string {
         $phpCommand = basename($phpBin);
 
-        if (preg_match('/php(\d+\.\d+)/', $phpCommand, $matches) === 1) {
-            $socketCandidates[] = "/run/php/php{$matches[1]}-fpm.sock";
+        return preg_match('/php(\d+\.\d+)/', $phpCommand, $matches) === 1 ? $matches[1] : '';
+    };
+
+    $remoteSystemdServiceExists = function (string $sshHost, string $service): bool {
+        $script = 'systemctl list-unit-files '.escapeshellarg($service).' --no-legend 2>/dev/null | grep -q . || systemctl status '.escapeshellarg($service).' >/dev/null 2>&1';
+
+        exec('ssh '.escapeshellarg($sshHost).' '.escapeshellarg($script).' 2>/dev/null', $output, $status);
+
+        return $status === 0;
+    };
+
+    $remoteFpmSocket = function (string $sshHost, string $phpBin, string $phpVersion = '', string $fpmPool = '') use ($phpVersionFromBin): string {
+        $socketCandidates = [];
+        $version = $phpVersion !== '' ? $phpVersion : $phpVersionFromBin($phpBin);
+
+        if ($version !== '' && $fpmPool !== '') {
+            $socketCandidates[] = "/run/php/php{$version}-fpm-{$fpmPool}.sock";
+        }
+
+        if ($version !== '') {
+            $socketCandidates[] = "/run/php/php{$version}-fpm.sock";
+        }
+
+        if ($fpmPool !== '') {
+            foreach (['8.5', '8.4', '8.3'] as $fallbackVersion) {
+                $socketCandidates[] = "/run/php/php{$fallbackVersion}-fpm-{$fpmPool}.sock";
+            }
         }
 
         $socketCandidates = array_values(array_unique([
@@ -113,10 +137,17 @@
     $group = $value($envoy, "OPS_DEPLOY_{$stageKey}_GROUP");
     $runUser = $value($envoy, "OPS_DEPLOY_{$stageKey}_RUN_USER", $value($envoy, 'OPS_DEPLOY_RUN_USER', 'www-data'));
     $sshHost = $value($envoy, "OPS_DEPLOY_{$stageKey}_SSH_HOST", $value($envoy, 'OPS_DEPLOY_SSH_HOST', 'onidel'));
+    $phpVersion = $value($envoy, "OPS_DEPLOY_{$stageKey}_PHP_VERSION", $value($envoy, 'OPS_DEPLOY_PHP_VERSION'));
+    $fpmPool = $value($envoy, "OPS_DEPLOY_{$stageKey}_FPM_POOL", $value($envoy, 'OPS_DEPLOY_FPM_POOL'));
     $phpBin = $value($envoy, "OPS_DEPLOY_{$stageKey}_PHP_BIN", $value($envoy, 'OPS_DEPLOY_PHP_BIN'));
 
     if ($phpBin === '') {
-        $phpBin = $remoteCommandPath($sshHost, ['php8.5', 'php8.4', 'php8.3', 'php']) ?: 'php';
+        $phpBinCandidates = $phpVersion !== '' ? ["php{$phpVersion}"] : ['php8.5', 'php8.4', 'php8.3', 'php'];
+        $phpBin = $remoteCommandPath($sshHost, $phpBinCandidates) ?: ($phpVersion !== '' ? "php{$phpVersion}" : 'php');
+    }
+
+    if ($phpVersion === '') {
+        $phpVersion = $phpVersionFromBin($phpBin);
     }
 
     $packageManagerBin = $value(
@@ -132,9 +163,18 @@
     $httpRuntime = $value($envoy, "OPS_DEPLOY_{$stageKey}_HTTP_RUNTIME", 'fpm');
     $octaneServer = $value($envoy, "OPS_DEPLOY_{$stageKey}_OCTANE_SERVER", $value($envoy, "OPS_DEPLOY_{$stageKey}_RUNTIME", 'swoole'));
     $fpmSocket = $value($envoy, "OPS_DEPLOY_{$stageKey}_FPM_SOCKET");
+    $fpmService = $value($envoy, "OPS_DEPLOY_{$stageKey}_FPM_SERVICE", $value($envoy, 'OPS_DEPLOY_FPM_SERVICE'));
 
     if ($fpmSocket === '') {
-        $fpmSocket = $remoteFpmSocket($sshHost, $phpBin) ?: '/run/php/php8.5-fpm.sock';
+        $fpmSocket = $remoteFpmSocket($sshHost, $phpBin, $phpVersion, $fpmPool) ?: ($phpVersion !== '' ? "/run/php/php{$phpVersion}-fpm.sock" : '/run/php/php8.5-fpm.sock');
+    }
+
+    if ($fpmService === '' && $phpVersion !== '') {
+        $dedicatedFpmService = $fpmPool !== '' ? "php{$phpVersion}-fpm-{$fpmPool}.service" : '';
+        $sharedFpmService = "php{$phpVersion}-fpm.service";
+        $fpmService = $dedicatedFpmService !== '' && $remoteSystemdServiceExists($sshHost, $dedicatedFpmService)
+            ? $dedicatedFpmService
+            : $sharedFpmService;
     }
 
     $octanePort = $value($envoy, "OPS_DEPLOY_{$stageKey}_OCTANE_PORT");
@@ -178,8 +218,20 @@
         throw new RuntimeException("Invalid HTTP runtime [{$httpRuntime}] for stage [{$stage}]. Expected [fpm] or [octane].");
     }
 
+    if ($phpVersion !== '' && preg_match('/^\d+\.\d+$/', $phpVersion) !== 1) {
+        throw new RuntimeException("Invalid PHP version [{$phpVersion}]. Expected a major.minor value such as [8.5] or [8.4].");
+    }
+
+    if ($fpmPool !== '' && preg_match('/^[A-Za-z0-9_.-]+$/', $fpmPool) !== 1) {
+        throw new RuntimeException("Invalid FPM pool [{$fpmPool}]. Use only letters, numbers, dots, underscores, or dashes.");
+    }
+
+    if ($fpmService !== '' && preg_match('/^[A-Za-z0-9_.@-]+\.service$/', $fpmService) !== 1) {
+        throw new RuntimeException("Invalid FPM service [{$fpmService}]. Expected a systemd service unit name.");
+    }
+
     if ($httpRuntime === 'fpm' && $fpmSocket === '') {
-        throw new RuntimeException("Missing OPS_DEPLOY_{$stageKey}_FPM_SOCKET for FPM stage [{$stage}].");
+        throw new RuntimeException("Unable to resolve FPM socket for stage [{$stage}]. Set OPS_DEPLOY_PHP_VERSION with optional OPS_DEPLOY_{$stageKey}_FPM_POOL, or provide OPS_DEPLOY_{$stageKey}_FPM_SOCKET as an override.");
     }
 
     if ($httpRuntime === 'octane') {
@@ -979,6 +1031,10 @@ CONF, [
 
 @task('restart-service', ['on' => 'vps'])
     set -euo pipefail
+    @if($httpRuntime === 'fpm' && $fpmService !== '')
+        echo "[restart-service] Reloading PHP-FPM service {{ $fpmService }}."
+        sudo systemctl reload {{ $fpmService }}
+    @endif
     @if(! $hasSupervisorPrograms)
         echo "[restart-service] No Supervisor-managed programs enabled for {{ $stage }}."
     @else

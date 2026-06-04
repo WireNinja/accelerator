@@ -13,7 +13,7 @@ Format per entry:
 
 ## v1.1.78
 
-No deployment contract changes beyond v1.1.66.
+Deployment contract changes from v1.1.66 are listed below.
 
 ### 🔴 BREAKING — Envoy deploy binary and Octane server keys renamed
 
@@ -30,6 +30,38 @@ The deploy template now uses clearer `.env.envoy` keys:
 `OPS_DEPLOY_PHP_BIN`, `OPS_DEPLOY_PACKAGE_MANAGER_BIN`, and `OPS_DEPLOY_{STAGE}_FPM_SOCKET` may now be left empty. Envoy resolves PHP on the VPS in this order: `php8.5`, `php8.4`, `php8.3`, `php`. The package manager resolves in this order: `pnpm`, `bun`, `npm`. FPM socket auto-detection tries the selected PHP version first, then common PHP 8.5 / 8.4 / 8.3 socket paths.
 
 **Action required**: Rename the keys in every project `.env.envoy` before republishing the deploy template. Remove stale `OPS_DEPLOY_SERVER`; it was never read by the package Envoy bridge. Existing `OPS_DEPLOY_SSH_HOST` remains required for local `ssh` / `scp` bootstrap tasks and must match the project `@servers(['vps' => ...])` alias.
+
+### 🔴 BREAKING — Envoy PHP-FPM config now uses PHP version + optional pool intent
+
+FPM deployments should now express intent with PHP version and optional FPM pool instead of manually repeating the same PHP version in the CLI binary, FPM socket, and service unit.
+
+```diff
++ OPS_DEPLOY_PHP_VERSION=8.5
+  OPS_DEPLOY_PHP_BIN=
+
++ OPS_DEPLOY_{STAGE}_FPM_POOL=
+  OPS_DEPLOY_{STAGE}_FPM_SOCKET=
++ OPS_DEPLOY_{STAGE}_FPM_SERVICE=
+```
+
+Dedicated client pools can be configured without repeating the socket/service path:
+
+```dotenv
+OPS_DEPLOY_PHP_VERSION=8.4
+OPS_DEPLOY_TEST_FPM_POOL=wahyudi
+OPS_DEPLOY_TEST_FPM_SOCKET=
+OPS_DEPLOY_TEST_FPM_SERVICE=
+```
+
+Envoy derives:
+
+- PHP CLI binary: `php8.4`
+- preferred dedicated socket: `/run/php/php8.4-fpm-wahyudi.sock`
+- preferred dedicated service: `php8.4-fpm-wahyudi.service` when the unit exists on the VPS, otherwise `php8.4-fpm.service`
+
+The old explicit keys remain supported as advanced overrides. Fill `OPS_DEPLOY_PHP_BIN`, `OPS_DEPLOY_{STAGE}_FPM_SOCKET`, or `OPS_DEPLOY_{STAGE}_FPM_SERVICE` only when the VPS uses non-standard names.
+
+**Action required**: Update project `.env.envoy` files to add `OPS_DEPLOY_PHP_VERSION` and `OPS_DEPLOY_{STAGE}_FPM_POOL`. Prefer blank socket/service overrides unless the server uses a custom path or unit. For dedicated FPM masters, make sure the derived service exists before deploy; Envoy reloads the resolved FPM service during `restart-service`.
 
 ### 🟡 AWARENESS — Isolated `/srv/clients/{client}` ownership is still explicit operator policy
 

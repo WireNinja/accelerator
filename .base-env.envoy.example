@@ -10,6 +10,8 @@ OPS_DEPLOY_SSH_HOST={{ ssh_host }}
 OPS_DEPLOY_REPO={{ repo }}
 OPS_DEPLOY_BRANCH={{ branch }}
 OPS_DEPLOY_KEEP_RELEASES=5
+# Preferred PHP intent. Leave PHP_BIN blank unless the VPS binary has a custom name/path.
+OPS_DEPLOY_PHP_VERSION={{ php_version }}
 OPS_DEPLOY_PHP_BIN={{ php_bin }}
 OPS_DEPLOY_PACKAGE_MANAGER_BIN={{ package_manager_bin }}
 OPS_DEPLOY_RUN_USER={{ run_user }}
@@ -21,7 +23,11 @@ OPS_DEPLOY_TEST_DOMAIN=test.{{ domain }}
 OPS_DEPLOY_TEST_ROOT=/var/www/test.{{ domain }}
 OPS_DEPLOY_TEST_GROUP={{ project }}_test
 OPS_DEPLOY_TEST_HTTP_RUNTIME={{ http_runtime }}
+# FPM_POOL derives /run/php/phpX.Y-fpm-{pool}.sock and phpX.Y-fpm-{pool}.service when present.
+# Leave FPM_SOCKET/FPM_SERVICE blank unless the VPS uses non-standard names.
+OPS_DEPLOY_TEST_FPM_POOL={{ fpm_pool }}
 OPS_DEPLOY_TEST_FPM_SOCKET={{ fpm_socket }}
+OPS_DEPLOY_TEST_FPM_SERVICE={{ fpm_service }}
 OPS_DEPLOY_TEST_OCTANE_SERVER={{ octane_server }}
 OPS_DEPLOY_TEST_OCTANE_PORT=9012
 OPS_DEPLOY_TEST_OCTANE_WORKERS=1
@@ -43,7 +49,11 @@ OPS_DEPLOY_PROD_DOMAIN={{ domain }}
 OPS_DEPLOY_PROD_ROOT={{ root }}
 OPS_DEPLOY_PROD_GROUP={{ group }}
 OPS_DEPLOY_PROD_HTTP_RUNTIME={{ http_runtime }}
+# FPM_POOL derives /run/php/phpX.Y-fpm-{pool}.sock and phpX.Y-fpm-{pool}.service when present.
+# Leave FPM_SOCKET/FPM_SERVICE blank unless the VPS uses non-standard names.
+OPS_DEPLOY_PROD_FPM_POOL={{ fpm_pool }}
 OPS_DEPLOY_PROD_FPM_SOCKET={{ fpm_socket }}
+OPS_DEPLOY_PROD_FPM_SERVICE={{ fpm_service }}
 OPS_DEPLOY_PROD_OCTANE_SERVER={{ octane_server }}
 OPS_DEPLOY_PROD_OCTANE_PORT={{ octane_port }}
 OPS_DEPLOY_PROD_OCTANE_WORKERS=1

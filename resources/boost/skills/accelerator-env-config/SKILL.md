@@ -123,11 +123,13 @@ When comparing env files, compare keys first. Values may intentionally differ be
 - `OPS_DEPLOY_DEFAULT_STAGE`
 - shared deploy defaults (repo, branch, PHP bin, JavaScript package manager bin, run user, SSL email, KEEP_RELEASES)
 - per-stage `TEST` / `PROD` domain, root, group, and `HTTP_RUNTIME` (`fpm` or `octane`)
-- `_FPM_SOCKET` for FPM; Octane server, port, and explicit worker counts for Octane
+- `OPS_DEPLOY_PHP_VERSION` as the preferred PHP intent and `_FPM_POOL` for optional dedicated FPM pools
+- `_FPM_SOCKET` / `_FPM_SERVICE` only as advanced FPM overrides; Octane server, port, and explicit worker counts for Octane
 - service flags for Horizon or plain queue worker, Reverb, Scheduler, and Nightwatch
 - Reverb and Nightwatch ports when those services are enabled
 
 `OPS_DEPLOY_{STAGE}_HTTP_RUNTIME=fpm` routes Nginx through the configured FPM socket and health-checks through Nginx. `octane` requires `OPS_DEPLOY_{STAGE}_OCTANE_PORT` and health-checks the Octane process directly.
+For FPM, prefer `OPS_DEPLOY_PHP_VERSION=8.5` (or `8.4`) plus optional `OPS_DEPLOY_{STAGE}_FPM_POOL=pool-name`. Envoy derives `phpX.Y`, `/run/php/phpX.Y-fpm[-pool].sock`, and the matching systemd service. Keep `_FPM_SOCKET` and `_FPM_SERVICE` blank unless the VPS uses non-standard names.
 `OPS_DEPLOY_{STAGE}_OCTANE_WORKERS` defaults to `1`. For Swoole, `OPS_DEPLOY_{STAGE}_OCTANE_TASK_WORKERS` defaults to `0`; set a positive task-worker count only when the application dispatches Octane tasks.
 Use either `OPS_DEPLOY_{STAGE}_HORIZON_ENABLED=true` or `OPS_DEPLOY_{STAGE}_QUEUE_WORKER_ENABLED=true`, never both. The latter renders a bounded `queue:work` Supervisor program suitable for Redis queue apps without Horizon.
 
