@@ -9,6 +9,9 @@ description: Deploy Laravel apps with WireNinja Accelerator Envoy release flow â
 
 First deployment, continuous deployment, deployment cleanup, Envoy release folders, `.env.envoy` / `.env.staging` / `.env.production`, Nginx, Supervisor, Octane, Reverb, Horizon, Scheduler, Nightwatch, OPcache, `larahelp`, `setfacl`, db backup, maintenance mode, health checks, release prune, rollback.
 
+Use `accelerator-env-config` first when the task is only about env/config key contracts or safe env inspection.
+Use `accelerator-ops-observability` when the task is read-only diagnosis of an already deployed runtime and no deploy/restart should happen.
+
 ## Non-Negotiable Rules
 
 - Envoy is the deployment orchestrator.

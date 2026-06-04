@@ -69,6 +69,16 @@ This patch does not change deploy root ownership behavior. `prepare-layout` stil
 
 **Action required**: For strict client isolation such as `/srv/clients/wahyudi`, decide the deploy user, runtime user, root owner, and group policy before changing `prepare-layout`. Do not blindly switch to `sudo su`; use passwordless `sudo` per privileged command.
 
+### 🟡 AWARENESS — Accelerator ops skills now have stricter boundaries
+
+`accelerator-env-config`, `accelerator-deployment`, and `accelerator-ops-observability` now document clearer ownership:
+
+- `accelerator-env-config` owns env/config key contracts and safe redacted env inspection.
+- `accelerator-deployment` owns mutating deploy operations such as bootstrap, deploy, rollback, restart, Nginx/Supervisor/systemd changes, and release layout changes.
+- `accelerator-ops-observability` is read-only by default and no longer includes Shield regeneration, model audit, or Filament resource verification sections.
+
+**Action required**: None. AI agents should switch skills instead of using observability as a catch-all ops/development checklist.
+
 ---
 
 ## v1.1.77

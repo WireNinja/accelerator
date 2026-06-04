@@ -7,7 +7,10 @@ description: Work with WireNinja Accelerator env files, config defaults, EnvRead
 
 ## When To Use
 
-Adding or reviewing Accelerator config keys, `.env.example`, `.base-env.example`, `.env.envoy`, `accelerator:env`, link-preload middleware alias, or any code that reads deployment/runtime settings.
+Adding or reviewing Accelerator config keys, `.env.example`, `.base-env.example`, `.env.envoy` key shape, `accelerator:env`, link-preload middleware alias, or any code that reads runtime/deploy configuration.
+
+Use `accelerator-deployment` for actual Envoy deploy flow, Nginx/Supervisor generation, release layout, maintenance, rollback, or server-side service behavior.
+Use `accelerator-ops-observability` for read-only runtime diagnosis after deployment.
 
 ## Rules
 
@@ -134,3 +137,5 @@ For FPM, prefer `OPS_DEPLOY_PHP_VERSION=8.5` (or `8.4`) plus optional `OPS_DEPLO
 Use either `OPS_DEPLOY_{STAGE}_HORIZON_ENABLED=true` or `OPS_DEPLOY_{STAGE}_QUEUE_WORKER_ENABLED=true`, never both. The latter renders a bounded `queue:work` Supervisor program suitable for Redis queue apps without Horizon.
 
 Runtime deploy intent belongs only in `.env.envoy` via `OPS_DEPLOY_{STAGE}_HTTP_RUNTIME` and, for Octane, `OPS_DEPLOY_{STAGE}_OCTANE_SERVER`. Do not add deploy runtime selector keys back to Laravel runtime `.env` files.
+
+For task sequencing, this skill owns the deploy env contract and redaction rules only. Do not use it as the runbook for `init`, `deploy`, `rollback`, Nginx bootstrap, Supervisor, or live server triage; use `accelerator-deployment` or `accelerator-ops-observability` for those.

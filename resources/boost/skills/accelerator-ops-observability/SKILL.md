@@ -7,7 +7,10 @@ description: Inspect Accelerator runtime state, logs, backup status, OPcache, Ho
 
 ## When To Use
 
-Debugging deployment health, runtime services, OPcache state, logs, backup status, Horizon, Nightwatch, Reverb, Octane, Supervisor, or Nginx in an Accelerator project.
+Read-only debugging of deployment health, runtime services, OPcache state, logs, backup status, Horizon, Nightwatch, Reverb, Octane, Supervisor, or Nginx in an Accelerator project.
+
+Use `accelerator-deployment` when the task requires deploying, bootstrapping, rollback, pruning, restarting services, or changing Nginx/Supervisor/systemd state.
+Use `accelerator-env-config` when the task is about `.env`, `.env.envoy`, config keys, or safe env redaction.
 
 ## Primary Checks
 
@@ -17,10 +20,10 @@ Use Envoy for deploy/service state:
 vendor/bin/envoy run status --stage=test
 vendor/bin/envoy run releases --stage=test
 vendor/bin/envoy run logs --stage=test --service=octane
-vendor/bin/envoy run restart --stage=test --service=all
 ```
 
 Use `--stage=prod` only after confirming production is the intended target.
+Do not run `restart`, `deploy`, `rollback`, `bootstrap`, or `prune` from this skill unless the user explicitly asks for a mutating operation; switch to `accelerator-deployment` for that workflow.
 
 ## Backup Status
 
@@ -133,62 +136,11 @@ Expected clean state:
 
 For Livewire, Filament, or dynamic package JavaScript 404s behind Nginx, check whether a static asset location is intercepting `.js` requests before Laravel/Octane can handle route-backed assets.
 
-## Shield Regeneration
+## Out Of Scope
 
-Idempotent — safe to run repeatedly:
+Do not use this skill for:
 
-```bash
-php artisan shield:safe-regenerate
-php artisan shield:safe-regenerate --panel=admin
-php artisan shield:safe-regenerate --json --compact
-```
-
-JSON shape:
-
-```json
-{
-  "status": "OK",
-  "panel": "admin",
-  "shield_exit_code": 0
-}
-```
-
-`--panel=` defaults to `admin`. Provide explicit panel ID for multi-panel projects. The wrapper propagates `shield:generate` exit code (was previously discarded).
-
-## Model Audit
-
-```bash
-php artisan accelerator:model-audit User                    # interactive
-php artisan accelerator:model-audit User --json --compact   # for AI / CI
-```
-
-JSON shape:
-
-```json
-{
-  "status": "WARNING",
-  "model": "App\\Models\\User",
-  "summary": {"columns": 27, "relationships": 18},
-  "findings": [
-    {"target": "...", "issue": "...", "severity": "critical|warning|info", "suggestion": "..."}
-  ]
-}
-```
-
-Checks: BigDecimalCast on financial columns, immutable date casts, PHPDoc drift.
-
-## Resource Verification (anti-bullshit gate)
-
-Hard pass/fail JSON gate for Filament resources. Critical-only checks:
-
-```bash
-php artisan accelerator:verify-resource user --compact
-```
-
-Exit codes: `0=PASS`, `1=FAIL`. Output:
-
-```json
-{"status":"PASS","resource":"user","class":"App\\Filament\\Resources\\Users\\UserResource","findings":[]}
-```
-
-Critical checks: `BetterResource` trait, `#[DiscoverAsResource]` attribute, no bulk action API leak (read from scanner's `table.violations`), policy registered. Best-practice items (form/table split, empty state) are reviewed in code, not in the gate. AI agents must produce a PASS before claiming "selesai".
+- Shield regeneration; use the Filament/security workflow that is changing permissions.
+- Model relationship/cast/schema review; use `accelerator-model-outline`.
+- Filament resource gates; use `accelerator-filament`.
+- Deployment mutation; use `accelerator-deployment`.
