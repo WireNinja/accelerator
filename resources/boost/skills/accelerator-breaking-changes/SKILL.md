@@ -11,6 +11,24 @@ Format per entry:
 
 ---
 
+## v1.1.77
+
+No deployment contract changes beyond v1.1.66.
+
+### 🟡 AWARENESS — Activity audit relation now respects configured field order and visibility
+
+`ActivitiesRelationManager` now filters and orders displayed change rows using `config/audit.php` attributes plus configured relationship snapshot keys. Removing an attribute such as `manager_id` from the model audit config hides it from old and new activity detail views instead of falling back to generated English-ish labels.
+
+**Action required**: None. If Octane workers have cached old audit config, restart the worker or call `WireNinja\Accelerator\Support\ActivityLog\AuditConfig::flush()` in the current process before expecting changed config labels/order to appear.
+
+### 🟡 AWARENESS — Activity detail separates technical event, description, time, and causer
+
+Activity detail now shows the technical event as a localized event label, treats duplicate event/description values as missing custom description, adds relative time next to the exact timestamp, and renders the causer in a dedicated section with name, username, email, avatar, and role badges when available.
+
+**Action required**: None. Custom activity descriptions remain supported and are still shown as the activity keterangan.
+
+---
+
 ## v1.1.76
 
 No deployment contract changes beyond v1.1.66.

@@ -65,20 +65,20 @@ trait InteractsWithApplication
         );
 
         Password::defaults(
-            fn(): ?Password => app()->isProduction()
+            fn (): ?Password => app()->isProduction()
                 ? Password::min(12)
-                ->mixedCase()
-                ->letters()
-                ->numbers()
-                ->symbols()
-                ->uncompromised()
+                    ->mixedCase()
+                    ->letters()
+                    ->numbers()
+                    ->symbols()
+                    ->uncompromised()
                 : null,
         );
     }
 
     protected function bootTelegramConfiguration(): void
     {
-        rescue(fn(): bool => resolve(TelegramBotConfigurator::class)->syncConfig());
+        rescue(fn (): bool => resolve(TelegramBotConfigurator::class)->syncConfig());
     }
 
     /**
@@ -94,7 +94,7 @@ trait InteractsWithApplication
             return;
         }
 
-        Session::extend('octane-table', fn(Application $application): SessionHandlerInterface => new OctaneTableSessionHandler(
+        Session::extend('octane-table', fn (Application $application): SessionHandlerInterface => new OctaneTableSessionHandler(
             minutes: (int) $application['config']->get('session.lifetime'),
             tableName: (string) $application['config']->get('session.octane_table', 'sessions'),
         ));

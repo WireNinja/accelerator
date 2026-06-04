@@ -7,6 +7,7 @@ namespace WireNinja\Accelerator\Telemetry;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Http\Request;
 use Laravel\Octane\Facades\Octane;
+use SplFileObject;
 use Throwable;
 
 /**
@@ -385,7 +386,7 @@ final class TelemetryRecorder
         $start = max(1, $line - $radius);
         $end = $line + $radius;
         $snippet = [];
-        $source = new \SplFileObject($file, 'r');
+        $source = new SplFileObject($file, 'r');
 
         for ($currentLine = $start; $currentLine <= $end; $currentLine++) {
             $source->seek($currentLine - 1);

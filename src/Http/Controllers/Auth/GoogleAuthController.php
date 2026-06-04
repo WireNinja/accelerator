@@ -4,8 +4,8 @@ namespace WireNinja\Accelerator\Http\Controllers\Auth;
 
 use Exception;
 use Illuminate\Routing\Controller;
-use Laravel\Socialite\Two\User as OAuth2User;
 use Laravel\Socialite\Facades\Socialite;
+use Laravel\Socialite\Two\User as OAuth2User;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use WireNinja\Accelerator\Services\GoogleOAuthService;
 

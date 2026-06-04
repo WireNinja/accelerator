@@ -24,6 +24,7 @@ use Laravel\Octane\Listeners\FlushUploadedFiles;
 use Laravel\Octane\Listeners\ReportException;
 use Laravel\Octane\Listeners\StopWorkerIfNecessary;
 use Laravel\Octane\Octane;
+use WireNinja\Accelerator\Telemetry\TelemetryManager;
 
 return [
 
@@ -167,7 +168,7 @@ return [
 
         // Telemetry exception buffer — captures exceptions in shared memory
         // and flushes to SQLite every N seconds. Zero request latency impact.
-        ...\WireNinja\Accelerator\Telemetry\TelemetryManager::octaneTableConfig(
+        ...TelemetryManager::octaneTableConfig(
             rows: (int) env('ACCELERATOR_TELEMETRY_BUFFER_ROWS', 128),
             bytes: (int) env('ACCELERATOR_TELEMETRY_BUFFER_BYTES', 65535),
         ),

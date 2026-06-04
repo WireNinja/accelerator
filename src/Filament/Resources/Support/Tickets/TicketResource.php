@@ -3,6 +3,9 @@
 namespace WireNinja\Accelerator\Filament\Resources\Support\Tickets;
 
 use Filament\Resources\Pages\PageRegistration;
+use Filament\Resources\RelationManagers\RelationGroup;
+use Filament\Resources\RelationManagers\RelationManager;
+use Filament\Resources\RelationManagers\RelationManagerConfiguration;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Table;
@@ -22,7 +25,7 @@ use WireNinja\Accelerator\Filament\Traits\BetterResource;
 use WireNinja\Accelerator\Model\Ticket;
 
 /**
- * @extends Resource<Ticket>
+ * @extends resource<Ticket>
  */
 class TicketResource extends Resource
 {
@@ -44,7 +47,7 @@ class TicketResource extends Resource
     }
 
     /**
-     * @return array<class-string<\Filament\Resources\RelationManagers\RelationManager> | \Filament\Resources\RelationManagers\RelationGroup | \Filament\Resources\RelationManagers\RelationManagerConfiguration>
+     * @return array<class-string<RelationManager> | RelationGroup | RelationManagerConfiguration>
      */
     #[Override]
     public static function getRelations(): array

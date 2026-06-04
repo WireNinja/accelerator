@@ -78,7 +78,7 @@ class AcceleratedUser extends Authenticatable implements FilamentUser, HasAppAut
         return Str::of($this->name)
             ->explode(' ')
             ->take(2)
-            ->map(fn($word) => Str::substr($word, 0, 1))
+            ->map(fn ($word) => Str::substr($word, 0, 1))
             ->implode('');
     }
 
@@ -99,7 +99,7 @@ class AcceleratedUser extends Authenticatable implements FilamentUser, HasAppAut
 
     public function getFilamentAvatarUrl(): ?string
     {
-        return $this->avatar ? Storage::url($this->avatar) : (new DiceBearAvatarProvider())->get($this);
+        return $this->avatar ? Storage::url($this->avatar) : (new DiceBearAvatarProvider)->get($this);
     }
 
     public function isSuspended(): bool

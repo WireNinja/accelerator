@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\File;
 use Illuminate\View\View;
+use SplFileObject;
 use WireNinja\Accelerator\Telemetry\TelemetryDatabase;
 
 class TelemetryController
@@ -246,7 +247,7 @@ class TelemetryController
      */
     private function readLogEntries(string $logPath, int $page, int $perPage): array
     {
-        $file = new \SplFileObject($logPath, 'r');
+        $file = new SplFileObject($logPath, 'r');
         $file->seek(PHP_INT_MAX);
         $lastLine = $file->key();
 

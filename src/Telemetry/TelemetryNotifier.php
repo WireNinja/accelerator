@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace WireNinja\Accelerator\Telemetry;
 
 use Illuminate\Support\Facades\Http;
-use Throwable;
 
 /**
  * Sends telemetry notifications to Discord and/or Telegram.

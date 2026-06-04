@@ -14,7 +14,7 @@ final class AuditRelationGroup
     /**
      * @param  array<class-string<RelationManager>|RelationManagerConfiguration>  $managers
      */
-    public static function make(array $managers, string | Closure $label = 'Audit'): RelationGroup
+    public static function make(array $managers, string|Closure $label = 'Audit'): RelationGroup
     {
         return RelationGroup::make($label, $managers)
             ->deferBadge();

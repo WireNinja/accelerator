@@ -13,6 +13,7 @@ use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Components\Section;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
 use Illuminate\Support\HtmlString;
 use Illuminate\Support\Str;
@@ -37,14 +38,17 @@ class ActivitiesRelationManager extends RelationManager
                 TextColumn::make('created_at')
                     ->label('Waktu')
                     ->dateTime()
+                    ->description(fn (Activity $record): ?string => $record->created_at?->diffForHumans())
                     ->sortable(),
                 TextColumn::make('description')
-                    ->label('Aktivitas')
+                    ->label('Keterangan')
+                    ->state(fn (Activity $record): string => $this->formatActivityDescription($record))
                     ->searchable()
                     ->wrap(),
                 TextColumn::make('event')
-                    ->label('Event')
+                    ->label('Event Teknis')
                     ->badge()
+                    ->formatStateUsing(fn (?string $state): string => $this->formatEventLabel($state))
                     ->sortable(),
                 TextColumn::make('causer.name')
                     ->label('Pelaku')
@@ -52,12 +56,12 @@ class ActivitiesRelationManager extends RelationManager
                     ->searchable(),
                 TextColumn::make('attribute_changes_summary')
                     ->label('Perubahan')
-                    ->state(fn(Activity $record): string => $this->summarizeChanges($record))
+                    ->state(fn (Activity $record): string => $this->summarizeChanges($record))
                     ->wrap()
                     ->toggleable(),
                 TextColumn::make('properties_summary')
                     ->label('Properti')
-                    ->state(fn(Activity $record): string => $this->summarizeProperties($record->properties))
+                    ->state(fn (Activity $record): string => $this->summarizeProperties($record->properties))
                     ->wrap()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
@@ -74,23 +78,31 @@ class ActivitiesRelationManager extends RelationManager
                                 ->components([
                                     TextEntry::make('created_at')
                                         ->label('Waktu')
-                                        ->dateTime(),
+                                        ->state(fn (Activity $record): HtmlString => $this->buildTimeSummary($record))
+                                        ->html(),
                                     TextEntry::make('event')
-                                        ->label('Event')
+                                        ->label('Event Teknis')
+                                        ->formatStateUsing(fn (?string $state): string => $this->formatEventLabel($state))
                                         ->badge(),
-                                    TextEntry::make('causer.name')
-                                        ->label('Pelaku')
-                                        ->placeholder('Sistem'),
                                     TextEntry::make('description')
-                                        ->label('Aktivitas')
+                                        ->label('Keterangan')
+                                        ->state(fn (Activity $record): string => $this->formatActivityDescription($record))
                                         ->columnSpanFull(),
+                                ]),
+                            Section::make('Pelaku')
+                                ->icon('lucide-user-round')
+                                ->components([
+                                    TextEntry::make('causer_card')
+                                        ->hiddenLabel()
+                                        ->state(fn (Activity $record): HtmlString => $this->buildCauserCard($record->causer))
+                                        ->html(),
                                 ]),
                             Section::make('Perbandingan Perubahan')
                                 ->icon('lucide-git-compare')
                                 ->components([
                                     TextEntry::make('changes_table')
                                         ->hiddenLabel()
-                                        ->state(fn(Activity $record): HtmlString => $this->buildChangesTable($record))
+                                        ->state(fn (Activity $record): HtmlString => $this->buildChangesTable($record))
                                         ->html(),
                                 ]),
                             Section::make('Properti Tambahan')
@@ -98,7 +110,7 @@ class ActivitiesRelationManager extends RelationManager
                                 ->components([
                                     TextEntry::make('properties_table')
                                         ->hiddenLabel()
-                                        ->state(fn(Activity $record): HtmlString => $this->buildPropertiesTable($record->properties))
+                                        ->state(fn (Activity $record): HtmlString => $this->buildPropertiesTable($record->properties))
                                         ->html(),
                                 ]),
                         ]),
@@ -120,7 +132,7 @@ class ActivitiesRelationManager extends RelationManager
 
         $labels = collect($rows)
             ->take(3)
-            ->map(fn(array $row): string => $this->formatAttributeLabel($row['attribute']))
+            ->map(fn (array $row): string => $this->formatAttributeLabel($row['attribute']))
             ->implode(', ');
 
         $remainingCount = count($rows) - 3;
@@ -142,7 +154,7 @@ class ActivitiesRelationManager extends RelationManager
         }
 
         return $collection->keys()
-            ->map(fn(mixed $key): string => $this->formatAttributeLabel((string) $key))
+            ->map(fn (mixed $key): string => $this->formatAttributeLabel((string) $key))
             ->implode(', ');
     }
 
@@ -155,7 +167,7 @@ class ActivitiesRelationManager extends RelationManager
         }
 
         $body = collect($rows)
-            ->map(fn(array $row): string => sprintf(
+            ->map(fn (array $row): string => sprintf(
                 '<tr class="border-b border-gray-200 dark:border-gray-700"><td class="px-3 py-2 font-medium text-gray-950 dark:text-white">%s</td><td class="px-3 py-2 text-gray-700 dark:text-gray-300">%s</td><td class="px-3 py-2 text-gray-700 dark:text-gray-300">%s</td></tr>',
                 e($this->formatAttributeLabel($row['attribute'])),
                 $this->formatValueForHtml($row['old']),
@@ -189,7 +201,7 @@ class ActivitiesRelationManager extends RelationManager
         }
 
         $body = $properties
-            ->map(fn(mixed $value, mixed $key): string => sprintf(
+            ->map(fn (mixed $value, mixed $key): string => sprintf(
                 '<tr class="border-b border-gray-200 dark:border-gray-700"><td class="px-3 py-2 font-medium text-gray-950 dark:text-white">%s</td><td class="px-3 py-2 text-gray-700 dark:text-gray-300">%s</td></tr>',
                 e($this->formatAttributeLabel((string) $key)),
                 $this->formatValueForHtml($value),
@@ -224,19 +236,37 @@ class ActivitiesRelationManager extends RelationManager
 
         $attributes = $this->normalizeAssociativeArray($changes->get('attributes'));
         $old = $this->normalizeAssociativeArray($changes->get('old'));
-        $keys = collect(array_keys($attributes))
+        $availableKeys = collect(array_keys($attributes))
             ->merge(array_keys($old))
             ->unique()
-            ->sort()
             ->values();
+        $configuredKeys = $this->getConfiguredChangeKeys();
+        $keys = $configuredKeys === []
+            ? $availableKeys->sort()->values()
+            : collect($configuredKeys)
+                ->filter(fn (string $key): bool => $availableKeys->contains($key))
+                ->values();
 
         return $keys
-            ->map(fn(mixed $key): array => [
+            ->map(fn (mixed $key): array => [
                 'attribute' => (string) $key,
                 'old' => $old[(string) $key] ?? null,
                 'new' => $attributes[(string) $key] ?? null,
             ])
             ->all();
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function getConfiguredChangeKeys(): array
+    {
+        $ownerRecord = $this->getOwnerRecord();
+
+        return [
+            ...AuditConfig::attributes($ownerRecord),
+            ...array_keys(AuditConfig::relationships($ownerRecord)),
+        ];
     }
 
     /**
@@ -269,10 +299,141 @@ class ActivitiesRelationManager extends RelationManager
             return $labels[$attribute];
         }
 
+        $relationships = AuditConfig::relationships($this->getOwnerRecord());
+
+        if (isset($relationships[$attribute])) {
+            return (string) Str::of($attribute)
+                ->replace('_', ' ')
+                ->headline();
+        }
+
         return (string) Str::of($attribute)
             ->replace('.', ' / ')
             ->replace('_', ' ')
             ->headline();
+    }
+
+    private function formatActivityDescription(Activity $activity): string
+    {
+        $description = trim($activity->description);
+        $event = trim((string) $activity->event);
+
+        if (($description === '') || (Str::lower($description) === Str::lower($event))) {
+            return 'Tidak ada keterangan khusus.';
+        }
+
+        return $description;
+    }
+
+    private function formatEventLabel(?string $event): string
+    {
+        return match ($event) {
+            'created' => 'Dibuat',
+            'updated' => 'Diperbarui',
+            'deleted' => 'Dihapus',
+            'restored' => 'Dipulihkan',
+            'relationships_updated' => 'Relasi Diperbarui',
+            null, '' => '-',
+            default => (string) Str::of($event)->replace('_', ' ')->headline(),
+        };
+    }
+
+    private function buildTimeSummary(Activity $activity): HtmlString
+    {
+        if ($activity->created_at === null) {
+            return new HtmlString('<span class="text-gray-400 dark:text-gray-500">-</span>');
+        }
+
+        return new HtmlString(sprintf(
+            '<div class="space-y-1"><div class="font-medium text-gray-950 dark:text-white">%s</div><div class="text-xs text-gray-500 dark:text-gray-400">%s</div></div>',
+            e($activity->created_at->format('Y-m-d H:i:s')),
+            e($activity->created_at->diffForHumans()),
+        ));
+    }
+
+    private function buildCauserCard(?Model $causer): HtmlString
+    {
+        if ($causer === null) {
+            return new HtmlString('<p class="text-sm text-gray-500 dark:text-gray-400">Aktivitas dibuat oleh sistem.</p>');
+        }
+
+        $name = $this->stringAttribute($causer, 'name') ?? class_basename($causer);
+        $email = $this->stringAttribute($causer, 'email');
+        $username = $this->stringAttribute($causer, 'username');
+        $avatarUrl = $this->causerAvatarUrl($causer);
+        $roles = $this->causerRoleNames($causer);
+        $initial = Str::of($name)->trim()->substr(0, 1)->upper()->toString();
+        $escapedName = e($name);
+        $avatar = $avatarUrl !== null
+            ? sprintf('<img src="%s" alt="" class="h-12 w-12 rounded-full object-cover ring-1 ring-gray-200 dark:ring-gray-700">', e($avatarUrl))
+            : sprintf('<div class="flex h-12 w-12 items-center justify-center rounded-full bg-gray-100 text-sm font-semibold text-gray-700 ring-1 ring-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:ring-gray-700">%s</div>', e($initial));
+        $usernameHtml = $username !== null
+            ? sprintf('<div class="text-xs text-gray-500 dark:text-gray-400">@%s</div>', e($username))
+            : '';
+        $emailHtml = $email !== null
+            ? sprintf('<div class="text-sm text-gray-600 dark:text-gray-300">%s</div>', e($email))
+            : '';
+        $rolesHtml = $roles === []
+            ? '<span class="text-xs text-gray-400 dark:text-gray-500">Role tidak tersedia</span>'
+            : collect($roles)
+                ->map(fn (string $role): string => sprintf('<span class="inline-flex rounded-md bg-gray-100 px-2 py-1 text-xs font-medium text-gray-700 dark:bg-gray-800 dark:text-gray-200">%s</span>', e($role)))
+                ->implode(' ');
+
+        return new HtmlString(<<<HTML
+            <div class="flex gap-3 rounded-lg border border-gray-200 p-3 dark:border-gray-700">
+                <div class="shrink-0">{$avatar}</div>
+                <div class="min-w-0 space-y-2">
+                    <div>
+                        <div class="font-medium text-gray-950 dark:text-white">{$escapedName}</div>
+                        {$usernameHtml}
+                        {$emailHtml}
+                    </div>
+                    <div class="flex flex-wrap gap-1">{$rolesHtml}</div>
+                </div>
+            </div>
+            HTML);
+    }
+
+    private function stringAttribute(Model $model, string $key): ?string
+    {
+        $value = data_get($model, $key);
+
+        return is_string($value) && filled($value) ? $value : null;
+    }
+
+    private function causerAvatarUrl(Model $causer): ?string
+    {
+        if (method_exists($causer, 'getFilamentAvatarUrl')) {
+            $url = $causer->{'getFilamentAvatarUrl'}();
+
+            if (is_string($url) && filled($url)) {
+                return $url;
+            }
+        }
+
+        return $this->stringAttribute($causer, 'avatar');
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function causerRoleNames(Model $causer): array
+    {
+        if (! method_exists($causer, 'getRoleNames')) {
+            return [];
+        }
+
+        $roles = $causer->{'getRoleNames'}();
+
+        if ($roles instanceof Collection) {
+            return $roles
+                ->filter(fn (mixed $role): bool => is_string($role) && filled($role))
+                ->map(fn (string $role): string => (string) Str::of($role)->replace(['_', '-'], ' ')->headline())
+                ->values()
+                ->all();
+        }
+
+        return [];
     }
 
     private function formatValueForHtml(mixed $value): string
@@ -331,7 +492,7 @@ class ActivitiesRelationManager extends RelationManager
                     return $formattedValue;
                 }
 
-                return '<span class="font-medium">' . e($this->formatAttributeLabel((string) $key)) . ':</span> ' . $formattedValue;
+                return '<span class="font-medium">'.e($this->formatAttributeLabel((string) $key)).':</span> '.$formattedValue;
             })
             ->implode('<br>');
     }

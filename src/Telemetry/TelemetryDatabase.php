@@ -17,7 +17,7 @@ use Throwable;
 final class TelemetryDatabase
 {
     public function __construct(
-        private readonly TelemetryMigration $migration = new TelemetryMigration(),
+        private readonly TelemetryMigration $migration = new TelemetryMigration,
     ) {}
 
     private ?PDO $pdo = null;

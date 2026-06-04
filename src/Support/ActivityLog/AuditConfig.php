@@ -21,7 +21,7 @@ final class AuditConfig
     /**
      * @return array{log_name: string|null, attributes: array<int, string>, except: array<int, string>, relationships: array<string, string>, attribute_labels: array<string, string>}
      */
-    public static function forModel(string | Model $model): array
+    public static function forModel(string|Model $model): array
     {
         $modelClass = is_string($model) ? $model : $model::class;
 
@@ -40,7 +40,7 @@ final class AuditConfig
     /**
      * @return array<int, string>
      */
-    public static function attributes(string | Model $model): array
+    public static function attributes(string|Model $model): array
     {
         return self::forModel($model)['attributes'];
     }
@@ -48,7 +48,7 @@ final class AuditConfig
     /**
      * @return array<int, string>
      */
-    public static function except(string | Model $model): array
+    public static function except(string|Model $model): array
     {
         return self::forModel($model)['except'];
     }
@@ -56,7 +56,7 @@ final class AuditConfig
     /**
      * @return array<string, string>
      */
-    public static function relationships(string | Model $model): array
+    public static function relationships(string|Model $model): array
     {
         return self::forModel($model)['relationships'];
     }
@@ -64,7 +64,7 @@ final class AuditConfig
     /**
      * @return array<string, string>
      */
-    public static function attributeLabels(string | Model $model): array
+    public static function attributeLabels(string|Model $model): array
     {
         return self::forModel($model)['attribute_labels'];
     }

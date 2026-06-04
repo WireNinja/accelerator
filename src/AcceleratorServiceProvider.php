@@ -11,6 +11,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
+use Laravel\Octane\Events\RequestReceived;
 use Livewire\Livewire;
 use Override;
 use Spatie\Activitylog\Models\Activity;
@@ -163,7 +164,7 @@ class AcceleratorServiceProvider extends ServiceProvider
 
         // Reset per-request dedup state on each new Octane request.
         $this->app['events']->listen(
-            \Laravel\Octane\Events\RequestReceived::class,
+            RequestReceived::class,
             fn () => $manager->resetRequestState(),
         );
 
