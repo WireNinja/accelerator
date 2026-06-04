@@ -121,9 +121,9 @@ When comparing env files, compare keys first. Values may intentionally differ be
 `.base-env.envoy.example` is the package template; installed projects receive its rendered output as `.env.envoy`, which carries deploy wiring. Required:
 
 - `OPS_DEPLOY_DEFAULT_STAGE`
-- shared deploy defaults (repo, branch, PHP/Bun bin, run user, SSL email, KEEP_RELEASES)
+- shared deploy defaults (repo, branch, PHP bin, JavaScript package manager bin, run user, SSL email, KEEP_RELEASES)
 - per-stage `TEST` / `PROD` domain, root, group, and `HTTP_RUNTIME` (`fpm` or `octane`)
-- `_FPM_SOCKET` for FPM; Octane runtime, port, and explicit worker counts for Octane
+- `_FPM_SOCKET` for FPM; Octane server, port, and explicit worker counts for Octane
 - service flags for Horizon or plain queue worker, Reverb, Scheduler, and Nightwatch
 - Reverb and Nightwatch ports when those services are enabled
 
@@ -131,4 +131,4 @@ When comparing env files, compare keys first. Values may intentionally differ be
 `OPS_DEPLOY_{STAGE}_OCTANE_WORKERS` defaults to `1`. For Swoole, `OPS_DEPLOY_{STAGE}_OCTANE_TASK_WORKERS` defaults to `0`; set a positive task-worker count only when the application dispatches Octane tasks.
 Use either `OPS_DEPLOY_{STAGE}_HORIZON_ENABLED=true` or `OPS_DEPLOY_{STAGE}_QUEUE_WORKER_ENABLED=true`, never both. The latter renders a bounded `queue:work` Supervisor program suitable for Redis queue apps without Horizon.
 
-Runtime deploy intent belongs only in `.env.envoy` via `OPS_DEPLOY_{STAGE}_HTTP_RUNTIME` and, for Octane, `OPS_DEPLOY_{STAGE}_RUNTIME`. Do not add deploy runtime selector keys back to Laravel runtime `.env` files.
+Runtime deploy intent belongs only in `.env.envoy` via `OPS_DEPLOY_{STAGE}_HTTP_RUNTIME` and, for Octane, `OPS_DEPLOY_{STAGE}_OCTANE_SERVER`. Do not add deploy runtime selector keys back to Laravel runtime `.env` files.

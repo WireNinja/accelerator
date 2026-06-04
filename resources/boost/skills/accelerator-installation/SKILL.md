@@ -134,12 +134,10 @@ php artisan accelerator:install --no-interaction --preset=none --with-deploy --w
   --root=/var/www/ssm.pgsduksw.web.id \
   --group=ssm_prod \
   --http-runtime=fpm \
-  --fpm-socket=/run/php/php8.5-fpm.sock \
   --octane-port=9020 \
   --reverb-port=9021 \
   --nightwatch-port=2420 \
-  --php-bin=/usr/bin/php8.5 \
-  --npm-bin=pnpm
+  --package-manager-bin=pnpm
 ```
 
 Generated files:
@@ -159,7 +157,7 @@ For an Octane application that requires Horizon, Reverb, Scheduler, and Nightwat
 
 ```dotenv
 OPS_DEPLOY_PROD_HTTP_RUNTIME=octane
-OPS_DEPLOY_PROD_RUNTIME=swoole
+OPS_DEPLOY_PROD_OCTANE_SERVER=swoole
 OPS_DEPLOY_PROD_OCTANE_WORKERS=1
 OPS_DEPLOY_PROD_OCTANE_TASK_WORKERS=0
 OPS_DEPLOY_PROD_HORIZON_ENABLED=true

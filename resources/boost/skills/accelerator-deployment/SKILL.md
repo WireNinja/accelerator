@@ -62,6 +62,8 @@ Envoy.blade.php
 @import('vendor/wireninja/accelerator/resources/envoy/Envoy.blade.php')
 ```
 
+The `vps` server alias must point to the same SSH host as `OPS_DEPLOY_SSH_HOST`. Envoy remote tasks run through the alias, while package bootstrap tasks use `OPS_DEPLOY_SSH_HOST` for local `ssh` / `scp` calls.
+
 Do not copy deployment shell scripts into the project.
 
 ## Required `.env.envoy` Keys
@@ -73,7 +75,8 @@ Global keys:
 - `OPS_DEPLOY_DEFAULT_STAGE`, `OPS_DEPLOY_PROJECT`, `OPS_DEPLOY_SSH_HOST`
 - `OPS_DEPLOY_REPO`, `OPS_DEPLOY_BRANCH`
 - `OPS_DEPLOY_KEEP_RELEASES` (default 5)
-- `OPS_DEPLOY_PHP_BIN`, `OPS_DEPLOY_NPM_BIN` (supports `pnpm`, `bun`, or `npm`; auto-detects if empty — fallback order: pnpm → bun → npm)
+- `OPS_DEPLOY_PHP_BIN` (auto-detects if empty — fallback order: php8.5 → php8.4 → php8.3 → php)
+- `OPS_DEPLOY_PACKAGE_MANAGER_BIN` (supports `pnpm`, `bun`, or `npm`; auto-detects if empty — fallback order: pnpm → bun → npm)
 - `OPS_DEPLOY_RUN_USER` (default `www-data`)
 - `OPS_DEPLOY_SSL_EMAIL`
 
@@ -83,8 +86,8 @@ Per stage (`TEST` / `PROD`):
 - `OPS_DEPLOY_{STAGE}_DOMAIN`, `OPS_DEPLOY_{STAGE}_ROOT`
 - `OPS_DEPLOY_{STAGE}_GROUP` (Supervisor group, stage-scoped)
 - `OPS_DEPLOY_{STAGE}_HTTP_RUNTIME` (`fpm` default, or `octane`)
-- `OPS_DEPLOY_{STAGE}_FPM_SOCKET` (required for FPM, default `/run/php/php8.5-fpm.sock`)
-- `OPS_DEPLOY_{STAGE}_RUNTIME` (Octane only: `swoole`, `roadrunner`, or `frankenphp`)
+- `OPS_DEPLOY_{STAGE}_FPM_SOCKET` (FPM only; auto-detects from selected PHP if empty)
+- `OPS_DEPLOY_{STAGE}_OCTANE_SERVER` (Octane only: `swoole`, `roadrunner`, or `frankenphp`)
 - `OPS_DEPLOY_{STAGE}_OCTANE_PORT` (required for Octane)
 - `OPS_DEPLOY_{STAGE}_OCTANE_WORKERS` (request workers; default `1`, must be >= `1`)
 - `OPS_DEPLOY_{STAGE}_OCTANE_TASK_WORKERS` (Swoole task workers; default `0`, set >= `1` only when tasks are used)

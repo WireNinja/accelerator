@@ -45,12 +45,14 @@ use function Laravel\Prompts\multiselect;
     {--root= : Single-stage deploy root}
     {--group= : Single-stage Supervisor group}
     {--http-runtime=fpm : HTTP runtime: fpm or octane}
-    {--fpm-socket=/run/php/php8.5-fpm.sock : PHP-FPM socket for FPM runtime}
+    {--fpm-socket= : PHP-FPM socket for FPM runtime; blank auto-detects from selected PHP}
+    {--octane-server=swoole : Octane server: swoole, roadrunner, or frankenphp}
     {--octane-port= : Single-stage Octane port}
     {--reverb-port= : Single-stage Reverb port}
     {--nightwatch-port= : Single-stage Nightwatch port}
-    {--php-bin=php : PHP binary on the VPS}
-    {--npm-bin=npm : Node package manager binary on the VPS (npm, pnpm, or bun)}
+    {--php-bin= : PHP binary on the VPS; blank auto-detects php8.5, php8.4, php8.3, then php}
+    {--package-manager-bin= : JavaScript package manager binary on the VPS; blank auto-detects pnpm, bun, then npm}
+    {--npm-bin= : Deprecated alias for --package-manager-bin}
     {--run-user=www-data : Runtime user for ACL and Supervisor}
     {--ssl-email= : Certbot email address}')]
 #[Description('Install WireNinja Accelerator components and optional deployment/PWA scaffolding')]
@@ -949,14 +951,20 @@ BLADE.PHP_EOL;
         $domain = $this->option('domain') ?: 'example.com';
         $root = $this->option('root') ?: "/var/www/{$domain}";
         $group = $this->option('group') ?: "{$project}_{$defaultStage}";
-        $fpmSocket = $this->option('fpm-socket') ?: '/run/php/php8.5-fpm.sock';
+        $fpmSocket = $this->option('fpm-socket') ?: '';
+        $octaneServer = $this->option('octane-server') ?: 'swoole';
+
+        if (! in_array($octaneServer, ['swoole', 'roadrunner', 'frankenphp'], true)) {
+            throw new RuntimeException('Deployment Octane server must be [swoole], [roadrunner], or [frankenphp].');
+        }
+
         $octanePort = $this->option('octane-port') ?: '9010';
         $reverbPort = $this->option('reverb-port') ?: '9011';
         $nightwatchPort = $this->option('nightwatch-port') ?: '2410';
         $repo = $this->option('repo') ?: 'git@github.com:vendor/project.git';
         $branch = $this->option('branch') ?: 'main';
-        $phpBin = $this->option('php-bin') ?: 'php';
-        $npmBin = $this->option('npm-bin') ?: 'npm';
+        $phpBin = $this->option('php-bin') ?: '';
+        $packageManagerBin = $this->option('package-manager-bin') ?: ($this->option('npm-bin') ?: '');
         $runUser = $this->option('run-user') ?: 'www-data';
         $sshHost = $this->option('ssh-host') ?: 'onidel';
         $sslEmail = $this->option('ssl-email') ?: "admin@{$domain}";
@@ -975,13 +983,14 @@ BLADE.PHP_EOL;
             '{{ repo }}' => $repo,
             '{{ branch }}' => $branch,
             '{{ php_bin }}' => $phpBin,
-            '{{ npm_bin }}' => $npmBin,
+            '{{ package_manager_bin }}' => $packageManagerBin,
             '{{ run_user }}' => $runUser,
             '{{ ssl_email }}' => $sslEmail,
             '{{ test_enabled }}' => $testEnabled,
             '{{ domain }}' => $domain,
             '{{ http_runtime }}' => $httpRuntime,
             '{{ fpm_socket }}' => $fpmSocket,
+            '{{ octane_server }}' => $octaneServer,
             '{{ prod_enabled }}' => $prodEnabled,
             '{{ root }}' => $root,
             '{{ group }}' => $group,

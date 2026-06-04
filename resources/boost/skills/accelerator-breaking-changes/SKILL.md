@@ -11,6 +11,34 @@ Format per entry:
 
 ---
 
+## v1.1.78
+
+No deployment contract changes beyond v1.1.66.
+
+### 🔴 BREAKING — Envoy deploy binary and Octane server keys renamed
+
+The deploy template now uses clearer `.env.envoy` keys:
+
+```diff
+- OPS_DEPLOY_NPM_BIN=pnpm
++ OPS_DEPLOY_PACKAGE_MANAGER_BIN=pnpm
+
+- OPS_DEPLOY_{STAGE}_RUNTIME=swoole
++ OPS_DEPLOY_{STAGE}_OCTANE_SERVER=swoole
+```
+
+`OPS_DEPLOY_PHP_BIN`, `OPS_DEPLOY_PACKAGE_MANAGER_BIN`, and `OPS_DEPLOY_{STAGE}_FPM_SOCKET` may now be left empty. Envoy resolves PHP on the VPS in this order: `php8.5`, `php8.4`, `php8.3`, `php`. The package manager resolves in this order: `pnpm`, `bun`, `npm`. FPM socket auto-detection tries the selected PHP version first, then common PHP 8.5 / 8.4 / 8.3 socket paths.
+
+**Action required**: Rename the keys in every project `.env.envoy` before republishing the deploy template. Remove stale `OPS_DEPLOY_SERVER`; it was never read by the package Envoy bridge. Existing `OPS_DEPLOY_SSH_HOST` remains required for local `ssh` / `scp` bootstrap tasks and must match the project `@servers(['vps' => ...])` alias.
+
+### 🟡 AWARENESS — Isolated `/srv/clients/{client}` ownership is still explicit operator policy
+
+This patch does not change deploy root ownership behavior. `prepare-layout` still assumes the SSH deploy user can create and own the configured root while ACLs grant the runtime user access to writable paths.
+
+**Action required**: For strict client isolation such as `/srv/clients/wahyudi`, decide the deploy user, runtime user, root owner, and group policy before changing `prepare-layout`. Do not blindly switch to `sudo su`; use passwordless `sudo` per privileged command.
+
+---
+
 ## v1.1.77
 
 No deployment contract changes beyond v1.1.66.

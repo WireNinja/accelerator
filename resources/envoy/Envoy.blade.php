@@ -77,25 +77,66 @@
         throw new RuntimeException('Deploy stage ['.$stage.'] is disabled in .env.envoy.');
     }
 
+    $remoteCommandPath = function (string $sshHost, array $commands): string {
+        $candidates = implode(' ', array_map('escapeshellarg', $commands));
+        $script = "for c in {$candidates}; do command -v \"\$c\" 2>/dev/null && exit 0; done";
+
+        return trim((string) shell_exec('ssh '.escapeshellarg($sshHost).' '.escapeshellarg($script).' 2>/dev/null'));
+    };
+
+    $remoteFpmSocket = function (string $sshHost, string $phpBin): string {
+        $socketCandidates = [];
+        $phpCommand = basename($phpBin);
+
+        if (preg_match('/php(\d+\.\d+)/', $phpCommand, $matches) === 1) {
+            $socketCandidates[] = "/run/php/php{$matches[1]}-fpm.sock";
+        }
+
+        $socketCandidates = array_values(array_unique([
+            ...$socketCandidates,
+            '/run/php/php8.5-fpm.sock',
+            '/run/php/php8.4-fpm.sock',
+            '/run/php/php8.3-fpm.sock',
+            '/run/php/php-fpm.sock',
+        ]));
+        $candidates = implode(' ', array_map('escapeshellarg', $socketCandidates));
+        $script = "for s in {$candidates}; do test -S \"\$s\" && echo \"\$s\" && exit 0; done";
+
+        return trim((string) shell_exec('ssh '.escapeshellarg($sshHost).' '.escapeshellarg($script).' 2>/dev/null'));
+    };
+
     $project = $value($envoy, 'OPS_DEPLOY_PROJECT', 'laravel');
     $domain = $value($envoy, "OPS_DEPLOY_{$stageKey}_DOMAIN");
     $deployRoot = rtrim($value($envoy, "OPS_DEPLOY_{$stageKey}_ROOT"), '/');
     $repo = $value($envoy, "OPS_DEPLOY_{$stageKey}_REPO", $value($envoy, 'OPS_DEPLOY_REPO'));
     $branch = $value($envoy, "OPS_DEPLOY_{$stageKey}_BRANCH", $value($envoy, 'OPS_DEPLOY_BRANCH', 'main'));
     $group = $value($envoy, "OPS_DEPLOY_{$stageKey}_GROUP");
-    $phpBin = $value($envoy, "OPS_DEPLOY_{$stageKey}_PHP_BIN", $value($envoy, 'OPS_DEPLOY_PHP_BIN', 'php'));
-    $npmBin = $value($envoy, "OPS_DEPLOY_{$stageKey}_NPM_BIN", $value($envoy, 'OPS_DEPLOY_NPM_BIN', ''));
-
-    // Auto-detect package manager when not explicitly set.
-    if ($npmBin === '') {
-        $detect = trim((string) shell_exec('which pnpm 2>/dev/null || which bun 2>/dev/null || which npm 2>/dev/null'));
-        $npmBin = $detect !== '' ? $detect : 'npm';
-    }
     $runUser = $value($envoy, "OPS_DEPLOY_{$stageKey}_RUN_USER", $value($envoy, 'OPS_DEPLOY_RUN_USER', 'www-data'));
     $sshHost = $value($envoy, "OPS_DEPLOY_{$stageKey}_SSH_HOST", $value($envoy, 'OPS_DEPLOY_SSH_HOST', 'onidel'));
+    $phpBin = $value($envoy, "OPS_DEPLOY_{$stageKey}_PHP_BIN", $value($envoy, 'OPS_DEPLOY_PHP_BIN'));
+
+    if ($phpBin === '') {
+        $phpBin = $remoteCommandPath($sshHost, ['php8.5', 'php8.4', 'php8.3', 'php']) ?: 'php';
+    }
+
+    $packageManagerBin = $value(
+        $envoy,
+        "OPS_DEPLOY_{$stageKey}_PACKAGE_MANAGER_BIN",
+        $value($envoy, 'OPS_DEPLOY_PACKAGE_MANAGER_BIN', $value($envoy, "OPS_DEPLOY_{$stageKey}_NPM_BIN", $value($envoy, 'OPS_DEPLOY_NPM_BIN')))
+    );
+
+    if ($packageManagerBin === '') {
+        $packageManagerBin = $remoteCommandPath($sshHost, ['pnpm', 'bun', 'npm']) ?: 'npm';
+    }
+
     $httpRuntime = $value($envoy, "OPS_DEPLOY_{$stageKey}_HTTP_RUNTIME", 'fpm');
-    $runtime = $value($envoy, "OPS_DEPLOY_{$stageKey}_RUNTIME", 'swoole');
-    $fpmSocket = $value($envoy, "OPS_DEPLOY_{$stageKey}_FPM_SOCKET", '/run/php/php8.5-fpm.sock');
+    $octaneServer = $value($envoy, "OPS_DEPLOY_{$stageKey}_OCTANE_SERVER", $value($envoy, "OPS_DEPLOY_{$stageKey}_RUNTIME", 'swoole'));
+    $fpmSocket = $value($envoy, "OPS_DEPLOY_{$stageKey}_FPM_SOCKET");
+
+    if ($fpmSocket === '') {
+        $fpmSocket = $remoteFpmSocket($sshHost, $phpBin) ?: '/run/php/php8.5-fpm.sock';
+    }
+
     $octanePort = $value($envoy, "OPS_DEPLOY_{$stageKey}_OCTANE_PORT");
     $octaneWorkers = $value($envoy, "OPS_DEPLOY_{$stageKey}_OCTANE_WORKERS", '1');
     $octaneTaskWorkers = $value($envoy, "OPS_DEPLOY_{$stageKey}_OCTANE_TASK_WORKERS", '0');
@@ -146,8 +187,8 @@
             throw new RuntimeException("Missing OPS_DEPLOY_{$stageKey}_OCTANE_PORT for Octane stage [{$stage}].");
         }
 
-        if (! in_array($runtime, ['swoole', 'roadrunner', 'frankenphp'], true)) {
-            throw new RuntimeException("Invalid Octane runtime [{$runtime}] for stage [{$stage}].");
+        if (! in_array($octaneServer, ['swoole', 'roadrunner', 'frankenphp'], true)) {
+            throw new RuntimeException("Invalid Octane server [{$octaneServer}] for stage [{$stage}].");
         }
 
         if (! ctype_digit($octaneWorkers) || (int) $octaneWorkers < 1) {
@@ -230,10 +271,10 @@
      * Octane's `auto` default. Call the registered Swoole command directly so
      * zero genuinely disables optional task workers.
      */
-    $octaneServerCommand = $runtime === 'swoole'
+    $octaneServerCommand = $octaneServer === 'swoole'
         ? 'octane:swoole'
-        : "octane:start --server={$runtime}";
-    $octaneTaskWorkersOption = $runtime === 'swoole'
+        : "octane:start --server={$octaneServer}";
+    $octaneTaskWorkersOption = $octaneServer === 'swoole'
         ? "--task-workers={$octaneTaskWorkers}"
         : '';
 
@@ -694,7 +735,7 @@ CONF, [
     command -v git >/dev/null
     command -v composer >/dev/null
     command -v {{ $phpBin }} >/dev/null
-    command -v {{ $npmBin }} >/dev/null
+    command -v {{ $packageManagerBin }} >/dev/null
     command -v larahelp >/dev/null
     command -v setfacl >/dev/null
     command -v curl >/dev/null
@@ -746,15 +787,15 @@ CONF, [
     test -s composer.lock || { echo "[build-release] composer.lock is required; refusing dependency resolution during deployment."; exit 1; }
     composer validate --no-check-all --strict --ansi
     composer install --no-dev --no-scripts --optimize-autoloader --classmap-authoritative --no-interaction --no-progress --quiet --ansi
-    @if(str_contains($npmBin, 'bun'))
-        {{ $npmBin }} install --frozen-lockfile --no-scripts --quiet
-        {{ $npmBin }} run build
-    @elseif(str_contains($npmBin, 'pnpm'))
-        {{ $npmBin }} install --frozen-lockfile --no-scripts --quiet
-        {{ $npmBin }} run build
+    @if(str_contains($packageManagerBin, 'bun'))
+        {{ $packageManagerBin }} install --frozen-lockfile --no-scripts --quiet
+        {{ $packageManagerBin }} run build
+    @elseif(str_contains($packageManagerBin, 'pnpm'))
+        {{ $packageManagerBin }} install --frozen-lockfile --no-scripts --quiet
+        {{ $packageManagerBin }} run build
     @else
-        {{ $npmBin }} ci --no-audit --no-fund --quiet
-        {{ $npmBin }} run build
+        {{ $packageManagerBin }} ci --no-audit --no-fund --quiet
+        {{ $packageManagerBin }} run build
     @endif
 @endtask
 
@@ -765,15 +806,15 @@ CONF, [
     test -s composer.lock || { echo "[build-release-with-dev] composer.lock is required; refusing dependency resolution during deployment."; exit 1; }
     composer validate --no-check-all --strict --ansi
     composer install --no-scripts --no-interaction --no-progress --quiet --ansi
-    @if(str_contains($npmBin, 'bun'))
-        {{ $npmBin }} install --frozen-lockfile --no-scripts --quiet
-        {{ $npmBin }} run build
-    @elseif(str_contains($npmBin, 'pnpm'))
-        {{ $npmBin }} install --frozen-lockfile --no-scripts --quiet
-        {{ $npmBin }} run build
+    @if(str_contains($packageManagerBin, 'bun'))
+        {{ $packageManagerBin }} install --frozen-lockfile --no-scripts --quiet
+        {{ $packageManagerBin }} run build
+    @elseif(str_contains($packageManagerBin, 'pnpm'))
+        {{ $packageManagerBin }} install --frozen-lockfile --no-scripts --quiet
+        {{ $packageManagerBin }} run build
     @else
-        {{ $npmBin }} ci --no-audit --no-fund --quiet
-        {{ $npmBin }} run build
+        {{ $packageManagerBin }} ci --no-audit --no-fund --quiet
+        {{ $packageManagerBin }} run build
     @endif
 @endtask
 
