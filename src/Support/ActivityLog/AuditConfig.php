@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 final class AuditConfig
 {
     /**
-     * @var array<class-string, array{log_name: string|null, attributes: array<int, string>, except: array<int, string>, relationships: array<string, string>}>
+     * @var array<class-string, array{log_name: string|null, attributes: array<int, string>, except: array<int, string>, relationships: array<string, string>, attribute_labels: array<string, string>}>
      */
     private static array $modelConfigs = [];
 
@@ -19,7 +19,7 @@ final class AuditConfig
     private static ?array $defaultExcept = null;
 
     /**
-     * @return array{log_name: string|null, attributes: array<int, string>, except: array<int, string>, relationships: array<string, string>}
+     * @return array{log_name: string|null, attributes: array<int, string>, except: array<int, string>, relationships: array<string, string>, attribute_labels: array<string, string>}
      */
     public static function forModel(string | Model $model): array
     {
@@ -61,6 +61,14 @@ final class AuditConfig
         return self::forModel($model)['relationships'];
     }
 
+    /**
+     * @return array<string, string>
+     */
+    public static function attributeLabels(string | Model $model): array
+    {
+        return self::forModel($model)['attribute_labels'];
+    }
+
     public static function flush(): void
     {
         self::$modelConfigs = [];
@@ -68,7 +76,7 @@ final class AuditConfig
     }
 
     /**
-     * @return array{log_name: string|null, attributes: array<int, string>, except: array<int, string>, relationships: array<string, string>}
+     * @return array{log_name: string|null, attributes: array<int, string>, except: array<int, string>, relationships: array<string, string>, attribute_labels: array<string, string>}
      */
     private static function normalizeModelConfig(string $modelClass): array
     {
@@ -79,12 +87,16 @@ final class AuditConfig
 
         return [
             'log_name' => is_string($config['log_name'] ?? null) ? $config['log_name'] : null,
-            'attributes' => self::stringList($config['attributes'] ?? []),
+            'attributes' => self::attributeList($config['attributes'] ?? []),
             'except' => [
                 ...self::defaultExcept(),
                 ...self::stringList($modelExcept),
             ],
             'relationships' => self::stringMap($config['relationships'] ?? []),
+            'attribute_labels' => [
+                ...self::attributeLabelMap($config['attributes'] ?? []),
+                ...self::stringMap($config['attribute_labels'] ?? []),
+            ],
         ];
     }
 
@@ -106,6 +118,54 @@ final class AuditConfig
         }
 
         return array_values(array_filter($value, is_string(...)));
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private static function attributeList(mixed $value): array
+    {
+        if (! is_array($value)) {
+            return [];
+        }
+
+        $attributes = [];
+
+        foreach ($value as $key => $item) {
+            if (is_string($key) && is_string($item)) {
+                $attributes[] = $key;
+
+                continue;
+            }
+
+            if (is_string($item)) {
+                $attributes[] = $item;
+            }
+        }
+
+        return array_values(array_unique($attributes));
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private static function attributeLabelMap(mixed $value): array
+    {
+        if (! is_array($value)) {
+            return [];
+        }
+
+        $map = [];
+
+        foreach ($value as $key => $item) {
+            if (! is_string($key) || ! is_string($item)) {
+                continue;
+            }
+
+            $map[$key] = $item;
+        }
+
+        return $map;
     }
 
     /**

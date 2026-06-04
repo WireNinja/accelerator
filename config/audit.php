@@ -19,6 +19,9 @@ return [
 
     /*
      * Per-model audit options consumed by Accelerator activity traits.
+     *
+     * Attributes may be a list of attribute names or an associative map of
+     * attribute names to UI labels, for example: ['name' => 'Nama'].
      */
     'models' => [],
 ];

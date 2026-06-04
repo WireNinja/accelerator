@@ -19,6 +19,7 @@ use Illuminate\Support\Str;
 use Override;
 use Spatie\Activitylog\Models\Activity;
 use UnitEnum;
+use WireNinja\Accelerator\Support\ActivityLog\AuditConfig;
 
 class ActivitiesRelationManager extends RelationManager
 {
@@ -51,18 +52,19 @@ class ActivitiesRelationManager extends RelationManager
                     ->searchable(),
                 TextColumn::make('attribute_changes_summary')
                     ->label('Perubahan')
-                    ->state(fn (Activity $record): string => $this->summarizeChanges($record))
+                    ->state(fn(Activity $record): string => $this->summarizeChanges($record))
                     ->wrap()
                     ->toggleable(),
                 TextColumn::make('properties_summary')
                     ->label('Properti')
-                    ->state(fn (Activity $record): string => $this->summarizeProperties($record->properties))
+                    ->state(fn(Activity $record): string => $this->summarizeProperties($record->properties))
                     ->wrap()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->recordActions([
                 ActionGroup::make([
                     ViewAction::make()
+                        ->slideOver()
                         ->modalHeading('Detail Log Aktivitas')
                         ->modalIcon('lucide-history')
                         ->schema([
@@ -88,7 +90,7 @@ class ActivitiesRelationManager extends RelationManager
                                 ->components([
                                     TextEntry::make('changes_table')
                                         ->hiddenLabel()
-                                        ->state(fn (Activity $record): HtmlString => $this->buildChangesTable($record))
+                                        ->state(fn(Activity $record): HtmlString => $this->buildChangesTable($record))
                                         ->html(),
                                 ]),
                             Section::make('Properti Tambahan')
@@ -96,7 +98,7 @@ class ActivitiesRelationManager extends RelationManager
                                 ->components([
                                     TextEntry::make('properties_table')
                                         ->hiddenLabel()
-                                        ->state(fn (Activity $record): HtmlString => $this->buildPropertiesTable($record->properties))
+                                        ->state(fn(Activity $record): HtmlString => $this->buildPropertiesTable($record->properties))
                                         ->html(),
                                 ]),
                         ]),
@@ -118,7 +120,7 @@ class ActivitiesRelationManager extends RelationManager
 
         $labels = collect($rows)
             ->take(3)
-            ->map(fn (array $row): string => $this->formatAttributeLabel($row['attribute']))
+            ->map(fn(array $row): string => $this->formatAttributeLabel($row['attribute']))
             ->implode(', ');
 
         $remainingCount = count($rows) - 3;
@@ -140,7 +142,7 @@ class ActivitiesRelationManager extends RelationManager
         }
 
         return $collection->keys()
-            ->map(fn (mixed $key): string => $this->formatAttributeLabel((string) $key))
+            ->map(fn(mixed $key): string => $this->formatAttributeLabel((string) $key))
             ->implode(', ');
     }
 
@@ -153,7 +155,7 @@ class ActivitiesRelationManager extends RelationManager
         }
 
         $body = collect($rows)
-            ->map(fn (array $row): string => sprintf(
+            ->map(fn(array $row): string => sprintf(
                 '<tr class="border-b border-gray-200 dark:border-gray-700"><td class="px-3 py-2 font-medium text-gray-950 dark:text-white">%s</td><td class="px-3 py-2 text-gray-700 dark:text-gray-300">%s</td><td class="px-3 py-2 text-gray-700 dark:text-gray-300">%s</td></tr>',
                 e($this->formatAttributeLabel($row['attribute'])),
                 $this->formatValueForHtml($row['old']),
@@ -187,7 +189,7 @@ class ActivitiesRelationManager extends RelationManager
         }
 
         $body = $properties
-            ->map(fn (mixed $value, mixed $key): string => sprintf(
+            ->map(fn(mixed $value, mixed $key): string => sprintf(
                 '<tr class="border-b border-gray-200 dark:border-gray-700"><td class="px-3 py-2 font-medium text-gray-950 dark:text-white">%s</td><td class="px-3 py-2 text-gray-700 dark:text-gray-300">%s</td></tr>',
                 e($this->formatAttributeLabel((string) $key)),
                 $this->formatValueForHtml($value),
@@ -229,7 +231,7 @@ class ActivitiesRelationManager extends RelationManager
             ->values();
 
         return $keys
-            ->map(fn (mixed $key): array => [
+            ->map(fn(mixed $key): array => [
                 'attribute' => (string) $key,
                 'old' => $old[(string) $key] ?? null,
                 'new' => $attributes[(string) $key] ?? null,
@@ -261,6 +263,12 @@ class ActivitiesRelationManager extends RelationManager
 
     private function formatAttributeLabel(string $attribute): string
     {
+        $labels = AuditConfig::attributeLabels($this->getOwnerRecord());
+
+        if (isset($labels[$attribute])) {
+            return $labels[$attribute];
+        }
+
         return (string) Str::of($attribute)
             ->replace('.', ' / ')
             ->replace('_', ' ')
@@ -323,7 +331,7 @@ class ActivitiesRelationManager extends RelationManager
                     return $formattedValue;
                 }
 
-                return '<span class="font-medium">'.e($this->formatAttributeLabel((string) $key)).':</span> '.$formattedValue;
+                return '<span class="font-medium">' . e($this->formatAttributeLabel((string) $key)) . ':</span> ' . $formattedValue;
             })
             ->implode('<br>');
     }
