@@ -51,7 +51,7 @@ class ActivitiesRelationManager extends RelationManager
                     ->formatStateUsing(fn (?string $state): string => $this->formatEventLabel($state))
                     ->sortable(),
                 TextColumn::make('causer.name')
-                    ->label('Pelaku')
+                    ->label('Aktor')
                     ->placeholder('Sistem')
                     ->searchable(),
                 TextColumn::make('attribute_changes_summary')
@@ -72,31 +72,14 @@ class ActivitiesRelationManager extends RelationManager
                         ->modalHeading('Detail Log Aktivitas')
                         ->modalIcon('lucide-history')
                         ->schema([
-                            Section::make('Informasi Aktivitas')
-                                ->icon('lucide-info')
-                                ->columns(2)
-                                ->components([
-                                    TextEntry::make('created_at')
-                                        ->label('Waktu')
-                                        ->state(fn (Activity $record): HtmlString => $this->buildTimeSummary($record))
-                                        ->html(),
-                                    TextEntry::make('event')
-                                        ->label('Event Teknis')
-                                        ->formatStateUsing(fn (?string $state): string => $this->formatEventLabel($state))
-                                        ->badge(),
-                                    TextEntry::make('description')
-                                        ->label('Keterangan')
-                                        ->state(fn (Activity $record): string => $this->formatActivityDescription($record))
-                                        ->columnSpanFull(),
-                                ]),
-                            Section::make('Pelaku')
-                                ->icon('lucide-user-round')
-                                ->components([
-                                    TextEntry::make('causer_card')
-                                        ->hiddenLabel()
-                                        ->state(fn (Activity $record): HtmlString => $this->buildCauserCard($record->causer))
-                                        ->html(),
-                                ]),
+                            TextEntry::make('activity_summary')
+                                ->hiddenLabel()
+                                ->state(fn (Activity $record): HtmlString => $this->buildActivitySummary($record))
+                                ->html(),
+                            TextEntry::make('causer_card')
+                                ->hiddenLabel()
+                                ->state(fn (Activity $record): HtmlString => $this->buildCauserCard($record->causer))
+                                ->html(),
                             Section::make('Perbandingan Perubahan')
                                 ->icon('lucide-git-compare')
                                 ->components([
@@ -338,23 +321,40 @@ class ActivitiesRelationManager extends RelationManager
         };
     }
 
-    private function buildTimeSummary(Activity $activity): HtmlString
+    private function buildActivitySummary(Activity $activity): HtmlString
     {
-        if ($activity->created_at === null) {
-            return new HtmlString('<span class="text-gray-400 dark:text-gray-500">-</span>');
-        }
+        $time = $activity->created_at?->format('Y-m-d H:i:s') ?? '-';
+        $relativeTime = $activity->created_at?->diffForHumans() ?? '-';
+        $event = $this->formatEventLabel($activity->event);
+        $description = $this->formatActivityDescription($activity);
 
         return new HtmlString(sprintf(
-            '<div class="space-y-1"><div class="font-medium text-gray-950 dark:text-white">%s</div><div class="text-xs text-gray-500 dark:text-gray-400">%s</div></div>',
-            e($activity->created_at->format('Y-m-d H:i:s')),
-            e($activity->created_at->diffForHumans()),
+            '<div class="grid gap-3 rounded-lg border border-gray-200 bg-white p-4 text-sm dark:border-gray-700 dark:bg-gray-900 sm:grid-cols-2">
+                <div>
+                    <div class="text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Waktu</div>
+                    <div class="mt-1 font-medium text-gray-950 dark:text-white">%s</div>
+                    <div class="text-xs text-gray-500 dark:text-gray-400">%s</div>
+                </div>
+                <div>
+                    <div class="text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Event Teknis</div>
+                    <div class="mt-1 text-gray-950 dark:text-white">%s</div>
+                </div>
+                <div class="sm:col-span-2">
+                    <div class="text-xs font-medium uppercase text-gray-500 dark:text-gray-400">Keterangan</div>
+                    <div class="mt-1 text-gray-700 dark:text-gray-300">%s</div>
+                </div>
+            </div>',
+            e($time),
+            e($relativeTime),
+            e($event),
+            e($description),
         ));
     }
 
     private function buildCauserCard(?Model $causer): HtmlString
     {
         if ($causer === null) {
-            return new HtmlString('<p class="text-sm text-gray-500 dark:text-gray-400">Aktivitas dibuat oleh sistem.</p>');
+            return new HtmlString('<div class="rounded-lg border border-gray-200 bg-white p-4 text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-400">Aktivitas dibuat oleh sistem.</div>');
         }
 
         $name = $this->stringAttribute($causer, 'name') ?? class_basename($causer);
@@ -365,30 +365,30 @@ class ActivitiesRelationManager extends RelationManager
         $initial = Str::of($name)->trim()->substr(0, 1)->upper()->toString();
         $escapedName = e($name);
         $avatar = $avatarUrl !== null
-            ? sprintf('<img src="%s" alt="" class="h-12 w-12 rounded-full object-cover ring-1 ring-gray-200 dark:ring-gray-700">', e($avatarUrl))
-            : sprintf('<div class="flex h-12 w-12 items-center justify-center rounded-full bg-gray-100 text-sm font-semibold text-gray-700 ring-1 ring-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:ring-gray-700">%s</div>', e($initial));
+            ? sprintf('<img src="%s" alt="" class="h-16 w-16 rounded-full object-cover ring-1 ring-gray-200 dark:ring-gray-700">', e($avatarUrl))
+            : sprintf('<div class="flex h-16 w-16 items-center justify-center rounded-full bg-gray-100 text-lg font-semibold text-gray-700 ring-1 ring-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:ring-gray-700">%s</div>', e($initial));
         $usernameHtml = $username !== null
-            ? sprintf('<div class="text-xs text-gray-500 dark:text-gray-400">@%s</div>', e($username))
+            ? sprintf('<div class="leading-5 text-gray-500 dark:text-gray-400">@%s</div>', e($username))
             : '';
         $emailHtml = $email !== null
-            ? sprintf('<div class="text-sm text-gray-600 dark:text-gray-300">%s</div>', e($email))
+            ? sprintf('<div class="leading-5 text-gray-600 dark:text-gray-300">%s</div>', e($email))
             : '';
         $rolesHtml = $roles === []
             ? '<span class="text-xs text-gray-400 dark:text-gray-500">Role tidak tersedia</span>'
             : collect($roles)
-                ->map(fn (string $role): string => sprintf('<span class="inline-flex rounded-md bg-gray-100 px-2 py-1 text-xs font-medium text-gray-700 dark:bg-gray-800 dark:text-gray-200">%s</span>', e($role)))
+                ->map(fn (string $role): string => sprintf('<span class="inline-flex rounded-md bg-gray-100 px-2 py-1 text-xs font-medium leading-none text-gray-700 dark:bg-gray-800 dark:text-gray-200">%s</span>', e($role)))
                 ->implode(' ');
 
         return new HtmlString(<<<HTML
-            <div class="flex gap-3 rounded-lg border border-gray-200 p-3 dark:border-gray-700">
-                <div class="shrink-0">{$avatar}</div>
-                <div class="min-w-0 space-y-2">
-                    <div>
-                        <div class="font-medium text-gray-950 dark:text-white">{$escapedName}</div>
+            <div class="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-900">
+                <div class="flex items-center gap-4">
+                    <div class="shrink-0">{$avatar}</div>
+                    <div class="min-w-0 flex-1">
+                        <div class="font-medium leading-5 text-gray-950 dark:text-white">{$escapedName}</div>
                         {$usernameHtml}
                         {$emailHtml}
+                        <div class="mt-2 flex flex-wrap gap-1">{$rolesHtml}</div>
                     </div>
-                    <div class="flex flex-wrap gap-1">{$rolesHtml}</div>
                 </div>
             </div>
             HTML);

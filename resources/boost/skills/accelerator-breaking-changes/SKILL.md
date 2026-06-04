@@ -21,9 +21,9 @@ No deployment contract changes beyond v1.1.66.
 
 **Action required**: None. If Octane workers have cached old audit config, restart the worker or call `WireNinja\Accelerator\Support\ActivityLog\AuditConfig::flush()` in the current process before expecting changed config labels/order to appear.
 
-### 🟡 AWARENESS — Activity detail separates technical event, description, time, and causer
+### 🟡 AWARENESS — Activity detail separates technical event, description, time, and actor
 
-Activity detail now shows the technical event as a localized event label, treats duplicate event/description values as missing custom description, adds relative time next to the exact timestamp, and renders the causer in a dedicated section with name, username, email, avatar, and role badges when available.
+Activity detail now shows the technical event as a localized event label, treats duplicate event/description values as missing custom description, adds relative time next to the exact timestamp, and renders the actor as a clean headerless card with name, username, email, avatar, and role badges when available.
 
 **Action required**: None. Custom activity descriptions remain supported and are still shown as the activity keterangan.
 
