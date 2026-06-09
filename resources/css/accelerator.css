@@ -15,7 +15,7 @@ reference;
 }
 
 .fi-page-header-main-ctn {
-    @apply gap-4 py-6;
+    @apply gap-4 pb-6 pt-4;
 }
 
 .accelerator-sidebar-tenant-menu {

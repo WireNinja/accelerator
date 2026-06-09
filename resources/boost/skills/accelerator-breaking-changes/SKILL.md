@@ -11,6 +11,22 @@ Format per entry:
 
 ---
 
+## v1.1.79
+
+No deployment contract changes beyond v1.1.66.
+
+### 🟡 AWARENESS — Sidebar support actions now follow support settings
+
+Accelerator now registers WhatsApp and Telegram support user-menu actions during panel boot after `SystemSettings` is resolved. The actions are only visible when `support_enabled` is active and the matching support profile value is configured.
+
+**Action required**: None. Projects that disable bundled support should no longer see empty support actions in the user menu after upgrading.
+
+### 🟡 AWARENESS — Sidebar topbar hook is mobile-only
+
+The custom sidebar topbar hook now renders only below the small breakpoint, and page header spacing is tightened to better align with that mobile-only header.
+
+**Action required**: None. Rebuild frontend assets if the updated Accelerator CSS is not reflected.
+
 ## v1.1.78
 
 Deployment contract changes from v1.1.66 are listed below.

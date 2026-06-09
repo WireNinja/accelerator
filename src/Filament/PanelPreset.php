@@ -39,7 +39,6 @@ use WireNinja\Accelerator\Filament\AvatarProviders\DiceBearAvatarProvider;
 use WireNinja\Accelerator\Filament\Pages\Auth\Login;
 use WireNinja\Accelerator\Filament\Pages\ManageProfile;
 use WireNinja\Accelerator\Livewire\Sidebar;
-use WireNinja\Accelerator\Livewire\SystemInfoWidget;
 use WireNinja\Accelerator\Settings\SystemSettings;
 use WireNinja\Accelerator\Support\BuiltinExceptions;
 
@@ -159,18 +158,6 @@ final class PanelPreset
                 PanelsRenderHook::BODY_END,
                 fn () => view('accelerator::filament.business-exception-handler', BuiltinExceptions::getFilamentBusinessExceptionViewData())
             )
-            ->userMenuItems([
-                Action::make('whatsapp_support')
-                    ->label('Whatsapp Support')
-                    ->url(fn () => sprintf('https://wa.me/%s', Profile::DEVELOPER_WHATSAPP))
-                    ->openUrlInNewTab()
-                    ->icon('lucide-phone-outgoing'),
-                Action::make('telegram_support')
-                    ->label('Telegram Support')
-                    ->url(fn () => sprintf('https://t.me/%s', Profile::DEVELOPER_TELEGRAM))
-                    ->openUrlInNewTab()
-                    ->icon('lucide-send'),
-            ])
             ->bootUsing(function (Panel $panel) {
                 rescue(function () use ($panel) {
                     $settings = resolve(SystemSettings::class);
@@ -189,7 +176,21 @@ final class PanelPreset
                             $settings->email_verification_enabled ? EmailVerificationPrompt::class : null,
                             $settings->email_verification_enabled,
                         )
-                        ->emailChangeVerification($settings->email_verification_enabled ? true : false);
+                        ->emailChangeVerification($settings->email_verification_enabled ? true : false)
+                        ->userMenuItems([
+                            Action::make('whatsapp_support')
+                                ->label('Whatsapp Support')
+                                ->url(fn () => sprintf('https://wa.me/%s', Profile::DEVELOPER_WHATSAPP))
+                                ->openUrlInNewTab()
+                                ->visible(fn () => ! blank(Profile::DEVELOPER_WHATSAPP) && $settings->support_enabled)
+                                ->icon('lucide-phone-outgoing'),
+                            Action::make('telegram_support')
+                                ->label('Telegram Support')
+                                ->url(fn () => sprintf('https://t.me/%s', Profile::DEVELOPER_TELEGRAM))
+                                ->openUrlInNewTab()
+                                ->visible(fn () => ! blank(Profile::DEVELOPER_TELEGRAM) && $settings->support_enabled)
+                                ->icon('lucide-send'),
+                        ]);
                 });
 
                 return $panel;

@@ -1,5 +1,5 @@
 <div
-    class="fi-sidebar-topbar-hook"
+    class="fi-sidebar-topbar-hook block sm:hidden"
     x-cloak
     x-data="{}"
 >
