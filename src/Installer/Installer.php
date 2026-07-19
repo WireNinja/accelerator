@@ -64,6 +64,7 @@ final class Installer
         'stubs/bootstrap/app.php' => 'bootstrap/app.php',
         'stubs/bootstrap/providers.php.stub' => 'bootstrap/providers.php',
         'stubs/database/seeders/DatabaseSeeder.php' => 'database/seeders/DatabaseSeeder.php',
+        'stubs/lang/vendor/filament-panels/id/auth/multi-factor/app/provider.php' => 'lang/vendor/filament-panels/id/auth/multi-factor/app/provider.php',
         'stubs/public/.user.ini' => 'public/.user.ini',
         'stubs/public/favicon.svg' => 'public/favicon.svg',
         'stubs/resources/svg/.gitkeep' => 'resources/svg/.gitkeep',
