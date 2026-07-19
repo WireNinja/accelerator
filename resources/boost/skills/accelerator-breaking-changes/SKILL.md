@@ -15,7 +15,7 @@ Format per entry:
 
 ### 🔴 BREAKING — Fake contracts and thin Filament wrappers removed
 
-`HasHandle`, `PanelColor`, `Profile`, `TypeCaster`, `BetterActionGroup`, `AuditRelationGroup`, `AcceleratorPanelsRenderHook`, widget lazy/polling traits, and the created/updated/deleted timestamp aliases no longer exist. Use concrete action classes, literal Filament color names, env-backed support config, `Cast`, native `ActionGroup`/`RelationGroup`, native render-hook strings, native widget properties, and `TimestampSummaryColumn` directly.
+`HasHandle`, `PanelColor`, `Profile`, `TypeCaster`, `BetterActionGroup`, `AuditRelationGroup`, `AcceleratorPanelsRenderHook`, widget lazy/polling traits, and all timestamp column wrappers no longer exist. Use concrete action classes, literal Filament color names, env-backed support config, `Cast`, native `ActionGroup`/`RelationGroup`, native render-hook strings, native widget properties, and `TextColumn::since()` with `description()` or a date tooltip.
 
 ### 🔴 BREAKING — Support identity is application configuration
 
@@ -86,6 +86,8 @@ Fresh installs no longer create `LauncherEnum`. It is optional, application-owne
 `AdvancedCheckboxCards` is removed together with its copied 197-line view. Use `CodeWithDennis\FilamentAdvancedChoice\Filament\Forms\Components\CheckboxCard` directly.
 
 `AdvancedRadioCards` is renamed to `IconRadioCard`. It extends the maintained upstream `RadioCard` and owns only Accelerator's enum-icon view; searchable options, grid behavior, colors, extras, and hidden-input behavior stay upstream-owned.
+
+`TimestampSummaryColumn` is also removed. Its only application consumer had two columns in one table, while native `TextColumn::since()` plus `description()` preserves the same relative and exact timestamp UX without a package class or Blade view.
 
 ## v1.1.79
 
