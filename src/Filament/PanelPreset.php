@@ -37,6 +37,10 @@ final class PanelPreset
 
     public static function configure(Panel $panel, string $id = 'admin'): Panel
     {
+        $panelSegment = $id === 'admin' ? null : Str::studly($id);
+        $panelDirectory = app_path('Filament'.($panelSegment ? "/{$panelSegment}" : ''));
+        $panelNamespace = 'App\\Filament'.($panelSegment ? "\\{$panelSegment}" : '');
+
         return $panel
             ->id($id)
             ->path($id)
@@ -77,12 +81,12 @@ final class PanelPreset
             ->maxContentWidth(Width::Full)
             ->sidebarLivewireComponent(Sidebar::class)
             ->sidebarWidth('25rem')
-            ->discoverResources(in: self::discoverResourcesIn($id), for: self::discoverResourcesFor($id))
-            ->discoverPages(in: self::discoverPagesIn($id), for: self::discoverPagesFor($id))
+            ->discoverResources(in: "{$panelDirectory}/Resources", for: "{$panelNamespace}\\Resources")
+            ->discoverPages(in: "{$panelDirectory}/Pages", for: "{$panelNamespace}\\Pages")
             ->pages([
                 Dashboard::class,
             ])
-            ->discoverWidgets(in: self::discoverWidgetsIn($id), for: self::discoverWidgetsFor($id))
+            ->discoverWidgets(in: "{$panelDirectory}/Widgets", for: "{$panelNamespace}\\Widgets")
             ->middleware([
                 EncryptCookies::class,
                 AddQueuedCookiesToResponse::class,
@@ -98,7 +102,7 @@ final class PanelPreset
                 Authenticate::class,
             ])
             ->databaseNotifications()
-            ->broadcasting(fn () => config('broadcasting.default') === 'reverb')
+            ->broadcasting(static fn (): bool => config('broadcasting.default') === 'reverb')
             ->spa()
             ->topbar(false)
             ->globalSearch(false)
@@ -107,8 +111,8 @@ final class PanelPreset
             ->collapsibleNavigationGroups()
             ->sidebarFullyCollapsibleOnDesktop()
             ->databaseTransactions()
-            ->unsavedChangesAlerts(fn () => resolve('app')->isProduction())
-            ->strictAuthorization(fn () => resolve('app')->isLocal())
+            ->unsavedChangesAlerts(static fn (): bool => app()->isProduction())
+            ->strictAuthorization(static fn (): bool => app()->isLocal())
             ->profile(ManageProfile::class, isSimple: true)
             ->revealablePasswords()
             ->resourceCreatePageRedirect('index')
@@ -118,37 +122,37 @@ final class PanelPreset
             ->lazyLoadedDatabaseNotifications()
             ->renderHook(
                 PanelsRenderHook::AUTH_LOGIN_FORM_AFTER,
-                fn () => config('accelerator.features.oauth') && config('services.google.client_id')
+                static fn () => config('accelerator.features.oauth') && config('services.google.client_id')
                     ? view('accelerator::filament.auth.google-login')
                     : ''
             )
             ->renderHook(
                 PanelsRenderHook::SIDEBAR_NAV_START,
-                fn () => config('accelerator.features.settings')
+                static fn () => config('accelerator.features.settings')
                     ? view('accelerator::filament.sidebar.notice')
                     : ''
             )
             ->renderHook(
                 self::SIDEBAR_SUPPORT_RENDER_HOOK,
-                fn () => config('accelerator.features.settings')
+                static fn () => config('accelerator.features.settings')
                     ? view('accelerator::filament.sidebar.support')
                     : ''
             )
             ->renderHook(
                 PanelsRenderHook::PAGE_START,
-                fn () => view('accelerator::filament.sidebar.topbar')
+                static fn () => view('accelerator::filament.sidebar.topbar')
             )
             ->renderHook(
                 PanelsRenderHook::HEAD_END,
-                fn () => config('accelerator.features.pwa')
+                static fn () => config('accelerator.features.pwa')
                     ? view('accelerator::partials.pwa.head')
                     : ''
             )
             ->renderHook(
                 PanelsRenderHook::BODY_END,
-                fn () => view('accelerator::filament.business-exception-handler', BuiltinExceptions::getFilamentBusinessExceptionViewData())
+                static fn () => view('accelerator::filament.business-exception-handler', BuiltinExceptions::getFilamentBusinessExceptionViewData())
             )
-            ->bootUsing(function (Panel $panel): void {
+            ->bootUsing(static function (Panel $panel): void {
                 if (! config('accelerator.features.settings')) {
                     return;
                 }
@@ -186,60 +190,6 @@ final class PanelPreset
         return is_file(base_path($panelTheme))
             ? $panelTheme
             : 'resources/css/filament/theme.css';
-    }
-
-    private static function discoverResourcesIn(string $id): string
-    {
-        if ($id === 'admin') {
-            return app_path('Filament/Resources');
-        }
-
-        return app_path(sprintf('Filament/%s/Resources', Str::studly($id)));
-    }
-
-    private static function discoverResourcesFor(string $id): string
-    {
-        if ($id === 'admin') {
-            return 'App\\Filament\\Resources';
-        }
-
-        return sprintf('App\\Filament\\%s\\Resources', Str::studly($id));
-    }
-
-    private static function discoverPagesIn(string $id): string
-    {
-        if ($id === 'admin') {
-            return app_path('Filament/Pages');
-        }
-
-        return app_path(sprintf('Filament/%s/Pages', Str::studly($id)));
-    }
-
-    private static function discoverPagesFor(string $id): string
-    {
-        if ($id === 'admin') {
-            return 'App\\Filament\\Pages';
-        }
-
-        return sprintf('App\\Filament\\%s\\Pages', Str::studly($id));
-    }
-
-    private static function discoverWidgetsIn(string $id): string
-    {
-        if ($id === 'admin') {
-            return app_path('Filament/Widgets');
-        }
-
-        return app_path(sprintf('Filament/%s/Widgets', Str::studly($id)));
-    }
-
-    private static function discoverWidgetsFor(string $id): string
-    {
-        if ($id === 'admin') {
-            return 'App\\Filament\\Widgets';
-        }
-
-        return sprintf('App\\Filament\\%s\\Widgets', Str::studly($id));
     }
 
     private static function resolveAssetUrl(?string $path, ?string $fallback = null): ?string

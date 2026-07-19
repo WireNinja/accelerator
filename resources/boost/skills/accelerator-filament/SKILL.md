@@ -271,11 +271,13 @@ Project-wide style: high-density vertical stacking. Forms must not look thin or 
 
 ### Vertical rhythm
 
-Card-based components (`BooleanCard`, `AdvancedRadioCards`, `AdvancedCheckboxCards`) MUST NOT sit inline with `TextInput`/`Select` in the same row. Place them on:
+Card-based components (`BooleanCard`, `IconRadioCard`, upstream `RadioCard`/`CheckboxCard`) MUST NOT sit inline with `TextInput`/`Select` in the same row. Place them on:
 
 - their own row with `columnSpanFull()`, OR
 - a dedicated section, OR
 - the bottom of a section after standard inputs finish.
+
+Use upstream `CheckboxCard` and `RadioCard` directly. Use Accelerator `IconRadioCard` only when enum cases implement Filament `HasIcon` and option cards must render those icons; Accelerator adds no duplicate PHP behavior beyond that custom view.
 
 ### Copy
 

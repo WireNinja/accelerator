@@ -1,17 +1,15 @@
 @php
     use function Filament\Support\get_color_css_variables;
-    use Filament\Support\Facades\FilamentView;
     use Filament\Support\Contracts\HasIcon;
+    use Filament\Support\Facades\FilamentView;
 
     $descriptions = $getDescriptions();
     $extras = $getExtras();
-    $colors = \Illuminate\Support\Arr::toCssStyles([
-        get_color_css_variables($getColor(), shades: [50, 100, 400, 500, 600, 700, 800]),
-    ]);
     $hiddenInputs = $getHiddenInputs();
     $columns = $getColumns();
     $gridDirection = $getGridDirection();
     $isInline = false;
+    $isHtmlAllowed = $isHtmlAllowed();
     $enum = $getEnum();
     $isDisabled = $isDisabled();
     $hasCursorPointer = $hasCursorPointer();
@@ -26,15 +24,15 @@
     <div @if (FilamentView::hasSpaMode()) {{-- format-ignore-start --}}x-load="visible || event (x-modal-opened)" {{--
     format-ignore-end --}} @else x-load @endif
         x-load-src="{{ \Filament\Support\Facades\FilamentAsset::getAlpineComponentSrc('checkbox-list', 'filament/forms') }}"
-        x-data="checkboxListFormComponent({
-                    livewireId: @js($this->getId()),
-                })" class="fi-fo-checkbox-list">
+        x-data="checkboxListFormComponent({ livewireId: @js($this->getId()) })"
+        {{ $getExtraAlpineAttributeBag()->class(['fi-fo-checkbox-list']) }}
+    >
         @if (!$isDisabled)
             @if ($isSearchable)
                 <x-filament::input.wrapper inline-prefix :prefix-icon="\Filament\Support\Icons\Heroicon::MagnifyingGlass"
                     prefix-icon-alias="forms:components.checkbox-list.search-field"
                     class="fi-fo-checkbox-list-search-input-wrp">
-                    <input placeholder="{{ $getSearchPrompt() }}" type="search" x-model="search"
+                    <input placeholder="{{ $getSearchPrompt() }}" type="search" x-model.debounce.{{ $getSearchDebounce() }}="search"
                         class="fi-input fi-input-has-inline-prefix" />
                 </x-filament::input.wrapper>
             @endif
@@ -52,29 +50,32 @@
             'gap-4',
         ])
             }}>
-            @foreach($getOptions() as $value => $label)
+            @foreach ($options as $value => $label)
                 @php
                     $id = str_replace('.', '-', $statePath) . '-' . $value;
                     $description = $descriptions[$value] ?? null;
                     $extra = $extras[$value] ?? null;
                     $icon = null;
+                    $itemColor = $getColor();
 
                     if ($enum) {
                         $case = $getEnum()::tryFrom($value) ?: null;
 
                         if ($case && method_exists($case, 'getColor') && $color = $case->getColor()) {
-                            $colors = \Illuminate\Support\Arr::toCssStyles([
-                                get_color_css_variables($color, shades: [50, 100, 400, 500, 600, 700, 800])
-                            ]);
+                            $itemColor = $color;
                         }
 
                         if ($case instanceof HasIcon) {
                             $icon = $case->getIcon();
                         }
                     }
+
+                    $colors = \Illuminate\Support\Arr::toCssStyles([
+                        get_color_css_variables($itemColor, shades: [50, 100, 400, 500, 600, 700, 800]),
+                    ]);
                 @endphp
 
-                <div @if ($isSearchable) wire:key="{{ $livewireKey }}.options.{{ $value }}" x-show="
+                <div wire:key="{{ $livewireKey }}.options.{{ $value }}" @if ($isSearchable) x-show="
                     $el
                         .querySelector('.fi-fo-checkbox-list-option-label')
                         ?.innerText.toLowerCase()
@@ -90,31 +91,36 @@
                             'not-has-disabled:cursor-pointer' => $hasCursorPointer,
                         ])
                         style="{{ $colors }}">
-                        @if($hiddenInputs)
-                                    <input id="{{ $id }}" name="{{ $statePath }}" type="radio" value="{{ $value }}" {{
-                            $getExtraInputAttributeBag()
-                                ->merge([
-                                     'disabled' => $isDisabled || $isOptionDisabled($value, $label),
-                                    'wire:loading.attr' => 'disabled',
-                                    $wireModelAttribute => $statePath,
-                                ], escape: false)
-                                ->class([
-                                    'absolute inset-0 appearance-none focus:outline-none',
-                                ])
-                                                                                                                                }} />
+                        @if ($hiddenInputs)
+                            <input id="{{ $id }}" name="{{ $statePath }}" type="radio" value="{{ $value }}" {{
+                                $extraInputAttributeBag
+                                    ->merge([
+                                        'disabled' => $isDisabled || $isOptionDisabled($value, $label),
+                                        'wire:loading.attr' => 'disabled',
+                                        $wireModelAttribute => $statePath,
+                                    ], escape: false)
+                                    ->class(['absolute inset-0 appearance-none focus:outline-none'])
+                            }} />
                         @endif
 
                         <div class="flex items-center w-full gap-x-4">
                             @if ($icon)
                                 <div class="shrink-0 flex items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-800 p-2 group-has-checked:bg-custom-50 dark:group-has-checked:bg-custom-400/10 transition duration-75">
-                                    @svg($icon, 'size-6 text-gray-500 dark:text-gray-400 group-has-checked:text-custom-600 dark:group-has-checked:text-custom-500')
+                                    <x-filament::icon
+                                        :icon="$icon"
+                                        class="size-6 text-gray-500 group-has-checked:text-custom-600 dark:text-gray-400 dark:group-has-checked:text-custom-500"
+                                    />
                                 </div>
                             @endif
 
                             <div class="fi-fo-checkbox-list-option-text flex-1">
                                 <span
                                     class="fi-fo-checkbox-list-option-label block text-sm font-medium text-gray-900 dark:text-gray-100">
-                                    {{ $label }}
+                                    @if ($isHtmlAllowed)
+                                        {!! $label !!}
+                                    @else
+                                        {{ $label }}
+                                    @endif
                                 </span>
                                 @if ($description)
                                     <span
@@ -126,9 +132,9 @@
                                 @endif
                             </div>
 
-                            @if(!$hiddenInputs)
+                            @if (! $hiddenInputs)
                                 <input id="{{ $id }}" name="{{ $statePath }}" type="radio" value="{{ $value }}" {{
-                                    $getExtraInputAttributeBag()
+                                    $extraInputAttributeBag
                                         ->merge([
                                             'disabled' => $isDisabled || $isOptionDisabled($value, $label),
                                             'wire:loading.attr' => 'disabled',
@@ -139,14 +145,15 @@
                                             'fi-valid' => !$errors->has($statePath),
                                             'fi-invalid' => $errors->has($statePath),
                                         ])
-                                                                                                                                        }} style="{{ $colors }}" />
+                                }} style="{{ $colors }}" />
                             @endif
                         </div>
 
-                        @if($hiddenInputs)
-                            <div class="invisible group-has-checked:visible absolute top-2 right-2 text-custom-600 dark:text-custom-500">
-                                @svg($getHiddenInputIcon() ?? 'heroicon-m-check-circle', 'size-5')
-                            </div>
+                        @if ($hiddenInputs)
+                            <x-filament::icon
+                                :icon="$getHiddenInputIcon() ?? 'heroicon-m-check-circle'"
+                                class="invisible absolute right-2 top-2 size-5 text-custom-600 group-has-checked:visible dark:text-custom-500"
+                            />
                         @endif
                     </label>
                 </div>

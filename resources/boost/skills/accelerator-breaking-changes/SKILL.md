@@ -81,6 +81,12 @@ Google OAuth is disabled unless its feature and mode are enabled. `existing_only
 
 Fresh installs no longer create `LauncherEnum`. It is optional, application-owned, and discovered when the class exists. Fresh `PanelEnum` contains only Admin, Support, and System; add application domain panels explicitly. The sidebar filters enum cases against Filament's registered panels, preventing inactive cases from producing dead links.
 
+### 🔴 BREAKING — Choice-card copies replaced by upstream components
+
+`AdvancedCheckboxCards` is removed together with its copied 197-line view. Use `CodeWithDennis\FilamentAdvancedChoice\Filament\Forms\Components\CheckboxCard` directly.
+
+`AdvancedRadioCards` is renamed to `IconRadioCard`. It extends the maintained upstream `RadioCard` and owns only Accelerator's enum-icon view; searchable options, grid behavior, colors, extras, and hidden-input behavior stay upstream-owned.
+
 ## v1.1.79
 
 No deployment contract changes beyond v1.1.66.
