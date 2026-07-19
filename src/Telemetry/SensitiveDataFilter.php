@@ -4,89 +4,133 @@ declare(strict_types=1);
 
 namespace WireNinja\Accelerator\Telemetry;
 
-/**
- * Strips sensitive parameters and headers from request data before persistence.
- *
- * Configurable via `accelerator.telemetry.sensitive_params` and
- * `accelerator.telemetry.sensitive_headers`.
- */
 final class SensitiveDataFilter
 {
+    private const REDACTED = '[REDACTED]';
+
+    private const MAX_DEPTH = 5;
+
+    private const MAX_ITEMS = 50;
+
+    private const MAX_STRING_LENGTH = 1000;
+
     /**
-     * Filter sensitive values from a parameter array (body, query).
-     *
-     * @param  array<string, mixed>  $params
+     * @param  array<string, mixed>  $parameters
      * @return array<string, mixed>
      */
-    public static function filterParams(array $params): array
+    public static function parameters(array $parameters): array
     {
-        $sensitiveKeys = array_map(
-            'strtolower',
-            config('accelerator.telemetry.sensitive_params', [])
-        );
-
-        return self::redactKeys($params, $sensitiveKeys);
+        return self::redactArray($parameters, self::sensitiveParameters());
     }
 
     /**
-     * Filter sensitive values from request headers.
-     *
      * @param  array<string, mixed>  $headers
      * @return array<string, mixed>
      */
-    public static function filterHeaders(array $headers): array
+    public static function headers(array $headers): array
     {
-        $sensitiveKeys = array_map(
-            'strtolower',
-            config('accelerator.telemetry.sensitive_headers', [])
-        );
+        return self::redactArray($headers, self::sensitiveHeaders());
+    }
 
-        return self::redactKeys($headers, $sensitiveKeys);
+    public static function text(string $value, int $maximumLength = 4000): string
+    {
+        $tokens = array_map(static fn (string $token): string => preg_quote($token, '/'), self::sensitiveParameters());
+        $filtered = $value;
+
+        if ($tokens !== []) {
+            $pattern = '/((?:'.implode('|', $tokens).')\s*[=:]\s*)([^\s&,;]+)/i';
+            $filtered = preg_replace($pattern, '$1'.self::REDACTED, $filtered) ?? $filtered;
+        }
+
+        $filtered = preg_replace('/\bBearer\s+[A-Za-z0-9._~+\/-]+=*/i', 'Bearer '.self::REDACTED, $filtered) ?? $filtered;
+
+        return mb_substr($filtered, 0, max(1, $maximumLength));
     }
 
     /**
-     * Recursively redact keys that contain any sensitive token.
-     *
-     * Uses substring matching: a key like 'api_token' matches the token 'token',
-     * 'client_secret' matches 'secret', etc. This prevents sensitive data from
-     * leaking through compound key names.
-     *
-     * @param  array<string, mixed>  $data
-     * @param  array<int, string>  $sensitiveKeys
+     * @param  array<string, mixed>  $values
+     * @param  list<string>  $sensitiveTokens
      * @return array<string, mixed>
      */
-    private static function redactKeys(array $data, array $sensitiveKeys): array
+    private static function redactArray(array $values, array $sensitiveTokens, int $depth = 0): array
     {
-        $result = [];
+        if ($depth >= self::MAX_DEPTH) {
+            return ['__truncated' => true];
+        }
 
-        foreach ($data as $key => $value) {
+        $filtered = [];
+        $processed = 0;
+
+        foreach ($values as $key => $value) {
+            if ($processed >= self::MAX_ITEMS) {
+                $filtered['__truncated'] = true;
+
+                break;
+            }
+
+            $processed++;
             $normalizedKey = strtolower((string) $key);
 
-            if (self::containsSensitiveToken($normalizedKey, $sensitiveKeys)) {
-                $result[$key] = '[REDACTED]';
+            if (self::containsToken($normalizedKey, $sensitiveTokens)) {
+                $filtered[$key] = self::REDACTED;
             } elseif (is_array($value)) {
-                $result[$key] = self::redactKeys($value, $sensitiveKeys);
+                $filtered[$key] = self::redactArray($value, $sensitiveTokens, $depth + 1);
+            } elseif (is_string($value)) {
+                $filtered[$key] = self::text($value, self::MAX_STRING_LENGTH);
+            } elseif (is_scalar($value) || $value === null) {
+                $filtered[$key] = $value;
             } else {
-                $result[$key] = $value;
+                $filtered[$key] = '['.get_debug_type($value).']';
             }
         }
 
-        return $result;
+        return $filtered;
     }
 
     /**
-     * Check if a key contains any of the sensitive tokens as a substring.
-     *
-     * @param  array<int, string>  $sensitiveTokens
+     * @param  list<string>  $sensitiveTokens
      */
-    private static function containsSensitiveToken(string $key, array $sensitiveTokens): bool
+    private static function containsToken(string $key, array $sensitiveTokens): bool
     {
         foreach ($sensitiveTokens as $token) {
-            if (str_contains($key, $token)) {
+            if ($token !== '' && str_contains($key, $token)) {
                 return true;
             }
         }
 
         return false;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private static function sensitiveParameters(): array
+    {
+        return self::normalizedConfig('accelerator.telemetry.sensitive_params');
+    }
+
+    /**
+     * @return list<string>
+     */
+    private static function sensitiveHeaders(): array
+    {
+        return self::normalizedConfig('accelerator.telemetry.sensitive_headers');
+    }
+
+    /**
+     * @return list<string>
+     */
+    private static function normalizedConfig(string $key): array
+    {
+        $configured = config($key, []);
+
+        if (! is_array($configured)) {
+            return [];
+        }
+
+        return array_values(array_filter(array_map(
+            static fn (mixed $value): string => is_string($value) ? strtolower(trim($value)) : '',
+            $configured,
+        )));
     }
 }

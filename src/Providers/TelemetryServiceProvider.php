@@ -4,36 +4,27 @@ declare(strict_types=1);
 
 namespace WireNinja\Accelerator\Providers;
 
-use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Support\ServiceProvider;
-use Laravel\Octane\Events\RequestReceived;
 use Override;
-use WireNinja\Accelerator\Telemetry\TelemetryDatabase;
+use Swoole\Timer;
+use WireNinja\Accelerator\Telemetry\TelemetryBuffer;
 use WireNinja\Accelerator\Telemetry\TelemetryFlusher;
-use WireNinja\Accelerator\Telemetry\TelemetryManager;
 use WireNinja\Accelerator\Telemetry\TelemetryNotifier;
 use WireNinja\Accelerator\Telemetry\TelemetryPruneCommand;
+use WireNinja\Accelerator\Telemetry\TelemetryRecorder;
+use WireNinja\Accelerator\Telemetry\TelemetryStatusCommand;
+use WireNinja\Accelerator\Telemetry\TelemetryStore;
 
 final class TelemetryServiceProvider extends ServiceProvider
 {
     #[Override]
     public function register(): void
     {
-        $this->app->singleton(TelemetryDatabase::class);
+        $this->app->singleton(TelemetryBuffer::class);
+        $this->app->singleton(TelemetryStore::class);
         $this->app->singleton(TelemetryNotifier::class);
-        $this->app->singleton(
-            TelemetryFlusher::class,
-            static fn (Application $app): TelemetryFlusher => new TelemetryFlusher(
-                $app->make(TelemetryDatabase::class),
-                $app->make(TelemetryNotifier::class),
-            ),
-        );
-        $this->app->singleton(
-            TelemetryManager::class,
-            static fn (Application $app): TelemetryManager => new TelemetryManager(
-                $app->make(TelemetryFlusher::class),
-            ),
-        );
+        $this->app->singleton(TelemetryRecorder::class);
+        $this->app->singleton(TelemetryFlusher::class);
     }
 
     public function boot(): void
@@ -41,21 +32,27 @@ final class TelemetryServiceProvider extends ServiceProvider
         $this->loadRoutesFrom(__DIR__.'/../../routes/telemetry.php');
 
         if ($this->app->runningInConsole()) {
-            $this->commands([TelemetryPruneCommand::class]);
+            $this->commands([
+                TelemetryPruneCommand::class,
+                TelemetryStatusCommand::class,
+            ]);
         }
 
-        if (! TelemetryManager::isSupported()) {
+        if (! TelemetryBuffer::supported()) {
             return;
         }
 
-        $manager = $this->app->make(TelemetryManager::class);
-        $manager->boot();
+        $workerState = $this->app->make('Laravel\\Octane\\Swoole\\WorkerState');
 
-        $this->app['events']->listen(
-            RequestReceived::class,
-            static function () use ($manager): void {
-                $manager->resetRequestState();
-            },
-        );
+        if ((int) data_get($workerState, 'workerId', -1) !== 0) {
+            return;
+        }
+
+        $flusher = $this->app->make(TelemetryFlusher::class);
+        $interval = max(1, (int) config('accelerator.telemetry.flush_interval', 5)) * 1000;
+
+        // Octane's public tick API dispatches through task workers. Accelerator
+        // permits zero optional task workers, so worker 0 owns this native timer.
+        Timer::tick($interval, static fn () => $flusher->flush());
     }
 }

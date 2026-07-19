@@ -7,50 +7,39 @@ namespace WireNinja\Accelerator\Telemetry;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
+use Throwable;
 
-#[Signature('telemetry:prune {--days= : Override retention days from config}')]
-#[Description('Prune telemetry exception records older than the configured retention period')]
-class TelemetryPruneCommand extends Command
+#[Signature('telemetry:prune {--days= : Override the configured retention in days}')]
+#[Description('Prune retained Accelerator telemetry occurrences and compact its SQLite database')]
+final class TelemetryPruneCommand extends Command
 {
-    public function handle(TelemetryDatabase $database): int
+    public function handle(TelemetryStore $store): int
     {
         if (! config('accelerator.telemetry.pruning_enabled', true)) {
-            $this->components->info('Telemetry pruning is disabled via config.');
+            $this->components->info('Telemetry pruning is disabled.');
 
-            return 0;
+            return self::SUCCESS;
         }
 
-        $pdo = $database->connection();
+        $days = max(1, (int) ($this->option('days') ?? config('accelerator.telemetry.retention_days', 90)));
 
-        if ($pdo === null) {
-            $this->components->error('Telemetry database unavailable.');
+        try {
+            $deleted = $store->prune($days);
+        } catch (Throwable $exception) {
+            $this->components->error('Telemetry prune failed: '.SensitiveDataFilter::text($exception->getMessage(), 500));
 
-            return 1;
+            return self::FAILURE;
         }
 
-        $days = (int) ($this->option('days') ?? config('accelerator.telemetry.retention_days', 90));
-        $cutoff = now()->subDays($days)->toIso8601String();
+        $this->components->info(sprintf(
+            'Pruned %d occurrences, %d empty groups, %d malformed records, and %d delivered notifications older than %d days.',
+            $deleted['occurrences'],
+            $deleted['groups'],
+            $deleted['failures'],
+            $deleted['notifications'],
+            $days,
+        ));
 
-        $this->components->info("Pruning telemetry records older than {$days} days...");
-
-        // Delete old occurrences.
-        $occurrenceStmt = $pdo->prepare('DELETE FROM exception_occurrences WHERE created_at < :cutoff');
-        $occurrenceStmt->execute(['cutoff' => $cutoff]);
-        $deletedOccurrences = $occurrenceStmt->rowCount();
-
-        // Delete groups that have no remaining occurrences.
-        $groupStmt = $pdo->prepare(<<<'SQL'
-            DELETE FROM exception_groups
-            WHERE id NOT IN (SELECT DISTINCT group_id FROM exception_occurrences)
-        SQL);
-        $groupStmt->execute();
-        $deletedGroups = $groupStmt->rowCount();
-
-        $this->components->info("Pruned {$deletedOccurrences} occurrences and {$deletedGroups} empty groups.");
-
-        // Vacuum to reclaim disk space.
-        $pdo->exec('VACUUM');
-
-        return 0;
+        return self::SUCCESS;
     }
 }

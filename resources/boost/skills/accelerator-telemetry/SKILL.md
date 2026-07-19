@@ -1,161 +1,126 @@
 ---
 name: accelerator-telemetry
-description: Set up and use the built-in Accelerator telemetry subsystem for exception tracking, notification, and log reading — Octane Swoole only, zero request latency impact.
+description: Configure and operate Accelerator v2 authenticated exception telemetry on Laravel Octane Swoole, including its shared-memory buffer, SQLite store, durable notification outbox, dashboard, health counters, and retention.
 ---
 
-# Accelerator Telemetry
+# Accelerator Telemetry v2
 
-## When To Use
+## Scope
 
-Setting up exception monitoring, configuring Discord/Telegram notifications for new exceptions, reviewing captured exceptions via the built-in dashboard, reading Laravel log files, or tuning telemetry buffer/retention settings.
+Use this skill for Accelerator exception capture, Discord/Telegram delivery, the telemetry dashboard, retention, privacy settings, or telemetry health failures.
 
-## Overview
+Telemetry is deliberately narrow:
 
-Accelerator ships a built-in, baked-in telemetry system that captures exceptions during Octane Swoole request processing. It is:
+- capture runs only for authenticated HTTP requests on Octane Swoole;
+- the request path writes bounded data to Swoole shared memory and performs no disk I/O;
+- capture still has CPU and memory cost when an exception occurs;
+- SQLite persistence and notification delivery run on a native timer owned by Swoole worker 0;
+- it complements Laravel logs and Nightwatch; it does not replace either.
 
-- **Zero latency**: writes to Swoole shared-memory Table, not disk.
-- **Self-healing**: SQLite database auto-creates on first flush.
-- **Gracefully degrading**: any failure silently disables telemetry for the worker lifecycle.
-- **Octane Swoole only**: automatically disabled on FPM, CLI/artisan, RoadRunner, or FrankenPHP.
+## Installation contract
 
-Exceptions are buffered in memory and batch-flushed to a dedicated SQLite database every 5 seconds (configurable). Notifications are sent to Discord/Telegram on first occurrence and re-open.
-
-## Setup
-
-### 1. Register the Swoole Table
-
-Add the telemetry buffer table to your `config/octane.php`:
+Enable the feature and keep both generated Swoole tables in `config/octane.php`:
 
 ```php
-use WireNinja\Accelerator\Telemetry\TelemetryManager;
+use WireNinja\Accelerator\Telemetry\TelemetryBuffer;
 
 'tables' => [
-    ...TelemetryManager::octaneTableConfig(
-        rows: (int) env('ACCELERATOR_TELEMETRY_BUFFER_ROWS', 128),
-        bytes: (int) env('ACCELERATOR_TELEMETRY_BUFFER_BYTES', 65535),
-    ),
-    // ...your other tables (sessions, etc.)
+    ...((bool) env('ACCELERATOR_FEATURE_TELEMETRY', false)
+        ? TelemetryBuffer::octaneTableConfig(
+            rows: (int) env('ACCELERATOR_TELEMETRY_BUFFER_ROWS', 128),
+            bytes: (int) env('ACCELERATOR_TELEMETRY_BUFFER_BYTES', 65535),
+        )
+        : []),
 ],
 ```
 
-This produces the correct Octane format: `'telemetry_buffer:128' => ['payload' => 'string:65535', 'created_at' => 'int']`.
-
-### 2. Environment Variables (all optional — defaults are sane)
+Relevant environment values:
 
 ```dotenv
-# Master switch (default: true, auto-disabled on non-Swoole)
-ACCELERATOR_TELEMETRY_ENABLED=true
-
-# Buffer flush interval in seconds (default: 5)
+ACCELERATOR_FEATURE_TELEMETRY=true
 ACCELERATOR_TELEMETRY_FLUSH_INTERVAL=5
-
-# Swoole Table sizing (default: 128 rows, 64KB per row)
 ACCELERATOR_TELEMETRY_BUFFER_ROWS=128
 ACCELERATOR_TELEMETRY_BUFFER_BYTES=65535
-
-# Retention: days to keep occurrence records (default: 90, 0 = forever)
 ACCELERATOR_TELEMETRY_RETENTION=90
 ACCELERATOR_TELEMETRY_PRUNING=true
-
-# Capture rules
-ACCELERATOR_TELEMETRY_CAPTURE_GUESTS=false
 ACCELERATOR_TELEMETRY_SAMPLE_RATE=100
 
-# Notifications (leave empty to disable)
-ACCELERATOR_TELEMETRY_DISCORD_WEBHOOK=
-ACCELERATOR_TELEMETRY_TELEGRAM_CHAT=
-ACCELERATOR_TELEMETRY_THROTTLE=60
+# Privacy-sensitive context remains off unless explicitly enabled.
+ACCELERATOR_TELEMETRY_CAPTURE_HEADERS=false
+ACCELERATOR_TELEMETRY_CAPTURE_QUERY=false
+ACCELERATOR_TELEMETRY_CAPTURE_PAYLOAD=false
+
+ACCELERATOR_TELEMETRY_NOTIFICATION_RETRY=60
+ACCELERATOR_TELEMETRY_NOTIFICATION_ATTEMPTS=8
+ACCELERATOR_TELEMETRY_NOTIFICATIONS_PER_FLUSH=10
+# ACCELERATOR_TELEMETRY_DISCORD_WEBHOOK=
+# ACCELERATOR_TELEMETRY_TELEGRAM_CHAT=
 ```
 
-### 3. Notification Setup
+Telegram also needs `TELEGRAM_BOT_TOKEN` through the application services config. A channel is active only when all of its required credentials exist.
 
-**Discord**: Create a webhook in your Discord channel settings → Integrations → Webhooks. Paste the URL into `ACCELERATOR_TELEMETRY_DISCORD_WEBHOOK`.
+Restart Octane after changing table size, feature, or notification configuration. Swoole tables are allocated at server boot.
 
-**Telegram**: Use your existing Telegram bot token (from `SystemSettings` or `services.telegram-bot-api.token`). Set `ACCELERATOR_TELEMETRY_TELEGRAM_CHAT` to your chat/group ID.
+## Persistence guarantees
 
-Both channels fire simultaneously if both are configured.
+The v2 flush sequence is intentional:
 
-### 4. Deploy Consideration
+1. worker 0 snapshots exact Swoole keys and payloads;
+2. the store obtains SQLite's immediate write lock;
+3. validate and persist each occurrence by unique `buffer_id`;
+4. create notification outbox rows in the same transaction;
+5. commit SQLite;
+6. acknowledge only unchanged, committed Swoole rows;
+7. deliver claimed outbox rows after commit.
 
-The telemetry SQLite lives at `storage/telemetry/telemetry.sqlite`. Since `storage/` is symlinked to `{root}/shared/storage` in the Envoy release layout, the database persists across deploys automatically.
+Persistence failure leaves buffer rows available for retry. A crash after commit but before acknowledgement is safe because `buffer_id` makes replay idempotent. Notification failures never roll back occurrences; they remain visible and retryable in the outbox.
 
-## How It Works
+## Schema upgrades
 
-```
-Request → Exception thrown → TelemetryRecorder::capture()
-    ↓
-Swoole Table buffer (memory-only, zero I/O)
-    ↓ (every 5 seconds via Swoole Timer)
-TelemetryFlusher::flush()
-    ↓
-Batch INSERT into storage/telemetry/telemetry.sqlite
-    ↓
-New/re-opened? → Discord/Telegram notification (throttled)
-```
+The database lives at `storage/telemetry/telemetry.sqlite`, which maps to shared storage in the Accelerator release layout.
 
-## Exception Grouping
+Accelerator never drops an unknown telemetry schema automatically. For the one-time v1 → v2 migration:
 
-Exceptions are grouped by **fingerprint**: `md5(class + file + line)`. Same exception from same location = same group, regardless of message variations.
+1. stop Octane;
+2. move the v1 SQLite file and any `-wal` / `-shm` companions into `.accelerator_v1/telemetry/`;
+3. start Octane and let v2 create schema `200`;
+4. keep the archive until acceptance is complete.
 
-Group statuses:
-- `open` — actively occurring
-- `resolved` — manually marked resolved by operator
-- `muted` — manually silenced (no notifications)
+Future v2 schema changes must be incremental. Never restore destructive “drop on version mismatch” behavior.
 
-When a resolved group re-appears, it automatically re-opens and triggers a notification.
+## Privacy and grouping
 
-## Dashboard
+- Guest and CLI exceptions are never captured.
+- Headers, query values, and request payloads default off.
+- Enabled context is recursively bounded and redacts configured sensitive keys.
+- Messages and stack traces redact common token/key patterns and Bearer credentials.
+- Stored file paths are application-relative when possible.
+- Fingerprints use SHA-256 over exception class, a stable application frame, and route identity.
+- A resolved group reopens when it recurs. Muted groups stay muted.
 
-The telemetry dashboard is available at `/insider/telemetry` (Super Admin only). It provides:
+Do not add a global query listener or source-file read to exception capture. Source context is read only when a Super Admin opens the dashboard.
 
-- **Exception Groups**: list of all captured exception types with occurrence count, status, first/last seen.
-- **Occurrence Detail**: full stack trace, request context, headers, timing for each individual occurrence.
-- **Log Reader**: paginated view of `laravel.log` entries.
+## Operations
 
-## Commands
+Dashboard: `/insider/telemetry`, guarded by `web`, `auth`, and `role:super_admin`.
+
+It exposes captured, persisted, dropped, malformed, flush-failure, notification-failure, buffer-depth, pending-outbox, database-size, and schema counters.
 
 ```bash
-# Prune old telemetry records (scheduled daily at 04:00)
+php artisan telemetry:status
+php artisan telemetry:status --json
 php artisan telemetry:prune
-
-# Override retention days
 php artisan telemetry:prune --days=30
 ```
 
-## Configuration Reference
+`telemetry:status` reports storage, current buffer health, configured channels, and configuration errors without exposing notification credentials. Pruning removes expired occurrences, empty groups, rejected payload records, and delivered outbox rows, then compacts SQLite. The fresh installer schedules it daily with overlap protection.
 
-All keys live under `config('accelerator.telemetry.*')`:
+## Failure triage
 
-| Key | Type | Default | Description |
-|-----|------|---------|-------------|
-| `enabled` | bool | `true` | Master switch |
-| `flush_interval` | int | `5` | Seconds between buffer flushes |
-| `buffer_rows` | int | `128` | Max buffered exceptions (Swoole Table rows) |
-| `buffer_bytes` | int | `65535` | Max payload size per row (bytes) |
-| `retention_days` | int | `90` | Days to keep occurrence records |
-| `pruning_enabled` | bool | `true` | Whether scheduled pruning runs |
-| `capture_guests` | bool | `false` | Capture exceptions from unauthenticated requests |
-| `sample_rate` | int | `100` | Percentage of exceptions to capture (1-100) |
-| `notify.discord_webhook` | string | `null` | Discord webhook URL |
-| `notify.telegram_chat_id` | string | `null` | Telegram chat ID for notifications |
-| `throttle_minutes` | int | `60` | Min minutes between notifications per fingerprint |
-| `capture_headers` | bool | `true` | Include request headers in occurrence |
-| `capture_payload` | bool | `false` | Include request body (privacy-sensitive) |
-| `sensitive_params` | array | `[password, token, ...]` | Parameters to redact |
-| `sensitive_headers` | array | `[Authorization, Cookie, ...]` | Headers to redact |
+- No captures: confirm Swoole runtime, feature flag, both table definitions, authenticated request, sample rate, and an Octane restart.
+- Drops rising: increase buffer rows/bytes or fix a persistence outage; allocation costs RAM and requires restart.
+- Flush failures: inspect shared-storage permissions, disk space, SQLite schema version, and the dashboard's latest runtime error.
+- Notification failures: inspect pending outbox rows and channel credentials/network access. Do not delete persisted exceptions.
+- Schema mismatch: archive the old database explicitly. Do not bypass the guard or auto-drop it.
 
-## Graceful Degradation
-
-- Swoole Table not registered → telemetry silently disabled, warning logged once.
-- SQLite write failure (disk full, permissions) → telemetry disabled for worker lifecycle.
-- Buffer overflow (128 rows full) → newest exceptions dropped (catastrophic flood protection).
-- Notification failure → swallowed by `rescue()`, never crashes the app.
-- CLI/artisan process → `isSupported()` returns false immediately (prevents Timer::tick from keeping CLI alive).
-
-## Rules
-
-- Do not store the telemetry SQLite inside a per-release directory. It must live in shared storage.
-- Do not use telemetry on FPM — it will silently not activate.
-- Do not rely on telemetry as a replacement for structured logging. It captures exceptions only.
-- Pruning is scheduled but can also be triggered manually for immediate cleanup.
-- The dashboard is Super Admin only. Do not expose to regular users.
+Keep telemetry's performance claims precise: no request-path disk I/O, not zero latency.

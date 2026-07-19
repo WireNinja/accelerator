@@ -13,6 +13,14 @@ Format per entry:
 
 ## v2.0.0
 
+### 🔴 BREAKING — Telemetry v1 is replaced, not migrated in place
+
+`TelemetryManager`, `TelemetryDatabase`, `TelemetryMigration`, the static recorder state, query timeline, log reader, source capture, and the v1 dashboard components are removed. `TelemetryBuffer` now defines both Octane tables and `TelemetryStore` owns schema `200`.
+
+Stop Octane and archive `storage/telemetry/telemetry.sqlite` plus any `-wal` / `-shm` files under `.accelerator_v1/telemetry/` before enabling v2. Accelerator refuses an unknown/v1 schema and never drops it automatically. Remove `ACCELERATOR_TELEMETRY_CAPTURE_GUESTS` and `ACCELERATOR_TELEMETRY_THROTTLE`; add explicit `CAPTURE_HEADERS`, `CAPTURE_QUERY`, `CAPTURE_PAYLOAD`, and `NOTIFICATION_RETRY` values. Restart Octane so both new tables are allocated.
+
+Telemetry now captures authenticated requests only. Persistence is idempotent by buffer ID, Swoole rows are acknowledged only after SQLite commit, and channel-specific notifications use a durable post-commit outbox. The supported claim is “no request-path disk I/O”, not “zero latency”.
+
 ### 🔴 BREAKING — Fake contracts and thin Filament wrappers removed
 
 `HasHandle`, `PanelColor`, `Profile`, `TypeCaster`, `BetterActionGroup`, `AuditRelationGroup`, `AcceleratorPanelsRenderHook`, widget lazy/polling traits, and all timestamp column wrappers no longer exist. Use concrete action classes, literal Filament color names, env-backed support config, `Cast`, native `ActionGroup`/`RelationGroup`, native render-hook strings, native widget properties, and `TextColumn::since()` with `description()` or a date tooltip.

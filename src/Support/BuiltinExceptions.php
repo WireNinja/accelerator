@@ -15,7 +15,7 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Throwable;
 use WireNinja\Accelerator\Exceptions\BusinessException;
-use WireNinja\Accelerator\Telemetry\TelemetryManager;
+use WireNinja\Accelerator\Telemetry\TelemetryBuffer;
 use WireNinja\Accelerator\Telemetry\TelemetryRecorder;
 
 final class BuiltinExceptions
@@ -80,18 +80,15 @@ final class BuiltinExceptions
             return Auth::guest();
         });
 
-        // Telemetry: capture every exception into the Swoole Table buffer.
-        // This fires independently of dontReportWhen — telemetry has its own
-        // capture_guests config and sample_rate. The capture is a memory-only
-        // Swoole Table write with zero disk I/O.
+        // Authenticated Octane requests may copy bounded exception context into
+        // a Swoole table. Persistence and notification happen after the request.
         $exceptions->report(function (Throwable $exception) {
-            if (! TelemetryManager::isSupported()) {
+            if (! TelemetryBuffer::supported()) {
                 return false; // Let default reporting continue.
             }
 
             $request = rescue(fn () => request(), null, false);
-
-            TelemetryRecorder::capture($exception, $request);
+            rescue(fn () => app(TelemetryRecorder::class)->capture($exception, $request), report: false);
 
             return false; // Do not stop default reporting chain.
         });

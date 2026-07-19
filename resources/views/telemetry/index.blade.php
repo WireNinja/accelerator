@@ -1,125 +1,86 @@
 @extends('accelerator::telemetry.layout')
 
-@section('title', 'Exception Groups')
-
-@php
-    $activeStatus = request('status');
-@endphp
+@section('title', 'Exception groups')
 
 @section('content')
-<div class="flex flex-col gap-8">
-    <section class="flex flex-col gap-5">
-        <div>
-            <p class="mb-3 text-sm text-neutral-500">Issues</p>
-            <h1 class="text-3xl font-semibold tracking-tight text-white">Exception groups</h1>
-            <p class="mt-2 text-sm text-neutral-400">{{ number_format($groups->total()) }} captured groups</p>
-        </div>
+<div class="stack">
+    <header>
+        <p class="eyebrow">Authenticated exception monitoring</p>
+        <h1>Exception groups</h1>
+        <p class="muted">{{ number_format($groups->total()) }} groups · {{ $statistics['database_id'] }} schema {{ $statistics['schema_version'] }}</p>
+    </header>
 
-        <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div class="flex flex-wrap gap-2">
-                <a href="{{ route('accelerator.telemetry.index') }}" class="rounded-md border px-3 py-1.5 text-sm {{ $activeStatus === null ? 'border-white/15 bg-white/10 text-white' : 'border-white/10 bg-white/[3%] text-neutral-400 hover:bg-white/[8%] hover:text-white' }}">
-                    All
-                </a>
-                @foreach(['open', 'resolved', 'muted'] as $status)
-                    <a href="{{ route('accelerator.telemetry.index', ['status' => $status]) }}" class="rounded-md border px-3 py-1.5 text-sm {{ $activeStatus === $status ? 'border-white/15 bg-white/10 text-white' : 'border-white/10 bg-white/[3%] text-neutral-400 hover:bg-white/[8%] hover:text-white' }}">
-                        {{ ucfirst($status) }}
-                    </a>
-                @endforeach
-            </div>
-        </div>
+    <section class="stats" aria-label="Telemetry health">
+        @foreach([
+            'Captured' => $runtime['captured'] ?? 0,
+            'Persisted' => $runtime['persisted'] ?? 0,
+            'Buffer depth' => $runtime['buffered'] ?? 0,
+            'Dropped' => $runtime['dropped'] ?? 0,
+            'Rejected payloads' => $statistics['malformed'] ?? 0,
+            'Flush failures' => $runtime['flush_failures'] ?? 0,
+            'Notification failures' => $runtime['notification_failures'] ?? 0,
+            'Pending notifications' => $statistics['pending_notifications'] ?? 0,
+        ] as $label => $value)
+            <div class="stat"><span class="muted">{{ $label }}</span><strong>{{ number_format((int) $value) }}</strong></div>
+        @endforeach
+        <div class="stat"><span class="muted">SQLite size</span><strong>{{ number_format(((int) $statistics['database_bytes']) / 1024, 1) }} KB</strong></div>
     </section>
 
+    @if(! $runtime['available'])
+        <section class="card alert"><strong>Runtime tables unavailable</strong><p>Open this dashboard through Octane Swoole after restarting it with the v2 table config.</p></section>
+    @elseif(filled($runtime['last_error'] ?? null))
+        <section class="card alert"><strong>Latest runtime error</strong><p>{{ $runtime['last_error'] }}</p></section>
+    @endif
+
+    <nav class="filters" aria-label="Status filter">
+        <a class="button {{ $activeStatus === null ? 'active' : '' }}" href="{{ route('accelerator.telemetry.index') }}">All</a>
+        @foreach(['open', 'resolved', 'muted'] as $status)
+            <a class="button {{ $activeStatus === $status ? 'active' : '' }}" href="{{ route('accelerator.telemetry.index', ['status' => $status]) }}">{{ ucfirst($status) }}</a>
+        @endforeach
+    </nav>
+
     @if($groups->isEmpty())
-        <div class="rounded-xl border border-white/10 bg-[#1d1d1d] p-8 text-center text-sm text-neutral-500">
-            No exception groups found.
-        </div>
+        <section class="card muted">No exception groups match this filter.</section>
     @else
-        <section class="overflow-hidden rounded-xl border border-white/10 bg-[#1d1d1d]">
-            <div class="overflow-x-auto">
-                <table class="min-w-full divide-y divide-white/10 text-sm">
-                    <thead class="bg-white/[3%] text-left font-mono text-xs uppercase text-neutral-500">
-                        <tr>
-                            <th class="px-4 py-3">Status</th>
-                            <th class="px-4 py-3">Issue</th>
-                            <th class="px-4 py-3">File</th>
-                            <th class="px-4 py-3">User</th>
-                            <th class="px-4 py-3">Perf</th>
-                            <th class="px-4 py-3 text-right">Count</th>
-                            <th class="px-4 py-3">Last seen</th>
-                            <th class="px-4 py-3"></th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-white/5">
-                        @foreach($groups as $group)
-                            <tr class="align-top hover:bg-white/[3%]">
-                                <td class="px-4 py-3">
-                                    <x-accelerator::telemetry.status-badge :status="$group['status']" />
-                                </td>
-                                <td class="max-w-md px-4 py-3">
-                                    <a href="{{ route('accelerator.telemetry.show', $group['id']) }}" class="font-semibold text-neutral-100 hover:text-white hover:underline">
-                                        {{ class_basename($group['class']) }}
-                                    </a>
-                                    <p class="mt-1 truncate font-mono text-xs text-neutral-500">{{ $group['class'] }}</p>
-                                    @if(($group['message'] ?? null) || ($group['latest_message'] ?? null))
-                                        <p class="mt-2 text-sm text-neutral-300">{{ $group['message'] ?? $group['latest_message'] }}</p>
-                                    @endif
-                                </td>
-                                <td class="max-w-sm px-4 py-3">
-                                    <p class="truncate font-mono text-xs text-neutral-400">{{ str_replace(base_path().'/', '', $group['file']) }}:{{ $group['line'] }}</p>
-                                </td>
-                                <td class="max-w-[14rem] px-4 py-3">
-                                    <x-accelerator::telemetry.user-chip
-                                        :name="$group['latest_user_name'] ?? null"
-                                        :username="$group['latest_user_username'] ?? null"
-                                        :email="$group['latest_user_email'] ?? null"
-                                    />
-                                    <p class="mt-1 text-xs text-neutral-500">{{ number_format((int) ($group['user_count'] ?? 0)) }} impacted users</p>
-                                </td>
-                                <td class="whitespace-nowrap px-4 py-3 font-mono text-xs text-neutral-400">
-                                    @if($group['latest_duration_ms'] !== null)
-                                        <div>{{ number_format((float) $group['latest_duration_ms'], 2) }}ms request</div>
-                                    @else
-                                        <div class="text-neutral-600">n/a</div>
-                                    @endif
-                                    @if($group['latest_db_query_count'] !== null)
-                                        <div>{{ number_format((int) $group['latest_db_query_count']) }}q / {{ number_format((float) $group['latest_db_duration_ms'], 2) }}ms DB</div>
-                                    @endif
-                                </td>
-                                <td class="px-4 py-3 text-right font-mono text-sm font-semibold text-neutral-100">
-                                    {{ number_format($group['occurrence_count']) }}
-                                </td>
-                                <td class="whitespace-nowrap px-4 py-3 font-mono text-xs text-neutral-500">
-                                    {{ $group['last_seen_at'] }}
-                                </td>
-                                <td class="px-4 py-3">
-                                    <x-accelerator::telemetry.group-actions :group="$group" />
-                                </td>
-                            </tr>
-                        @endforeach
-                    </tbody>
-                </table>
-            </div>
-        </section>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>Status</th><th>Issue</th><th>Location</th><th>Actor</th><th>Count</th><th>Last seen</th><th>Change</th></tr></thead>
+                <tbody>
+                @foreach($groups as $group)
+                    <tr>
+                        <td><span class="badge badge-{{ $group['status'] }}">{{ $group['status'] }}</span></td>
+                        <td class="issue">
+                            <a href="{{ route('accelerator.telemetry.show', $group['id']) }}">{{ class_basename($group['exception_class']) }}</a>
+                            <p class="message">{{ $group['message'] }}</p>
+                            @if($group['route_name'])<p class="muted mono">{{ $group['route_name'] }}</p>@endif
+                        </td>
+                        <td class="mono">{{ $group['source_file'] }}:{{ $group['source_line'] }}</td>
+                        <td>{{ $group['latest_user_label'] ?: 'User '.$group['latest_user_id'] }}<br><span class="muted">{{ number_format((int) $group['impacted_users']) }} users</span></td>
+                        <td>{{ number_format((int) $group['occurrence_count']) }}</td>
+                        <td class="mono">{{ $group['last_seen_at'] }}</td>
+                        <td>
+                            <form method="POST" action="{{ route('accelerator.telemetry.status', $group['id']) }}">
+                                @csrf
+                                <select name="status" aria-label="Change status" onchange="this.form.submit()">
+                                    @foreach(['open', 'resolved', 'muted'] as $status)
+                                        <option value="{{ $status }}" @selected($group['status'] === $status)>{{ ucfirst($status) }}</option>
+                                    @endforeach
+                                </select>
+                            </form>
+                        </td>
+                    </tr>
+                @endforeach
+                </tbody>
+            </table>
+        </div>
+    @endif
 
-        @if($groups->hasPages())
-            <div class="flex items-center justify-center gap-2 text-sm">
-                @if($groups->onFirstPage())
-                    <span class="rounded-md border border-white/10 bg-white/[3%] px-3 py-1.5 text-neutral-600">Prev</span>
-                @else
-                    <a href="{{ $groups->previousPageUrl() }}" class="rounded-md border border-white/10 bg-white/[3%] px-3 py-1.5 text-neutral-300 hover:bg-white/[8%]">Prev</a>
-                @endif
-
-                <span class="rounded-md border border-white/10 bg-white/[3%] px-3 py-1.5 text-neutral-500">
-                    Page {{ $groups->currentPage() }} of {{ $groups->lastPage() }}
-                </span>
-
-                @if($groups->hasMorePages())
-                    <a href="{{ $groups->nextPageUrl() }}" class="rounded-md border border-white/10 bg-white/[3%] px-3 py-1.5 text-neutral-300 hover:bg-white/[8%]">Next</a>
-                @else
-                    <span class="rounded-md border border-white/10 bg-white/[3%] px-3 py-1.5 text-neutral-600">Next</span>
-                @endif
-            </div>
-        @endif
+    @if($groups->hasPages())
+        <nav class="pagination">
+            @if($groups->onFirstPage())<span class="button muted">Previous</span>@else<a class="button" href="{{ $groups->previousPageUrl() }}">Previous</a>@endif
+            <span class="muted">Page {{ $groups->currentPage() }} / {{ $groups->lastPage() }}</span>
+            @if($groups->hasMorePages())<a class="button" href="{{ $groups->nextPageUrl() }}">Next</a>@else<span class="button muted">Next</span>@endif
+        </nav>
     @endif
 </div>
 @endsection

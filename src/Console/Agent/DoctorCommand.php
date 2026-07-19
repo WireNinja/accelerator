@@ -20,6 +20,7 @@ use Throwable;
 use WireNinja\Accelerator\AcceleratorServiceProvider;
 use WireNinja\Accelerator\Console\Concerns\HasBanner;
 use WireNinja\Accelerator\Contracts\AcceleratorUser;
+use WireNinja\Accelerator\Telemetry\TelemetryBuffer;
 
 #[Signature('accelerator:doctor {--json : Output as JSON} {--compact : Compact JSON output}')]
 #[Description('Verify the Accelerator installation contract and report host warnings')]
@@ -355,6 +356,39 @@ final class DoctorCommand extends Command
             value: "{$uploadMegabytes} MB",
             passed: $uploadMegabytes > 0,
             message: 'ACCELERATOR_UPLOAD_MAX_MB must be greater than zero.',
+        );
+
+        $this->inspectTelemetryConfiguration();
+    }
+
+    private function inspectTelemetryConfiguration(): void
+    {
+        $enabled = (bool) config('accelerator.features.telemetry', false);
+        $configuredTables = config('octane.tables', []);
+        $tableNames = is_array($configuredTables) ? array_keys($configuredTables) : [];
+        $hasBuffer = collect($tableNames)->contains(
+            static fn (int|string $name): bool => str_starts_with((string) $name, TelemetryBuffer::BUFFER_TABLE.':'),
+        );
+        $hasHealth = collect($tableNames)->contains(
+            static fn (int|string $name): bool => str_starts_with((string) $name, TelemetryBuffer::HEALTH_TABLE.':'),
+        );
+        $routeCount = collect(app('router')->getRoutes()->getRoutes())
+            ->filter(static fn (Route $route): bool => is_string($route->getName()) && str_starts_with($route->getName(), 'accelerator.telemetry.'))
+            ->count();
+
+        $this->assert(
+            category: 'Configuration',
+            label: 'Telemetry tables',
+            value: sprintf('%s buffer, %s health', $hasBuffer ? 'with' : 'without', $hasHealth ? 'with' : 'without'),
+            passed: $enabled === ($hasBuffer && $hasHealth),
+            message: 'Telemetry feature and Octane Swoole table topology disagree; regenerate config/octane.php and rebuild config cache.',
+        );
+        $this->assert(
+            category: 'Configuration',
+            label: 'Telemetry routes',
+            value: (string) $routeCount,
+            passed: $routeCount === ($enabled ? 3 : 0),
+            message: 'Telemetry route topology is stale; rebuild config and route caches.',
         );
     }
 
