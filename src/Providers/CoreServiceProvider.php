@@ -4,11 +4,19 @@ declare(strict_types=1);
 
 namespace WireNinja\Accelerator\Providers;
 
+use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Foundation\Application;
 use Illuminate\Http\Middleware\TrustProxies;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Date;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Session;
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Validation\Rules\Password;
 use Livewire\LivewireManager;
-use WireNinja\Accelerator\Concerns\InteractsWithApplication;
+use NotificationChannels\Telegram\Telegram;
+use SessionHandlerInterface;
 use WireNinja\Accelerator\Console\Agent\DoctorCommand;
 use WireNinja\Accelerator\Console\Agent\ModelContextCommand;
 use WireNinja\Accelerator\Console\Agent\ResourceContextCommand;
@@ -18,10 +26,24 @@ use WireNinja\Accelerator\Console\ModelAuditCommand;
 use WireNinja\Accelerator\Console\ModelDocCommand;
 use WireNinja\Accelerator\Console\Vps\BackupStatusCommand;
 use WireNinja\Accelerator\Livewire\Synthesizers\BigDecimalSynth;
+use WireNinja\Accelerator\Support\OctaneTableSessionHandler;
+use WireNinja\Accelerator\Support\Telegram\TelegramBotConfigurator;
 
 final class CoreServiceProvider extends ServiceProvider
 {
-    use InteractsWithApplication;
+    public function register(): void
+    {
+        if (! config('accelerator.features.telegram')) {
+            return;
+        }
+
+        $this->app->afterResolving(
+            Telegram::class,
+            static function (Telegram $telegram, Application $application): void {
+                $application->make(TelegramBotConfigurator::class)->configureClient($telegram);
+            },
+        );
+    }
 
     public function boot(): void
     {
@@ -29,13 +51,9 @@ final class CoreServiceProvider extends ServiceProvider
         $this->loadViewsFrom(__DIR__.'/../../resources/views', 'accelerator');
 
         $this->configureTrustedProxy();
-        $this->bootCustomSessionDrivers();
-        $this->bootEloquentBestPractices();
-        $this->bootApplicationDefaults();
-
-        if (config('accelerator.features.telegram')) {
-            $this->bootTelegramConfiguration();
-        }
+        $this->registerCustomSessionDriver();
+        $this->configureEloquent();
+        $this->configureApplicationDefaults();
 
         $this->app->make(LivewireManager::class)->propertySynthesizer(BigDecimalSynth::class);
 
@@ -68,5 +86,43 @@ final class CoreServiceProvider extends ServiceProvider
                 | Request::HEADER_X_FORWARDED_PORT
                 | Request::HEADER_X_FORWARDED_PROTO
         );
+    }
+
+    private function registerCustomSessionDriver(): void
+    {
+        if (config('session.driver') !== 'octane-table') {
+            return;
+        }
+
+        Session::extend('octane-table', static fn (Application $application): SessionHandlerInterface => new OctaneTableSessionHandler(
+            minutes: (int) $application['config']->get('session.lifetime'),
+            tableName: (string) $application['config']->get('session.octane_table', 'sessions'),
+        ));
+    }
+
+    /**
+     * Filament nested relationship forms rely on global unguarding. Validation
+     * and authorization remain the responsibility of schemas, requests, and policies.
+     */
+    private function configureEloquent(): void
+    {
+        Model::shouldBeStrict(! $this->app->isProduction());
+        Model::unguard();
+    }
+
+    private function configureApplicationDefaults(): void
+    {
+        $isProduction = $this->app->isProduction();
+
+        Date::use(CarbonImmutable::class);
+        DB::prohibitDestructiveCommands($isProduction);
+        Password::defaults(static fn (): ?Password => $isProduction
+            ? Password::min(12)
+                ->mixedCase()
+                ->letters()
+                ->numbers()
+                ->symbols()
+                ->uncompromised()
+            : null);
     }
 }

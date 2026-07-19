@@ -229,12 +229,12 @@ For `HasMany` / `MorphMany` with few fields that should validate alongside the p
 
 ## Global Configuration (Don't Repeat)
 
-Accelerator already wires global defaults via `WireNinja\Accelerator\Concerns\InteractsWithApplication`. Do NOT redefine locally:
+Accelerator already wires global defaults in its Filament provider. Do NOT redefine locally:
 
 - `Select::searchable()->preload()->native(false)` — already global.
 - `DateTimePicker::native(false)->displayFormat('j F Y H:i')` — already global.
 - `TimePicker::native(false)->displayFormat('H:i')` — already global.
-- `FileUpload::imageEditor()->maxParallelUploads(5)->maxSize(1GB)` — already global.
+- `FileUpload::imageEditor()->maxParallelUploads(5)->maxSize(100MB)` — already global; the exact limit comes from `accelerator.uploads.max_megabytes`.
 - Table defaults: cursor pagination, IDR currency, id-ID locale, defer loading/filters/columns, default sort `id desc`, striped, empty state — all global. Session persistence is OFF by default (all `persistXxxInSession(false)`).
 
 Override locally only when intentionally diverging, with a short comment explaining why.

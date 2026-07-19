@@ -41,6 +41,10 @@ The database-backed `registration_enabled` toggle and Filament registration rout
 
 Google OAuth is disabled unless its feature and mode are enabled. `existing_only` authenticates only a pre-provisioned matching email. `allowed_domains` is the explicit provisioning mode and requires a configured domain allowlist. Neither mode stores Google access or refresh tokens; the v2 baseline removes those columns.
 
+### 🔴 BREAKING — Application god-trait removed
+
+`InteractsWithApplication` is removed. Applications must not import package provider internals. Core owns Eloquent/session/password defaults; the Filament provider owns UI and Shield defaults. Telegram settings are applied lazily when the Telegram client is resolved, so application boot no longer queries settings or silently swallows that failure.
+
 ## v1.1.79
 
 No deployment contract changes beyond v1.1.66.

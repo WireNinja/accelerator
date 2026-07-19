@@ -4,29 +4,44 @@ declare(strict_types=1);
 
 namespace WireNinja\Accelerator\Providers;
 
+use BezhanSalleh\FilamentShield\Commands\InstallCommand;
+use BezhanSalleh\FilamentShield\Commands\PublishCommand;
+use BezhanSalleh\FilamentShield\Commands\SeederCommand;
+use BezhanSalleh\FilamentShield\Commands\SetupCommand;
+use BezhanSalleh\FilamentShield\Commands\SuperAdminCommand;
+use Filament\Actions\Action;
+use Filament\Actions\CreateAction;
+use Filament\Actions\DeleteAction;
+use Filament\Actions\EditAction;
+use Filament\Forms\Components\DateTimePicker;
+use Filament\Forms\Components\FileUpload;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TimePicker;
+use Filament\Schemas\Components\Wizard\Step;
 use Filament\Support\Assets\Css;
 use Filament\Support\Assets\Js;
 use Filament\Support\Facades\FilamentAsset;
+use Filament\Support\Facades\FilamentTimezone;
+use Filament\Tables\Enums\FiltersLayout;
+use Filament\Tables\Enums\PaginationMode;
+use Filament\Tables\Table;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 use Livewire\LivewireManager;
 use Spatie\Activitylog\Models\Activity;
-use WireNinja\Accelerator\Concerns\InteractsWithApplication;
 use WireNinja\Accelerator\Console\Filament\VerifyResourceCommand;
 use WireNinja\Accelerator\Console\Shield\SafeRegenerateCommand;
 use WireNinja\Accelerator\Policies\ActivityPolicy;
 
 final class FilamentServiceProvider extends ServiceProvider
 {
-    use InteractsWithApplication;
-
     public function boot(): void
     {
         $this->registerActivityPolicy();
         $this->registerAssets();
         $this->registerLivewireNamespace();
-        $this->bootShieldDestructiveCommands();
-        $this->bootFilamentConfiguration();
+        $this->protectShieldCommands();
+        $this->configureFilament();
 
         if ($this->app->runningInConsole()) {
             $this->commands([
@@ -58,5 +73,91 @@ final class FilamentServiceProvider extends ServiceProvider
             namespace: 'accelerator',
             viewPath: __DIR__.'/../../resources/views/livewire',
         );
+    }
+
+    private function protectShieldCommands(): void
+    {
+        $prohibit = $this->app->isProduction();
+
+        InstallCommand::prohibit($prohibit);
+        PublishCommand::prohibit($prohibit);
+        SetupCommand::prohibit($prohibit);
+        SeederCommand::prohibit($prohibit);
+        SuperAdminCommand::prohibit($prohibit);
+    }
+
+    private function configureFilament(): void
+    {
+        FilamentTimezone::set(config('app.timezone'));
+
+        Table::configureUsing(static function (Table $table): void {
+            $table
+                ->defaultSort('id', 'desc')
+                ->deferLoading()
+                ->deferFilters()
+                ->deferColumnManager()
+                ->defaultCurrency('IDR')
+                ->defaultDateDisplayFormat('j F Y')
+                ->defaultTimeDisplayFormat('H:i:s')
+                ->paginationMode(PaginationMode::Cursor)
+                ->defaultNumberLocale('id-ID')
+                ->striped()
+                ->filtersLayout(FiltersLayout::AfterContent)
+                ->emptyStateIcon('lucide-database')
+                ->emptyStateHeading('Belum ada data')
+                ->emptyStateDescription('Anda bisa menambahkan data baru dengan mengklik tombol "Tambah" di pojok kanan atas')
+                ->persistColumnSearchesInSession(false)
+                ->persistColumnsInSession(false)
+                ->persistFiltersInSession(false)
+                ->persistSearchInSession(false)
+                ->persistSortInSession(false)
+                ->filtersApplyAction(static function (Action $action): void {
+                    $action
+                        ->label('Terapkan')
+                        ->icon('lucide-database-search');
+                });
+        });
+
+        FileUpload::configureUsing(static function (FileUpload $fileUpload): void {
+            $fileUpload
+                ->imageEditor()
+                ->maxParallelUploads(5)
+                ->maxSize(((int) config('accelerator.uploads.max_megabytes', 100)) * 1024);
+        });
+
+        Select::configureUsing(static function (Select $select): void {
+            $select
+                ->searchable()
+                ->preload()
+                ->native(false);
+        });
+
+        DateTimePicker::configureUsing(static function (DateTimePicker $dateTimePicker): void {
+            $dateTimePicker
+                ->native(false)
+                ->displayFormat('j F Y H:i');
+        });
+
+        TimePicker::configureUsing(static function (TimePicker $timePicker): void {
+            $timePicker
+                ->native(false)
+                ->displayFormat('H:i');
+        });
+
+        Step::configureUsing(static function (Step $step): void {
+            $step->completedIcon('lucide-thumbs-up');
+        });
+
+        CreateAction::configureUsing(static function (CreateAction $action): void {
+            $action->icon('lucide-circle-fading-plus');
+        });
+
+        EditAction::configureUsing(static function (EditAction $action): void {
+            $action->icon('lucide-notebook-pen');
+        });
+
+        DeleteAction::configureUsing(static function (DeleteAction $action): void {
+            $action->icon('lucide-shredder');
+        });
     }
 }
