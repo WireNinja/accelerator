@@ -189,7 +189,7 @@ final class DoctorCommand extends Command
 
             $routeNames = collect(app('router')->getRoutes()->getRoutes())
                 ->map(static fn (Route $route): ?string => $route->getName())
-                ->filter(is_string(...));
+                ->filter(static fn (mixed $name): bool => is_string($name));
             $missingStarterRoutes = array_values(array_diff(
                 ['home', 'inertia.home', 'livewire.home'],
                 $routeNames->all(),
