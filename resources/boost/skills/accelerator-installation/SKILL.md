@@ -45,6 +45,7 @@ Supported values:
 - `--features=` accepts `filament`, `fortify`, `panels`, `settings`, `ticketing`, `oauth`, `pwa`, `telegram`, `telemetry`, `insider`, `horizon`, `reverb`, `scout`, `nightwatch`, and `wayfinder`. Unknown names fail. Fresh recipes always include Filament as the internal-app login baseline; other required parents are added automatically (`settings/ticketing → panels`).
 
 Dependencies remain installed when optional runtime features are inactive. Feature gates control boot and integration, not Composer package presence.
+After changing a feature env value, rebuild Laravel's config and route caches; feature routes are intentionally not hot-toggled inside an already cached release.
 
 ## Installer Contract
 

@@ -10,6 +10,7 @@ use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Application;
+use Illuminate\Routing\Route;
 use Illuminate\Support\Facades\Schema;
 use JsonException;
 use Laravel\Fortify\FortifyServiceProvider;
@@ -282,12 +283,15 @@ final class DoctorCommand extends Command
         $fortifyEnabled = (bool) config('accelerator.features.fortify', false);
         $panelsEnabled = (bool) config('accelerator.features.panels', false);
         $fortifyLoaded = app()->getProvider(FortifyServiceProvider::class) !== null;
+        $fortifyRouteCount = collect(app('router')->getRoutes()->getRoutes())
+            ->filter(static fn (Route $route): bool => str_contains($route->getActionName(), 'Laravel\\Fortify'))
+            ->count();
         $this->assert(
             category: 'Configuration',
             label: 'Fortify activation',
-            value: $fortifyLoaded ? 'loaded' : 'not loaded',
-            passed: $fortifyEnabled === $fortifyLoaded,
-            message: 'Fortify provider activation does not match ACCELERATOR_FEATURE_FORTIFY.',
+            value: sprintf('%s, %d routes', $fortifyLoaded ? 'loaded' : 'not loaded', $fortifyRouteCount),
+            passed: $fortifyEnabled === $fortifyLoaded && $fortifyRouteCount === ($fortifyEnabled ? 4 : 0),
+            message: 'Fortify provider/routes do not match ACCELERATOR_FEATURE_FORTIFY; rebuild config and route caches.',
         );
         $this->assert(
             category: 'Configuration',
@@ -332,6 +336,16 @@ final class DoctorCommand extends Command
             passed: ! $oauthEnabled || $oauthCredentialsReady,
             message: 'OAuth is selected but GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are CONFIG_REQUIRED.',
             failureStatus: 'warning',
+        );
+        $oauthRouteCount = collect(app('router')->getRoutes()->getRoutes())
+            ->filter(static fn (Route $route): bool => is_string($route->getName()) && str_starts_with($route->getName(), 'auth.google.'))
+            ->count();
+        $this->assert(
+            category: 'Configuration',
+            label: 'Google OAuth routes',
+            value: (string) $oauthRouteCount,
+            passed: $oauthRouteCount === (($oauthEnabled && $filamentEnabled && $oauthCredentialsReady) ? 2 : 0),
+            message: 'Google OAuth route topology is stale; rebuild config and route caches.',
         );
 
         $uploadMegabytes = (int) config('accelerator.uploads.max_megabytes', 100);
