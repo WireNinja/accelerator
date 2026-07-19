@@ -546,6 +546,7 @@ Key properties:
 - Static asset caching with `expires 365d` + `Cache-Control: public, immutable`
 - Domain-specific access/error logs
 - `client_max_body_size 110m`, leaving multipart overhead above the 100 MB application file limit
+- A hidden-file deny rule that permits only `.well-known`; `public/.user.ini` must never be served
 
 Do NOT:
 - Use `upstream` block + `proxy_pass` directly in `location /` (old pattern)

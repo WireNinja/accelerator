@@ -34,5 +34,10 @@ server {
 
 {{ service_worker_location }}
 
+    # Never expose project dotfiles such as public/.user.ini.
+    location ~ /\.(?!well-known(?:/|$)) {
+        deny all;
+    }
+
 {{ application_locations }}
 }
