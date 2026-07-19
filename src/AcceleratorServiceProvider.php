@@ -2,174 +2,49 @@
 
 namespace WireNinja\Accelerator;
 
-use Filament\Support\Assets\Css;
-use Filament\Support\Assets\Js;
-use Filament\Support\Facades\FilamentAsset;
-use Illuminate\Database\Events\QueryExecuted;
-use Illuminate\Http\Middleware\TrustProxies;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
-use Laravel\Octane\Events\RequestReceived;
-use Livewire\Livewire;
 use Override;
-use Spatie\Activitylog\Models\Activity;
-use WireNinja\Accelerator\Concerns\InteractsWithApplication;
-use WireNinja\Accelerator\Console\Agent\AuditCommand;
-use WireNinja\Accelerator\Console\Agent\ModelContextCommand;
-use WireNinja\Accelerator\Console\Agent\ResourceContextCommand;
-use WireNinja\Accelerator\Console\EnvCommand;
-use WireNinja\Accelerator\Console\Filament\VerifyResourceCommand;
-use WireNinja\Accelerator\Console\Generator\ModelOutlineCommand;
-use WireNinja\Accelerator\Console\InstallCommand;
-use WireNinja\Accelerator\Console\ModelAuditCommand;
-use WireNinja\Accelerator\Console\ModelDocCommand;
-use WireNinja\Accelerator\Console\NotifyOverdueTicketsCommand;
-use WireNinja\Accelerator\Console\Shield\SafeRegenerateCommand;
-use WireNinja\Accelerator\Console\Vps\BackupStatusCommand;
-use WireNinja\Accelerator\Livewire\Synthesizers\BigDecimalSynth;
-use WireNinja\Accelerator\Policies\ActivityPolicy;
-use WireNinja\Accelerator\Providers\Filament\SupportPanelProvider;
-use WireNinja\Accelerator\Providers\Filament\SystemPanelProvider;
-use WireNinja\Accelerator\Telemetry\TelemetryDatabase;
-use WireNinja\Accelerator\Telemetry\TelemetryFlusher;
-use WireNinja\Accelerator\Telemetry\TelemetryManager;
-use WireNinja\Accelerator\Telemetry\TelemetryNotifier;
-use WireNinja\Accelerator\Telemetry\TelemetryPruneCommand;
-use WireNinja\Accelerator\Telemetry\TelemetryRecorder;
+use WireNinja\Accelerator\Providers\CoreServiceProvider;
+use WireNinja\Accelerator\Providers\FilamentServiceProvider;
+use WireNinja\Accelerator\Providers\InsiderServiceProvider;
+use WireNinja\Accelerator\Providers\OAuthServiceProvider;
+use WireNinja\Accelerator\Providers\PanelServiceProvider;
+use WireNinja\Accelerator\Providers\PwaServiceProvider;
+use WireNinja\Accelerator\Providers\TelemetryServiceProvider;
+use WireNinja\Accelerator\Providers\TicketingServiceProvider;
 
 class AcceleratorServiceProvider extends ServiceProvider
 {
-    use InteractsWithApplication;
+    /**
+     * @var array<string, class-string<ServiceProvider>>
+     */
+    private const FEATURE_PROVIDERS = [
+        'filament' => FilamentServiceProvider::class,
+        'panels' => PanelServiceProvider::class,
+        'oauth' => OAuthServiceProvider::class,
+        'insider' => InsiderServiceProvider::class,
+        'pwa' => PwaServiceProvider::class,
+        'telemetry' => TelemetryServiceProvider::class,
+        'ticketing' => TicketingServiceProvider::class,
+    ];
 
     #[Override]
     public function register(): void
     {
-        $this->app->register(SupportPanelProvider::class);
-        $this->app->register(SystemPanelProvider::class);
-        $this->registerTelemetry();
-    }
-
-    public function boot(): void
-    {
-        $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
-        $this->loadRoutesFrom(__DIR__.'/../routes/web.php');
-        $this->loadViewsFrom(__DIR__.'/../resources/views', 'accelerator');
         $this->mergeConfigFrom(__DIR__.'/../config/accelerator.php', 'accelerator');
-        $this->trustLocalProxy();
-        $this->registerActivityPolicy();
 
-        FilamentAsset::register([
-            Js::make('iconify', 'https://cdn.jsdelivr.net/npm/iconify-icon@2')->loadedOnRequest(),
-            Js::make('leaflet-js', 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js')->loadedOnRequest(),
-            Css::make('leaflet-css', 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css')->loadedOnRequest(),
-        ], 'accelerator');
+        $this->app->register(CoreServiceProvider::class);
 
-        Livewire::addNamespace(
-            namespace: 'accelerator',
-            viewPath: __DIR__.'/../resources/views/livewire',
-        );
+        foreach (self::FEATURE_PROVIDERS as $feature => $provider) {
+            if (! config("accelerator.features.{$feature}", false)) {
+                continue;
+            }
 
-        Livewire::propertySynthesizer(BigDecimalSynth::class);
+            if ($feature === 'panels' && ! config('accelerator.features.filament', false)) {
+                continue;
+            }
 
-        if ($this->app->runningInConsole()) {
-            $this->commands([
-                AuditCommand::class,
-                InstallCommand::class,
-                SafeRegenerateCommand::class,
-                ModelOutlineCommand::class,
-                ModelDocCommand::class,
-                ModelAuditCommand::class,
-                ModelContextCommand::class,
-                ResourceContextCommand::class,
-                EnvCommand::class,
-                NotifyOverdueTicketsCommand::class,
-                BackupStatusCommand::class,
-                VerifyResourceCommand::class,
-                TelemetryPruneCommand::class,
-            ]);
+            $this->app->register($provider);
         }
-
-        $this->bootCustomSessionDrivers();
-        $this->bootEloquentBestPractices();
-        $this->bootApplicationDefaults();
-        $this->bootTelegramConfiguration();
-        $this->bootShieldDestructiveCommands();
-        $this->bootFilamentConfiguration();
-        $this->bootTelemetry();
-    }
-
-    private function registerActivityPolicy(): void
-    {
-        if (Gate::getPolicyFor(Activity::class) !== null) {
-            return;
-        }
-
-        Gate::policy(Activity::class, ActivityPolicy::class);
-    }
-
-    private function trustLocalProxy(): void
-    {
-        if (! config('accelerator.proxy.trust_local', true)) {
-            return;
-        }
-
-        TrustProxies::at(['127.0.0.1', '::1']);
-        TrustProxies::withHeaders(
-            Request::HEADER_X_FORWARDED_FOR
-                | Request::HEADER_X_FORWARDED_HOST
-                | Request::HEADER_X_FORWARDED_PORT
-                | Request::HEADER_X_FORWARDED_PROTO
-        );
-    }
-
-    /**
-     * Register telemetry singletons in the container.
-     */
-    private function registerTelemetry(): void
-    {
-        $this->app->singleton(TelemetryDatabase::class);
-        $this->app->singleton(TelemetryNotifier::class);
-
-        $this->app->singleton(TelemetryFlusher::class, function ($app) {
-            return new TelemetryFlusher(
-                $app->make(TelemetryDatabase::class),
-                $app->make(TelemetryNotifier::class),
-            );
-        });
-
-        $this->app->singleton(TelemetryManager::class, function ($app) {
-            return new TelemetryManager(
-                $app->make(TelemetryFlusher::class),
-            );
-        });
-    }
-
-    /**
-     * Boot the telemetry subsystem if runtime supports it.
-     *
-     * Registers the Swoole Timer for periodic flush and resets per-request state
-     * via Octane's RequestReceived event.
-     */
-    private function bootTelemetry(): void
-    {
-        if (! TelemetryManager::isSupported()) {
-            return;
-        }
-
-        /** @var TelemetryManager $manager */
-        $manager = $this->app->make(TelemetryManager::class);
-        $manager->boot();
-
-        // Reset per-request dedup state on each new Octane request.
-        $this->app['events']->listen(
-            RequestReceived::class,
-            fn () => $manager->resetRequestState(),
-        );
-
-        DB::listen(function (QueryExecuted $query): void {
-            TelemetryRecorder::recordQuery($query);
-        });
     }
 }

@@ -1,8 +1,8 @@
 {
     "$schema": "https://getcomposer.org/schema.json",
     "name": "wireninja/accelerator",
-    "description": "Reusable Filament panel presets for Wireninja applications.",
-    "type": "composer-plugin",
+    "description": "A batteries-included Laravel foundation for solo developers.",
+    "type": "library",
     "autoload": {
         "psr-4": {
             "WireNinja\\Accelerator\\": "src/"
@@ -15,7 +15,7 @@
     "require": {
         "php": "^8.5",
         "laravel/framework": "^13.0",
-        "composer-plugin-api": "^2.0",
+        "brick/math": "^0.17 || ^0.18",
         "bezhansalleh/filament-shield": "^4.2",
         "blade-ui-kit/blade-icons": "^1.9",
         "mallardduck/blade-lucide-icons": "^1.26",
@@ -43,6 +43,7 @@
         "filament/spatie-laravel-media-library-plugin": "^5.0",
         "laravel/mcp": "^0.7.0",
         "laravel-notification-channels/telegram": "^7.0",
+        "laravel/prompts": "^0.3.21",
         "codewithdennis/filament-advanced-choice": "^2.0",
         "inertiajs/inertia-laravel": "^3.1",
         "laravel/fortify": "^1.36",
@@ -50,7 +51,6 @@
         "phiki/phiki": "^2.0"
     },
     "extra": {
-        "class": "WireNinja\\Accelerator\\Composer\\Plugin",
         "laravel": {
             "providers": [
                 "WireNinja\\Accelerator\\AcceleratorServiceProvider"

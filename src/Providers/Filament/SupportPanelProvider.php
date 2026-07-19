@@ -13,9 +13,12 @@ class SupportPanelProvider extends PanelProvider
 {
     public function panel(Panel $panel): Panel
     {
-        return PanelPreset::configure($panel, 'support')
-            ->plugins([
-                BuiltinTicketingPlugin::make(),
-            ]);
+        $panel = PanelPreset::configure($panel, 'support');
+
+        if (config('accelerator.features.ticketing')) {
+            $panel->plugin(BuiltinTicketingPlugin::make());
+        }
+
+        return $panel;
     }
 }

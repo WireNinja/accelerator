@@ -14,11 +14,16 @@ class SystemPanelProvider extends PanelProvider
 {
     public function panel(Panel $panel): Panel
     {
-        return PanelPreset::configure($panel, 'system')
-            ->plugins([
-                BuiltinSettingPlugin::make(),
+        $panel = PanelPreset::configure($panel, 'system')
+            ->plugin(
                 FilamentShieldPlugin::make()
                     ->navigationGroup('System'),
-            ]);
+            );
+
+        if (config('accelerator.features.settings')) {
+            $panel->plugin(BuiltinSettingPlugin::make());
+        }
+
+        return $panel;
     }
 }

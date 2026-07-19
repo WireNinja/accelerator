@@ -136,15 +136,21 @@ final class PanelPreset
             ->lazyLoadedDatabaseNotifications()
             ->renderHook(
                 PanelsRenderHook::AUTH_LOGIN_FORM_AFTER,
-                fn () => config('services.google.client_id') ? view('accelerator::filament.auth.google-login') : ''
+                fn () => config('accelerator.features.oauth') && config('services.google.client_id')
+                    ? view('accelerator::filament.auth.google-login')
+                    : ''
             )
             ->renderHook(
                 PanelsRenderHook::SIDEBAR_NAV_START,
-                fn () => view('accelerator::filament.sidebar.notice')
+                fn () => config('accelerator.features.settings')
+                    ? view('accelerator::filament.sidebar.notice')
+                    : ''
             )
             ->renderHook(
                 AcceleratorPanelsRenderHook::SIDEBAR_SUPPORT,
-                fn () => view('accelerator::filament.sidebar.support')
+                fn () => config('accelerator.features.settings')
+                    ? view('accelerator::filament.sidebar.support')
+                    : ''
             )
             ->renderHook(
                 PanelsRenderHook::PAGE_START,
@@ -152,13 +158,19 @@ final class PanelPreset
             )
             ->renderHook(
                 PanelsRenderHook::HEAD_END,
-                fn () => view('accelerator::partials.pwa.head')
+                fn () => config('accelerator.features.pwa')
+                    ? view('accelerator::partials.pwa.head')
+                    : ''
             )
             ->renderHook(
                 PanelsRenderHook::BODY_END,
                 fn () => view('accelerator::filament.business-exception-handler', BuiltinExceptions::getFilamentBusinessExceptionViewData())
             )
             ->bootUsing(function (Panel $panel) {
+                if (! config('accelerator.features.settings')) {
+                    return $panel;
+                }
+
                 rescue(function () use ($panel) {
                     $settings = resolve(SystemSettings::class);
 

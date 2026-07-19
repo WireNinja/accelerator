@@ -6,12 +6,30 @@ use App\Enums\System\ResourceEnum;
 use App\Enums\System\RoleEnum;
 
 return [
+    'features' => [
+        'filament' => env('ACCELERATOR_FEATURE_FILAMENT', false),
+        'panels' => env('ACCELERATOR_FEATURE_PANELS', false),
+        'oauth' => env('ACCELERATOR_FEATURE_OAUTH', false),
+        'insider' => env('ACCELERATOR_FEATURE_INSIDER', false),
+        'pwa' => env('ACCELERATOR_FEATURE_PWA', false),
+        'settings' => env('ACCELERATOR_FEATURE_SETTINGS', false),
+        'telegram' => env('ACCELERATOR_FEATURE_TELEGRAM', false),
+        'telemetry' => env('ACCELERATOR_FEATURE_TELEMETRY', false),
+        'ticketing' => env('ACCELERATOR_FEATURE_TICKETING', false),
+    ],
+
     'infra' => [
         'hosting' => env('INFRA_HOSTING', 'dedicated'), // 'shared' or 'dedicated'
     ],
 
     'proxy' => [
         'trust_local' => env('ACCELERATOR_TRUST_LOCAL_PROXY', true),
+    ],
+
+    'assets' => [
+        'iconify_url' => 'https://cdn.jsdelivr.net/npm/iconify-icon@3.0.2/dist/iconify-icon.min.js',
+        'leaflet_js_url' => 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
+        'leaflet_css_url' => 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
     ],
 
     'enums' => [
@@ -38,7 +56,7 @@ return [
     ],
 
     'telemetry' => [
-        'enabled' => env('ACCELERATOR_TELEMETRY_ENABLED', true),
+        'enabled' => env('ACCELERATOR_FEATURE_TELEMETRY', false),
         'flush_interval' => env('ACCELERATOR_TELEMETRY_FLUSH_INTERVAL', 5),
         'buffer_rows' => env('ACCELERATOR_TELEMETRY_BUFFER_ROWS', 128),
         'buffer_bytes' => env('ACCELERATOR_TELEMETRY_BUFFER_BYTES', 65535),
