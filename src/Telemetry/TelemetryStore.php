@@ -615,8 +615,8 @@ final class TelemetryStore
             UPDATE telemetry_groups
             SET exception_class = :exception_class,
                 message = :message,
-                source_file = :source_file,
-                source_line = :source_line,
+                source_file = CASE WHEN :source_file LIKE 'route:%' THEN source_file ELSE :source_file END,
+                source_line = CASE WHEN :source_file LIKE 'route:%' THEN source_line ELSE :source_line END,
                 route_name = :route_name,
                 status = CASE WHEN status = 'resolved' THEN 'open' ELSE status END,
                 occurrence_count = occurrence_count + 1,

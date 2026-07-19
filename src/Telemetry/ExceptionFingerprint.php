@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace WireNinja\Accelerator\Telemetry;
 
+use Closure;
 use Illuminate\Http\Request;
 use Throwable;
 
@@ -16,12 +17,21 @@ final class ExceptionFingerprint
     {
         [$file, $line] = self::applicationFrame($exception);
         $routeName = self::routeName($request);
+        $closureRoute = self::isClosureRoute($request) && $routeName !== null;
+
+        if ($closureRoute && ! self::isApplicationPath($file)) {
+            $file = 'route:'.$routeName;
+            $line = 0;
+        }
+
+        $fingerprintFile = $closureRoute ? 'route:'.$routeName : $file;
+        $fingerprintLine = $closureRoute ? 0 : $line;
 
         return [
             'fingerprint' => hash('sha256', implode('|', [
                 $exception::class,
-                $file,
-                (string) $line,
+                $fingerprintFile,
+                (string) $fingerprintLine,
                 $routeName ?? '-',
             ])),
             'class' => $exception::class,
@@ -65,7 +75,12 @@ final class ExceptionFingerprint
     {
         $relative = self::relativePath($file);
 
-        if ($relative === $file || str_starts_with($relative, 'vendor/')) {
+        if (
+            $relative === $file
+            || str_starts_with($relative, 'vendor/')
+            || str_starts_with($relative, 'storage/framework/')
+            || str_starts_with($relative, 'bootstrap/cache/')
+        ) {
             return null;
         }
 
@@ -80,6 +95,25 @@ final class ExceptionFingerprint
         return str_starts_with($normalizedFile, $normalizedBase)
             ? substr($normalizedFile, strlen($normalizedBase))
             : $normalizedFile;
+    }
+
+    private static function isApplicationPath(string $file): bool
+    {
+        return $file !== ''
+            && ! str_contains($file, '://')
+            && ! str_starts_with($file, '/')
+            && ! str_starts_with($file, 'vendor/')
+            && ! str_starts_with($file, 'storage/framework/')
+            && ! str_starts_with($file, 'bootstrap/cache/')
+            && ! str_contains($file, '..');
+    }
+
+    private static function isClosureRoute(?Request $request): bool
+    {
+        $route = $request?->route();
+
+        return $route !== null
+            && ($route->getActionName() === 'Closure' || $route->getAction('uses') instanceof Closure);
     }
 
     private static function routeName(?Request $request): ?string
