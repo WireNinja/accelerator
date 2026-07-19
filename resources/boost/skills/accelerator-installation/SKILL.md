@@ -1,309 +1,127 @@
 ---
 name: accelerator-installation
-description: Install WireNinja Accelerator into fresh or migrated Laravel projects with non-interactive flags, deployment env files, Boost resources, optional PWA, per-component config publishing, and post-install Shield/Pint hooks.
+description: Install WireNinja Accelerator v2 into a pristine Laravel 13 application with its Bash onboarding recipe, optional feature gates, automatic environment/frontend/Boost setup, resumable journal, and deployment seeds.
 ---
 
 # Accelerator Installation
 
-## When To Use
+## Scope
 
-Installing or reinstalling `wireninja/accelerator`, migrating a project onto Accelerator conventions, preparing a project for Envoy deployment, refreshing generated Boost resources, or adding the Accelerator Laravel PWA Vite package.
+Use this skill for a new Accelerator v2 application, installer failure/resume, rerun verification, or install-time deployment configuration.
 
-## Core Rules
+The Bash installer is deliberately **fresh-only**. It replaces the Laravel skeleton, runs `migrate:fresh --seed`, and refuses modified recipe targets. Do not run it against an existing application such as WSS; migrate existing projects surgically.
 
-- Keep userland thin. Prefer Accelerator defaults and package resources over copied project-local scripts.
-- `OPS_DEPLOY_*` keys belong only in `.env.envoy`.
-- `.env.staging` and `.env.production` are local-only runtime seed files. Sensitive keys are blanked when the seed files are generated — operator fills them manually before scp.
-- Do not overwrite an existing Inertia frontend unless the user explicitly asks.
-- Use Bun for JavaScript package installation in WireNinja projects.
-- Never invent production secrets.
-
-## Composer Install
+## Canonical Flow
 
 ```bash
-composer require wireninja/accelerator:^1.1 --no-interaction
+laravel new my-project --no-interaction
+cd my-project
+composer require wireninja/accelerator:^2.0 --no-interaction
+bash vendor/wireninja/accelerator/bin/install
 ```
 
-Pin a known patch:
+Interactive onboarding asks only for application identity, frontend, database, Redis, runtime features, and optional deployment details. It then owns the complete setup: `.env`, configs, migrations, Inertia Vue or Livewire entrypoint, Filament panel, frontend dependencies/build, Shield, Pint, Boost, and doctor.
+
+Use Bun for JavaScript dependencies and builds. Do not run a starter-kit installer before Accelerator.
+
+## Non-Interactive Install
 
 ```bash
-composer require wireninja/accelerator:1.1.x --no-interaction
+bash vendor/wireninja/accelerator/bin/install \
+  --no-interaction \
+  --app-name='My Project' \
+  --app-url=http://my-project.test \
+  --frontend=inertia \
+  --database=sqlite \
+  --features=filament,fortify,panels,settings,ticketing,pwa,insider,scout,wayfinder
 ```
 
-After package changes:
+Supported values:
+
+- `--frontend=inertia|livewire`
+- `--database=sqlite|mysql|pgsql`
+- `--redis` uses Redis for cache, sessions, and queues; without it, database drivers work immediately.
+- `--features=` accepts `filament`, `fortify`, `panels`, `settings`, `ticketing`, `oauth`, `pwa`, `telegram`, `telemetry`, `insider`, `horizon`, `reverb`, `scout`, `nightwatch`, and `wayfinder`.
+
+Dependencies remain installed when optional runtime features are inactive. Feature gates control boot and integration, not Composer package presence.
+
+## Installer Contract
+
+The recipe executes these journaled steps:
+
+1. `scaffold` — replace only pristine Laravel recipe files and migrations.
+2. `environment` — render `.env` / `.env.example`, optional deploy seeds, and gitignore entries.
+3. `composer` — configure autoload/scripts and install Boost, Envoy, Larastan, Rector, and PHPStan rules.
+4. `frontend` — install the generated frontend with Bun.
+5. `application` — autoload, translations, `migrate:fresh --seed`, storage link, Shield, optional PWA icons, and production build.
+6. `quality` — configure Boost for `wireninja/accelerator`, install all package skills, run Pint, and run doctor.
+
+Any failed required process returns non-zero. State lives in ignored `.accelerator/install-state.json`; rerunning the same command resumes after the last completed step. Once finished, rerun exits successfully without touching files or the database.
+
+The saved plan is authoritative during resume. Do not expect different CLI flags to replace a partially completed plan.
+
+## Generated Defaults
+
+- Authentication is internal-facing; public registration is absent.
+- OAuth is disabled unless selected; selected OAuth starts in `existing_only` mode.
+- Upload policy is 100 MB, but the web runtime's `upload_max_filesize` and `post_max_size` must also be at least 100 MB.
+- Themes are discovered from `resources/css/filament/**/theme.css`.
+- `resources/svg` and the public favicon are created before icon-dependent commands run.
+- Accelerator is added to `boost.json`; missing Accelerator skills fail installation instead of reporting false success.
+
+## Deployment Setup
+
+Add deployment during onboarding or non-interactively:
 
 ```bash
-php artisan package:discover --ansi
-```
-
-## Discover Components
-
-```bash
-php artisan accelerator:install --list-components
-```
-
-Prints a table of available wizard components (`reverb`, `filament-core`, `octane`, `localization`, `app-config`, `frontend-core`) with stub/config/command counts. Use this before crafting `--component=` flags.
-
-## Verify-only Check (no modification)
-
-```bash
-php artisan accelerator:install --check
-```
-
-Delegates to `agent:audit`, runs the integration check (PHP version, extensions, OPcache, Accelerator integration, env keys) without changing anything.
-
-## Fresh Interactive Install
-
-```bash
-php artisan accelerator:install
-```
-
-Opens the component wizard.
-
-## Fresh Non-Interactive Install
-
-Full install (all components):
-
-```bash
-php artisan accelerator:install --no-interaction --force --preset=full --with-boost
-```
-
-Selected components:
-
-```bash
-php artisan accelerator:install --no-interaction --component=reverb --component=octane --component=app-config --with-boost
-```
-
-Skip components from a preset:
-
-```bash
-php artisan accelerator:install --no-interaction --preset=full --without=frontend-core --with-boost
-```
-
-Use `--without=frontend-core` when the target project already has a real Inertia React/Vue/Svelte frontend that must be preserved.
-
-## Skip Migrate Finalisation
-
-For installs that should not touch the database (e.g. running outside of a normal `migrate` window):
-
-```bash
-php artisan accelerator:install --no-interaction --preset=app --no-migrate
-```
-
-`--no-migrate` skips `php artisan migrate`, `storage:unlink/link`, and `webpush:vapid` finalisation steps.
-
-## Per-Component Config Publishing
-
-Configs (`config/*.php`) are scoped to selected components — installing only `reverb` will publish only `broadcasting.php` + `reverb.php`, not the entire stub config tree.
-
-| Component | Configs published |
-|---|---|
-| reverb | broadcasting.php, reverb.php |
-| filament-core | filament.php, filament-shield.php, fortify.php, permission.php, livewire.php, media-library.php, query-builder.php |
-| octane | octane.php |
-| app-config | app.php, **audit.php**, auth.php, cache.php, database.php, filesystems.php, logging.php, mail.php, queue.php, services.php, session.php, settings.php, activitylog.php, backup.php, **backup_predeploy.php**, blade-icons.php, horizon.php, pennant.php, scout.php, webpush.php, laravel-pdf.php |
-| frontend-core | inertia.php |
-| localization | (none) |
-
-`backup_predeploy.php` is the Spatie profile used by Envoy `db-backup`. Do not delete it from `app-config`.
-
-## Post-Install Hooks
-
-After component install / config publish:
-
-- **Shield** — runs `shield:safe-regenerate` automatically when `filament-core` or `app-config` was selected. Idempotent. Disable with `--without-shield`.
-- **Pint** — runs `vendor/bin/pint --format=agent` automatically when the binary exists. Disable with `--without-pint`.
-- **Env summary** — `EnvReader::redacted()` summary printed at the end with empty/missing keys list, to help operators see what still needs filling.
-
-Force-enable when the auto-detection misses:
-
-```bash
-php artisan accelerator:install --no-interaction --preset=app --with-shield --with-pint
-```
-
-## Deployment Files
-
-```bash
-php artisan accelerator:install --no-interaction --preset=none --with-deploy --with-boost \
-  --stage-mode=single \
-  --default-stage=prod \
-  --project=ssm \
+bash vendor/wireninja/accelerator/bin/install \
+  --no-interaction \
+  --app-name='My Project' \
+  --app-url=http://my-project.test \
+  --frontend=inertia \
+  --database=pgsql \
+  --features=filament,fortify,panels,settings,horizon,reverb,nightwatch \
+  --redis \
+  --deploy \
+  --project=my-project \
   --ssh-host=onidel \
-  --repo=git@github.com:WireNinja/smart-school-management.git \
-  --domain=ssm.pgsduksw.web.id \
-  --root=/var/www/ssm.pgsduksw.web.id \
-  --group=ssm_prod \
-  --http-runtime=fpm \
-  --octane-port=9020 \
-  --reverb-port=9021 \
-  --nightwatch-port=2420 \
-  --package-manager-bin=pnpm
+  --repo=git@github.com:example/my-project.git \
+  --domain=app.example.com \
+  --deploy-root=/var/www/app.example.com \
+  --http-runtime=octane
 ```
 
-Generated files:
+This creates `Envoy.blade.php`, `.env.envoy`, `.env.staging`, and `.env.production`. The three env files are local-only and gitignored.
 
-```text
-Envoy.blade.php
-.env.envoy
-.env.staging
-.env.production
-```
+- Only `OPS_DEPLOY_*` keys belong in `.env.envoy`.
+- Runtime application keys belong in `.env.staging` / `.env.production`.
+- Fill real credentials locally; never invent or commit production secrets.
+- Use an absolute shared database path for deployed SQLite.
+- Never enable Horizon and the plain queue worker together.
 
-The installer renders the package `.base-env.envoy.example` template into `.env.envoy` using the CLI options above, and adds the three env seed files to `.gitignore`.
+Use the deployment skill before running Envoy against a server.
 
-Generated deployment configuration defaults to PHP-FPM and leaves Horizon, plain queue workers, Reverb, Scheduler, and Nightwatch disabled. Enable only the programs that the application requires in `.env.envoy`.
-
-For an Octane application that requires Horizon, Reverb, Scheduler, and Nightwatch:
-
-```dotenv
-OPS_DEPLOY_PROD_HTTP_RUNTIME=octane
-OPS_DEPLOY_PROD_OCTANE_SERVER=swoole
-OPS_DEPLOY_PROD_OCTANE_WORKERS=1
-OPS_DEPLOY_PROD_OCTANE_TASK_WORKERS=0
-OPS_DEPLOY_PROD_HORIZON_ENABLED=true
-OPS_DEPLOY_PROD_QUEUE_WORKER_ENABLED=false
-OPS_DEPLOY_PROD_REVERB_ENABLED=true
-OPS_DEPLOY_PROD_SCHEDULER_ENABLED=true
-OPS_DEPLOY_PROD_NIGHTWATCH_ENABLED=true
-```
-
-For a PHP-FPM application with Redis queue workers but no Horizon, set `QUEUE_WORKER_ENABLED=true` and keep `HORIZON_ENABLED=false`.
-
-### Sensitive credential handling in seed files
-
-When `.env.staging` / `.env.production` are generated from local `.env`, the following keys have their **values blanked** (keys retained for shape compatibility):
-
-`APP_KEY`, `DB_PASSWORD`, `REDIS_PASSWORD`, `MAIL_PASSWORD`, `PUSHER_APP_SECRET`, `REVERB_APP_SECRET`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `GOOGLE_CLIENT_SECRET`, `STRIPE_SECRET`, `MEILISEARCH_KEY`, `NIGHTWATCH_TOKEN`, `TELEGRAM_BOT_TOKEN`, `VAPID_PRIVATE_KEY`, `SENTRY_DSN`, `SENTRY_LARAVEL_DSN`.
-
-If any were populated in local `.env`, the installer warns the operator at the end of `--with-deploy`. Fill the seed files manually before `vendor/bin/envoy run init/deploy`.
-
-## Single-Stage Projects
-
-Production-only:
-
-```text
-OPS_DEPLOY_DEFAULT_STAGE=prod
-OPS_DEPLOY_TEST_ENABLED=false
-OPS_DEPLOY_PROD_ENABLED=true
-```
+## Verification
 
 ```bash
-vendor/bin/envoy run deploy --stage=prod
-```
-
-Do not force a fake `test` stage.
-
-## Two-Stage Projects
-
-```text
-OPS_DEPLOY_DEFAULT_STAGE=test
-OPS_DEPLOY_TEST_ENABLED=true
-OPS_DEPLOY_PROD_ENABLED=true
-```
-
-```bash
-vendor/bin/envoy run deploy --stage=test
-vendor/bin/envoy run deploy --stage=prod
-```
-
-## Runtime Env Seeds
-
-`.env.staging` / `.env.production` MUST be key-compatible with `.env`.
-
-For SQLite:
-
-```dotenv
-DB_CONNECTION=sqlite
-# DB_HOST=127.0.0.1
-# DB_PORT=3306
-# DB_DATABASE=/var/www/example.com/shared/database/database.sqlite
-# DB_USERNAME=root
-# DB_PASSWORD=
-# DB_SOCKET=
-```
-
-On a release-based VPS, SQLite must use a shared absolute path. Do not keep the live database inside a release directory.
-
-For Reverb:
-
-```dotenv
-REVERB_HOST="localhost"
-REVERB_PORT=8080
-REVERB_SCHEME=http
-# REVERB_SERVER_HOST=0.0.0.0
-# REVERB_SERVER_PORT=8080
-```
-
-## PWA Setup
-
-```bash
-php artisan accelerator:install --no-interaction --preset=none --with-pwa --with-boost
-```
-
-Then add the Vite plugin without disturbing existing Inertia plugins:
-
-```ts
-import { laravelPwa } from '@wireninja/vite-plugin-laravel-pwa';
-
-laravelPwa({
-    name: 'Application Name',
-    shortName: 'App',
-    description: 'Application description',
-    themeColor: '#111827',
-});
-```
-
-Generate icons from `public/favicon.svg`:
-
-```bash
-bunx laravel-pwa icons
-```
-
-Verify:
-
-```bash
+php artisan accelerator:doctor
+php artisan agent:model-context User --compact
+php artisan config:cache
+php artisan route:list
+composer analyse
 bun run build
 ```
 
-## Boost Resources
+Expected model commands are `agent:model-context` and Laravel's native `model:show`; v1 `agent:model-outline`, `agent:model-audit`, and `agent:model-doc` must not exist.
 
-```bash
-php artisan boost:update --ansi
-```
+For a completed-install no-op check, record the database and project file hashes, rerun the identical Bash command, and confirm both hashes are unchanged.
 
-If `laravel/boost` isn't installed, the installer warns and continues. To install:
+## Existing Applications
 
-```bash
-composer require laravel/boost
-```
+Do not force the fresh installer over application code. For WSS or another v1 application:
 
-Expected Accelerator skills:
-
-```text
-accelerator-installation
-accelerator-deployment
-accelerator-env-config
-accelerator-filament
-accelerator-model-context
-accelerator-ops-observability
-accelerator-pwa-development
-```
-
-## CI / Git Hooks (optional)
-
-```bash
-php artisan accelerator:install --no-interaction --preset=none --with-ci --with-hooks --force
-```
-
-`--with-ci` writes `.github/workflows/deploy.yml` — tag-triggered (or `workflow_dispatch`) Envoy deploy job. Required GitHub secrets:
-
-| Secret | Purpose |
-|---|---|
-| `DEPLOY_SSH_PRIVATE_KEY` | SSH key with VPS access |
-| `DEPLOY_SSH_HOST` | VPS hostname / IP |
-| `DEPLOY_SSH_USER` | VPS deploy user |
-| `ENV_ENVOY` | full content of `.env.envoy` |
-| `ENV_PRODUCTION` | full content of `.env.production` seed |
-| `ENV_STAGING` | full content of `.env.staging` seed |
-
-`--with-hooks` writes `.git/hooks/pre-commit`. Runs Pint on staged PHP (auto re-stage) + PHPStan on the project. Bypass per-commit: `SKIP_HOOK=1 git commit ...`. Skipped when `.git` is missing or hook already exists (use `--force` to overwrite).
+1. keep a local ignored `.accelerator_v1` snapshot;
+2. install the v2 package dependency;
+3. apply schema, config, provider, auth, Filament, telemetry, and deployment changes in explicit reviewable slices;
+4. use `accelerator:doctor`, model context, static analysis, build, and migration checks after every slice;
+5. remove all compatibility adapters before declaring the migration complete.

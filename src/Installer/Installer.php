@@ -358,6 +358,7 @@ final class Installer
 
     private function runQualityTools(): void
     {
+        $this->selectAcceleratorBoostResources();
         $this->processRunner->run([
             'php',
             'artisan',
@@ -365,9 +366,55 @@ final class Installer
             '--ansi',
             '--no-interaction',
         ], $this->projectRoot);
-        $this->processRunner->run(['php', 'artisan', 'boost:update', '--ansi', '--no-interaction'], $this->projectRoot);
+        $this->assertAcceleratorBoostResources();
         $this->processRunner->run(['vendor/bin/pint', '--format=agent'], $this->projectRoot);
         $this->processRunner->run(['php', 'artisan', 'accelerator:doctor'], $this->projectRoot);
+    }
+
+    private function selectAcceleratorBoostResources(): void
+    {
+        $path = $this->projectRoot.'/boost.json';
+        $contents = is_file($path) ? file_get_contents($path) : null;
+        $config = is_string($contents) ? json_decode($contents, true, flags: JSON_THROW_ON_ERROR) : [];
+
+        if (! is_array($config)) {
+            throw new RuntimeException('Unable to parse project boost.json.');
+        }
+
+        $packages = $config['packages'] ?? [];
+
+        if (! is_array($packages)) {
+            throw new RuntimeException('Project boost.json packages must be an array.');
+        }
+
+        $config['packages'] = array_values(array_unique([
+            ...$packages,
+            'wireninja/accelerator',
+        ]));
+        ksort($config);
+
+        $payload = json_encode($config, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR).PHP_EOL;
+        $this->writeFile('boost.json', $payload);
+    }
+
+    private function assertAcceleratorBoostResources(): void
+    {
+        $path = $this->projectRoot.'/boost.json';
+        $contents = file_get_contents($path);
+        $config = is_string($contents) ? json_decode($contents, true, flags: JSON_THROW_ON_ERROR) : null;
+        $installedSkills = is_array($config) ? ($config['skills'] ?? null) : null;
+
+        if (! is_array($installedSkills)) {
+            throw new RuntimeException('Boost did not record installed skills.');
+        }
+
+        $skillFiles = glob($this->packageRoot.'/resources/boost/skills/*/SKILL.md') ?: [];
+        $expectedSkills = array_map(static fn (string $skillFile): string => basename(dirname($skillFile)), $skillFiles);
+        $missingSkills = array_values(array_diff($expectedSkills, $installedSkills));
+
+        if ($missingSkills !== []) {
+            throw new RuntimeException('Boost did not install Accelerator skills: '.implode(', ', $missingSkills));
+        }
     }
 
     private function renderEnvironment(string $template, string $appKey): string
