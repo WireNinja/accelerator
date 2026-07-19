@@ -49,6 +49,15 @@ return [
         'password_default' => env('DEV_PASSWORD', null),
     ],
 
+    'oauth' => [
+        'mode' => env('ACCELERATOR_OAUTH_MODE', 'disabled'),
+        'allowed_domains' => array_values(array_filter(explode(',', (string) env('ACCELERATOR_OAUTH_ALLOWED_DOMAINS', '')))),
+    ],
+
+    'uploads' => [
+        'max_megabytes' => env('ACCELERATOR_UPLOAD_MAX_MB', 100),
+    ],
+
     'dicebear' => [
         'url' => env('ACCELERATOR_DICEBEAR_URL', 'https://dicebear.ohmyserver.com'),
         'version' => env('ACCELERATOR_DICEBEAR_VERSION', '9.x'),

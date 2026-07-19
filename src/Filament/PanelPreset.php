@@ -264,7 +264,11 @@ final class PanelPreset
 
     private static function viteTheme(string $path): string
     {
-        return sprintf('resources/css/filament/%s/theme.css', $path);
+        $panelTheme = sprintf('resources/css/filament/%s/theme.css', $path);
+
+        return is_file(base_path($panelTheme))
+            ? $panelTheme
+            : 'resources/css/filament/theme.css';
     }
 
     private static function discoverResourcesIn(string $id): string

@@ -1,0 +1,15 @@
+<?php
+
+declare(strict_types=1);
+
+use Illuminate\Support\Facades\Route;
+use Inertia\Inertia;
+
+{{ primary_route }}
+
+Route::get('/inertia', static fn () => Inertia::render('Home'))
+    ->middleware('inertia')
+    ->name('inertia.home');
+
+Route::livewire('/livewire', 'pages::home')->name('livewire.home');
+Route::redirect('/login', '/admin/login')->name('login');

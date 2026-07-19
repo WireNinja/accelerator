@@ -1,0 +1,7 @@
+<?php
+
+{{ provider_imports }}
+
+return [
+{{ providers }}
+];

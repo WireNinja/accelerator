@@ -9,12 +9,11 @@ use Illuminate\Http\Request;
 use Illuminate\Support\ServiceProvider;
 use Livewire\Livewire;
 use WireNinja\Accelerator\Concerns\InteractsWithApplication;
-use WireNinja\Accelerator\Console\Agent\AuditCommand;
+use WireNinja\Accelerator\Console\Agent\DoctorCommand;
 use WireNinja\Accelerator\Console\Agent\ModelContextCommand;
 use WireNinja\Accelerator\Console\Agent\ResourceContextCommand;
 use WireNinja\Accelerator\Console\EnvCommand;
 use WireNinja\Accelerator\Console\Generator\ModelOutlineCommand;
-use WireNinja\Accelerator\Console\InstallCommand;
 use WireNinja\Accelerator\Console\ModelAuditCommand;
 use WireNinja\Accelerator\Console\ModelDocCommand;
 use WireNinja\Accelerator\Console\Vps\BackupStatusCommand;
@@ -45,8 +44,7 @@ final class CoreServiceProvider extends ServiceProvider
         }
 
         $this->commands([
-            AuditCommand::class,
-            InstallCommand::class,
+            DoctorCommand::class,
             ModelOutlineCommand::class,
             ModelDocCommand::class,
             ModelAuditCommand::class,

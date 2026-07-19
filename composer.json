@@ -38,6 +38,7 @@
         "spatie/laravel-pdf": "^2.4",
         "spatie/laravel-query-builder": "^7.0",
         "stechstudio/filament-impersonate": "^5.1",
+        "symfony/process": "^8.0",
         "laravel/nightwatch": "^1.24",
         "filament/spatie-laravel-settings-plugin": "^5.0",
         "filament/spatie-laravel-media-library-plugin": "^5.0",

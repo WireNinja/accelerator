@@ -148,7 +148,7 @@ trait InteractsWithApplication
             $fileUpload
                 ->imageEditor()
                 ->maxParallelUploads(5)
-                ->maxSize(1024 * 1024); // 1 GB (Filament maxSize unit is KB)
+                ->maxSize(((int) config('accelerator.uploads.max_megabytes', 100)) * 1024);
         });
 
         Select::configureUsing(static function (Select $select): void {
