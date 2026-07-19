@@ -11,6 +11,7 @@ use Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets;
 use Spatie\Permission\Middleware\PermissionMiddleware;
 use Spatie\Permission\Middleware\RoleMiddleware;
 use Spatie\Permission\Middleware\RoleOrPermissionMiddleware;
+use WireNinja\Accelerator\Http\Middleware\EnsureUserIsActive;
 use WireNinja\Accelerator\Http\Middleware\HandleAppearance;
 use WireNinja\Accelerator\Http\Middleware\HandleInertiaRequests;
 
@@ -27,6 +28,7 @@ final class BuiltinMiddleware
 
         $middleware->web(append: [
             HandleAppearance::class,
+            EnsureUserIsActive::class,
         ]);
 
         $middleware->alias([

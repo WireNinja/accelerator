@@ -13,11 +13,15 @@ final class OAuthServiceProvider extends ServiceProvider
 {
     public function boot(): void
     {
-        $this->loadRoutesFrom(__DIR__.'/../../routes/oauth.php');
+        $mode = (string) config('accelerator.oauth.mode', 'disabled');
 
-        if (blank(config('services.google.client_id')) || blank(config('services.google.client_secret'))) {
+        if (! in_array($mode, ['existing_only', 'allowed_domains'], true)
+            || blank(config('services.google.client_id'))
+            || blank(config('services.google.client_secret'))) {
             return;
         }
+
+        $this->loadRoutesFrom(__DIR__.'/../../routes/oauth.php');
 
         FilamentView::registerRenderHook(
             PanelsRenderHook::AUTH_LOGIN_FORM_AFTER,

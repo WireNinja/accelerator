@@ -21,6 +21,7 @@ use WireNinja\Accelerator\Console\Agent\DoctorCommand;
 use WireNinja\Accelerator\Console\Agent\ModelContextCommand;
 use WireNinja\Accelerator\Console\Agent\ResourceContextCommand;
 use WireNinja\Accelerator\Console\EnvCommand;
+use WireNinja\Accelerator\Console\ProvisionAdminCommand;
 use WireNinja\Accelerator\Console\Vps\BackupStatusCommand;
 use WireNinja\Accelerator\Livewire\Synthesizers\BigDecimalSynth;
 use WireNinja\Accelerator\Support\OctaneTableSessionHandler;
@@ -63,6 +64,7 @@ final class CoreServiceProvider extends ServiceProvider
             ModelContextCommand::class,
             ResourceContextCommand::class,
             EnvCommand::class,
+            ProvisionAdminCommand::class,
             BackupStatusCommand::class,
         ]);
     }

@@ -1,15 +1,21 @@
 <?php
 
+declare(strict_types=1);
+
 namespace WireNinja\Accelerator\Http\Controllers\Auth;
 
+use Filament\Facades\Filament;
+use Illuminate\Auth\AuthenticationException;
+use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Laravel\Socialite\Facades\Socialite;
+use Laravel\Socialite\Two\InvalidStateException;
 use Laravel\Socialite\Two\User as OAuth2User;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Throwable;
 use WireNinja\Accelerator\Services\GoogleOAuthService;
 
-class GoogleAuthController extends Controller
+final class GoogleAuthController extends Controller
 {
     /**
      * Redirect to the Google OAuth page.
@@ -22,8 +28,12 @@ class GoogleAuthController extends Controller
     /**
      * Handle the callback from Google.
      */
-    public function callback(GoogleOAuthService $service): RedirectResponse
+    public function callback(Request $request, GoogleOAuthService $service): RedirectResponse
     {
+        if ($request->filled('error')) {
+            return $this->failedLogin('Login Google dibatalkan.');
+        }
+
         try {
             $googleUser = Socialite::driver('google')->user();
 
@@ -32,11 +42,22 @@ class GoogleAuthController extends Controller
             }
 
             $service->handle($googleUser);
+            $request->session()->regenerate();
 
-            return redirect()->intended(config('filament.path', 'admin'));
-        } catch (Throwable) {
-            return redirect()->route('filament.admin.auth.login')
-                ->withErrors(['email' => 'Gagal login menggunakan Google.']);
+            return redirect()->intended(Filament::getPanel('admin')->getUrl());
+        } catch (AuthenticationException|InvalidStateException) {
+            return $this->failedLogin('Akun Google tidak diizinkan masuk.');
+        } catch (Throwable $throwable) {
+            report($throwable);
+
+            return $this->failedLogin('Google login sedang tidak tersedia.');
         }
+    }
+
+    private function failedLogin(string $message): RedirectResponse
+    {
+        $loginUrl = Filament::getPanel('admin')->getLoginUrl();
+
+        return redirect()->to($loginUrl ?? '/admin/login')->withErrors(['email' => $message]);
     }
 }

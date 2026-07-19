@@ -4,13 +4,14 @@ namespace WireNinja\Accelerator\Services;
 
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Laravel\Socialite\Contracts\User as SocialiteUser;
 use Laravel\Socialite\Two\User as OAuth2User;
 use LogicException;
 use WireNinja\Accelerator\Contracts\AcceleratorUser;
 use WireNinja\Accelerator\Support\UserModel;
 
-class GoogleOAuthService
+final class GoogleOAuthService
 {
     /**
      * @param  SocialiteUser&OAuth2User  $googleUser
@@ -25,6 +26,10 @@ class GoogleOAuthService
             throw new AuthenticationException('Google did not return a valid email and user ID.');
         }
 
+        if (! $this->emailIsVerified($googleUser)) {
+            throw new AuthenticationException('Google did not verify this email address.');
+        }
+
         if (! in_array($mode, ['existing_only', 'allowed_domains'], true)) {
             throw new AuthenticationException('Google OAuth login is disabled.');
         }
@@ -36,14 +41,28 @@ class GoogleOAuthService
                 throw new AuthenticationException('No provisioned user matches this Google account.');
             }
 
-            $userClass = UserModel::className();
-            $user = new $userClass;
-            $user->forceFill([
-                'name' => filled($googleUser->getName()) ? $googleUser->getName() : str($email)->before('@')->toString(),
-                'email' => $email,
-                'google_id' => $googleId,
-                'email_verified_at' => now(),
-            ])->save();
+            $user = DB::transaction(function () use ($email, $googleId, $googleUser): AcceleratorUser {
+                $userClass = UserModel::className();
+                $user = new $userClass;
+                $user->forceFill([
+                    'name' => filled($googleUser->getName()) ? $googleUser->getName() : str($email)->before('@')->toString(),
+                    'email' => $email,
+                    'google_id' => $googleId,
+                    'email_verified_at' => now(),
+                ])->save();
+
+                if (! $user instanceof AcceleratorUser) {
+                    throw new LogicException('The configured user model does not implement '.AcceleratorUser::class.'.');
+                }
+
+                $defaultRole = trim((string) config('accelerator.oauth.default_role', 'user'));
+
+                if ($defaultRole !== '') {
+                    $user->syncRoles([$defaultRole]);
+                }
+
+                return $user;
+            });
         }
 
         if (! $user instanceof AcceleratorUser) {
@@ -83,5 +102,16 @@ class GoogleOAuthService
             ->all();
 
         return in_array($domain, $allowedDomains, true);
+    }
+
+    /**
+     * @param  SocialiteUser&OAuth2User  $googleUser
+     */
+    private function emailIsVerified(SocialiteUser $googleUser): bool
+    {
+        $raw = $googleUser->getRaw();
+        $verified = $raw['email_verified'] ?? $raw['verified_email'] ?? false;
+
+        return filter_var($verified, FILTER_VALIDATE_BOOL);
     }
 }

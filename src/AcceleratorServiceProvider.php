@@ -3,9 +3,11 @@
 namespace WireNinja\Accelerator;
 
 use Illuminate\Support\ServiceProvider;
+use Laravel\Fortify\Fortify;
 use Override;
 use WireNinja\Accelerator\Providers\CoreServiceProvider;
 use WireNinja\Accelerator\Providers\FilamentServiceProvider;
+use WireNinja\Accelerator\Providers\FortifyServiceProvider;
 use WireNinja\Accelerator\Providers\InsiderServiceProvider;
 use WireNinja\Accelerator\Providers\OAuthServiceProvider;
 use WireNinja\Accelerator\Providers\PanelServiceProvider;
@@ -20,6 +22,7 @@ class AcceleratorServiceProvider extends ServiceProvider
      */
     private const FEATURE_PROVIDERS = [
         'filament' => FilamentServiceProvider::class,
+        'fortify' => FortifyServiceProvider::class,
         'panels' => PanelServiceProvider::class,
         'oauth' => OAuthServiceProvider::class,
         'insider' => InsiderServiceProvider::class,
@@ -35,12 +38,16 @@ class AcceleratorServiceProvider extends ServiceProvider
 
         $this->app->register(CoreServiceProvider::class);
 
+        if (! config('accelerator.features.fortify', false)) {
+            Fortify::ignoreRoutes();
+        }
+
         foreach (self::FEATURE_PROVIDERS as $feature => $provider) {
             if (! config("accelerator.features.{$feature}", false)) {
                 continue;
             }
 
-            if ($feature === 'panels' && ! config('accelerator.features.filament', false)) {
+            if (in_array($feature, ['panels', 'oauth'], true) && ! config('accelerator.features.filament', false)) {
                 continue;
             }
 

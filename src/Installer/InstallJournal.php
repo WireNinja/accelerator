@@ -93,7 +93,7 @@ final class InstallJournal
     {
         $directory = dirname($this->path);
 
-        if (! is_dir($directory) && ! mkdir($directory, 0755, true) && ! is_dir($directory)) {
+        if (! is_dir($directory) && ! mkdir($directory, 0700, true) && ! is_dir($directory)) {
             throw new RuntimeException('Unable to create installation state directory.');
         }
 
@@ -106,7 +106,9 @@ final class InstallJournal
 
         $temporaryPath = $this->path.'.tmp';
 
-        if (file_put_contents($temporaryPath, $payload, LOCK_EX) === false || ! rename($temporaryPath, $this->path)) {
+        if (file_put_contents($temporaryPath, $payload, LOCK_EX) === false
+            || ! chmod($temporaryPath, 0600)
+            || ! rename($temporaryPath, $this->path)) {
             throw new RuntimeException('Unable to persist installation journal.');
         }
     }

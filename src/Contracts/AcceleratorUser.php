@@ -23,4 +23,7 @@ interface AcceleratorUser extends Authenticatable, Authorizable, FilamentUser, H
     public function isSuspended(): bool;
 
     public function canImpersonate(): bool;
+
+    /** @param  mixed  ...$roles */
+    public function syncRoles(...$roles): static;
 }

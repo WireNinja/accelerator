@@ -143,6 +143,11 @@ class User extends Authenticatable implements AcceleratorUser, HasAppAuthenticat
 
     public function canImpersonate(): bool
     {
-        return $this->isSuperAdmin();
+        return $this->isSuperAdmin() && ! $this->isSuspended();
+    }
+
+    public function canBeImpersonated(): bool
+    {
+        return ! $this->isSuperAdmin() && ! $this->isSuspended();
     }
 }

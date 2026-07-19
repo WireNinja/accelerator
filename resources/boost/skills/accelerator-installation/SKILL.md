@@ -40,8 +40,9 @@ Supported values:
 
 - `--frontend=inertia|livewire`
 - `--database=sqlite|mysql|pgsql`
+- `--admin-name=`, `--admin-username=`, and `--admin-email=` provision the initial Super Admin. Pass the password through `ACCELERATOR_ADMIN_PASSWORD`; otherwise a secure generated password is shown once.
 - `--redis` uses Redis for cache, sessions, and queues; without it, database drivers work immediately.
-- `--features=` accepts `filament`, `fortify`, `panels`, `settings`, `ticketing`, `oauth`, `pwa`, `telegram`, `telemetry`, `insider`, `horizon`, `reverb`, `scout`, `nightwatch`, and `wayfinder`.
+- `--features=` accepts `filament`, `fortify`, `panels`, `settings`, `ticketing`, `oauth`, `pwa`, `telegram`, `telemetry`, `insider`, `horizon`, `reverb`, `scout`, `nightwatch`, and `wayfinder`. Unknown names fail. Fresh recipes always include Filament as the internal-app login baseline; other required parents are added automatically (`settings/ticketing → panels`).
 
 Dependencies remain installed when optional runtime features are inactive. Feature gates control boot and integration, not Composer package presence.
 
@@ -63,7 +64,10 @@ The saved plan is authoritative during resume. Do not expect different CLI flags
 ## Generated Defaults
 
 - Authentication is internal-facing; public registration is absent.
-- OAuth is disabled unless selected; selected OAuth starts in `existing_only` mode.
+- The fresh recipe removes Laravel's demo user and provisions exactly one verified `super_admin`; its password is never written in plaintext to the install journal.
+- Fortify activation is real, not Composer auto-discovery: inactive means zero Fortify routes; active provides headless login/logout/password-confirmation endpoints. Filament owns the ready-made password reset, verification, and MFA UI.
+- OAuth is disabled unless selected; selected OAuth starts in `existing_only` mode. `allowed_domains` accepts only Google-verified email addresses, assigns the configured default role (`user`), and never stores provider access or refresh tokens.
+- Suspended users are rejected by Filament, Fortify, OAuth, normal web sessions, and impersonation. Filament owns the default MFA UI; the separate Fortify 2FA schema remains available for a future frontend that explicitly owns its challenge UI.
 - File upload policy is 100 MB. The recipe sets FPM `upload_max_filesize=100M`, PHP/Nginx request envelopes to 110 MB, and the Octane Supervisor command to the same PHP limits.
 - Themes are discovered from `resources/css/filament/**/theme.css`.
 - `resources/svg` and the public favicon are created before icon-dependent commands run.

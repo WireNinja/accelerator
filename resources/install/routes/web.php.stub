@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -14,4 +15,4 @@ Route::get('/inertia', static fn () => Inertia::render('Home'))
 Route::livewire('/livewire', 'pages::home')
     ->middleware(['auth', 'verified'])
     ->name('livewire.home');
-Route::redirect('/login', '/admin/login')->name('login');
+Route::get('/login', static fn (): RedirectResponse => redirect('/admin/login'))->name('login');

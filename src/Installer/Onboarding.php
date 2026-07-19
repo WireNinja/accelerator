@@ -12,6 +12,7 @@ use function Laravel\Prompts\confirm;
 use function Laravel\Prompts\intro;
 use function Laravel\Prompts\multiselect;
 use function Laravel\Prompts\note;
+use function Laravel\Prompts\password;
 use function Laravel\Prompts\select;
 use function Laravel\Prompts\text;
 
@@ -21,7 +22,7 @@ final class Onboarding
      * @var array<string, string>
      */
     private const FEATURES = [
-        'filament' => 'Filament defaults and Accelerator components',
+        'filament' => 'Filament internal-app core (always enabled)',
         'fortify' => 'Fortify authentication backend',
         'panels' => 'Built-in System and Support panels',
         'settings' => 'Application settings UI',
@@ -40,7 +41,6 @@ final class Onboarding
 
     /** @var list<string> */
     private const DEFAULT_FEATURES = [
-        'filament',
         'fortify',
         'panels',
         'settings',
@@ -49,6 +49,15 @@ final class Onboarding
         'insider',
         'scout',
         'wayfinder',
+    ];
+
+    /** @var list<string> */
+    private const CORE_FEATURES = ['filament'];
+
+    /** @var array<string, list<string>> */
+    private const FEATURE_DEPENDENCIES = [
+        'settings' => ['panels'],
+        'ticketing' => ['panels'],
     ];
 
     public function __construct(
@@ -91,6 +100,40 @@ final class Onboarding
                 ? null
                 : 'Enter a valid absolute URL.',
         );
+        $adminName = text(
+            label: 'Initial Super Admin name',
+            default: 'Super Administrator',
+            required: true,
+        );
+        $adminUsername = text(
+            label: 'Initial Super Admin username',
+            default: 'superadmin',
+            required: true,
+            validate: static fn (string $value): ?string => preg_match('/^[a-z0-9._-]+$/', $value) === 1
+                ? null
+                : 'Use lowercase letters, numbers, dots, underscores, or dashes.',
+        );
+        $adminEmail = text(
+            label: 'Initial Super Admin email',
+            default: 'admin@example.com',
+            required: true,
+            validate: static fn (string $value): ?string => filter_var($value, FILTER_VALIDATE_EMAIL)
+                ? null
+                : 'Enter a valid email address.',
+        );
+        $adminPassword = password(
+            label: 'Initial Super Admin password',
+            required: true,
+            validate: $this->validatePassword(...),
+            hint: 'At least 12 characters with upper/lowercase letters, a number, and a symbol.',
+        );
+        password(
+            label: 'Confirm Super Admin password',
+            required: true,
+            validate: static fn (string $value): ?string => hash_equals($adminPassword, $value)
+                ? null
+                : 'Passwords do not match.',
+        );
         $primaryFrontend = select(
             label: 'Primary landing frontend',
             options: [
@@ -113,13 +156,13 @@ final class Onboarding
             default: false,
             hint: 'Database drivers work immediately without an external service.',
         );
-        $features = multiselect(
-            label: 'Activate runtime features',
-            options: self::FEATURES,
+        $features = $this->resolveFeatures(multiselect(
+            label: 'Activate optional runtime features',
+            options: array_diff_key(self::FEATURES, array_fill_keys(self::CORE_FEATURES, true)),
             default: self::DEFAULT_FEATURES,
-            hint: 'Dependencies stay installed even when a feature is inactive.',
-            required: true,
-        );
+            hint: 'Filament remains the internal-app core; dependencies stay installed when an optional feature is inactive.',
+            required: false,
+        ));
         $deploy = confirm(
             label: 'Configure staging and production deployment now?',
             default: true,
@@ -155,10 +198,14 @@ final class Onboarding
         return new InstallPlan(
             appName: $appName,
             appUrl: $appUrl,
+            adminName: trim($adminName),
+            adminUsername: strtolower(trim($adminUsername)),
+            adminEmail: strtolower(trim($adminEmail)),
+            adminPasswordHash: $this->hashPassword($adminPassword),
             primaryFrontend: $primaryFrontend,
             database: $database,
             useRedis: $useRedis,
-            features: array_values($features),
+            features: $features,
             deploy: $deploy,
             project: $project,
             sshHost: $sshHost,
@@ -199,15 +246,38 @@ final class Onboarding
      */
     private function nonInteractivePlan(array $options, string $directoryName, string $defaultProject): InstallPlan
     {
-        $features = isset($options['features']) && is_string($options['features'])
-            ? array_values(array_intersect(explode(',', $options['features']), array_keys(self::FEATURES)))
-            : self::DEFAULT_FEATURES;
+        $features = self::DEFAULT_FEATURES;
+
+        if (isset($options['features']) && is_string($options['features'])) {
+            $requestedFeatures = array_values(array_filter(explode(',', $options['features'])));
+            $unknownFeatures = array_values(array_diff($requestedFeatures, array_keys(self::FEATURES)));
+
+            if ($unknownFeatures !== []) {
+                throw new RuntimeException('Unknown Accelerator features: '.implode(', ', $unknownFeatures));
+            }
+
+            $features = $this->resolveFeatures($requestedFeatures);
+        }
         $deploy = isset($options['deploy']);
         $domain = $this->option($options, 'domain');
+        $adminPassword = $this->option($options, 'admin-password', (string) getenv('ACCELERATOR_ADMIN_PASSWORD'));
+
+        if ($adminPassword === '') {
+            $adminPassword = 'Aa1!'.bin2hex(random_bytes(12));
+            note('Generated initial Super Admin password (shown once): '.$adminPassword);
+        }
+
+        if ($error = $this->validatePassword($adminPassword)) {
+            throw new RuntimeException($error);
+        }
 
         return new InstallPlan(
             appName: $this->option($options, 'app-name', Str::headline($directoryName)),
             appUrl: $this->option($options, 'app-url', "http://{$defaultProject}.test"),
+            adminName: trim($this->option($options, 'admin-name', 'Super Administrator')),
+            adminUsername: strtolower(trim($this->option($options, 'admin-username', 'superadmin'))),
+            adminEmail: strtolower(trim($this->option($options, 'admin-email', 'admin@example.com'))),
+            adminPasswordHash: $this->hashPassword($adminPassword),
             primaryFrontend: $this->option($options, 'frontend', 'inertia'),
             database: $this->option($options, 'database', 'sqlite'),
             useRedis: isset($options['redis']),
@@ -220,6 +290,52 @@ final class Onboarding
             deployRoot: $this->option($options, 'deploy-root', $domain === '' ? '' : "/var/www/{$domain}"),
             httpRuntime: $this->option($options, 'http-runtime', 'octane'),
         );
+    }
+
+    /**
+     * @param  list<string>  $features
+     * @return list<string>
+     */
+    private function resolveFeatures(array $features): array
+    {
+        $selected = array_fill_keys([...self::CORE_FEATURES, ...$features], true);
+
+        do {
+            $count = count($selected);
+
+            foreach (self::FEATURE_DEPENDENCIES as $feature => $dependencies) {
+                if (! isset($selected[$feature])) {
+                    continue;
+                }
+
+                foreach ($dependencies as $dependency) {
+                    $selected[$dependency] = true;
+                }
+            }
+        } while (count($selected) !== $count);
+
+        return array_values(array_filter(
+            array_keys(self::FEATURES),
+            static fn (string $feature): bool => isset($selected[$feature]),
+        ));
+    }
+
+    private function validatePassword(string $password): ?string
+    {
+        $isValid = strlen($password) >= 12
+            && preg_match('/[a-z]/', $password) === 1
+            && preg_match('/[A-Z]/', $password) === 1
+            && preg_match('/[0-9]/', $password) === 1
+            && preg_match('/[^a-zA-Z0-9]/', $password) === 1;
+
+        return $isValid
+            ? null
+            : 'Super Admin password must contain at least 12 characters, upper/lowercase letters, a number, and a symbol.';
+    }
+
+    private function hashPassword(string $password): string
+    {
+        return password_hash($password, PASSWORD_BCRYPT, ['cost' => 12]);
     }
 
     /**

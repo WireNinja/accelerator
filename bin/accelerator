@@ -29,9 +29,12 @@ Interactive:
 Non-interactive:
   bash vendor/wireninja/accelerator/bin/install --no-interaction \
     --app-name="My Project" --app-url=http://my-project.test \
-    --frontend=inertia --database=sqlite
+    --admin-name="Super Administrator" --admin-username=superadmin \
+    --admin-email=admin@example.com --frontend=inertia --database=sqlite
 
 Options:
+  ACCELERATOR_ADMIN_PASSWORD="..." supplies the initial password without
+  exposing it in shell history. Without it, a secure password is shown once.
   --features=filament,fortify,panels,settings,ticketing,pwa,insider,scout,wayfinder
   --redis
   --deploy --project=app --ssh-host=onidel --repo=git@example/app.git \

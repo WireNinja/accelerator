@@ -32,6 +32,7 @@ final class Installer
         'config/queue.php' => '6101774da7c8b79af46d0028f2b8b31a484c3f7eda10b76e5b27b6093ad364a4',
         'config/services.php' => '8258c4487eb1d73a97e569eb0e411e3f25368044812df4cba807860432be1d92',
         'config/session.php' => '64272cfbef6f47c65bf857f1c5b1e853700c0d0278de46b86663fd83ef4aeed8',
+        'database/seeders/DatabaseSeeder.php' => 'cf8e4b6e48360218bb5534f66419c955288f78338eb8a3dba9d8ac3394ec3dbc',
         'package.json' => '10a54d6736b26384ac68636e11f958360e6d18fb9c41e91e05707a918ad58622',
         'resources/css/app.css' => '02db84e827e06d8349293e9797eb8d81465e109e91976775964c4bf873b6fab5',
         'resources/js/app.js' => '101ead936a2281d53dcc064b7e2a2ab0d53b92ef3ef7b34b668673007895c860',
@@ -62,6 +63,7 @@ final class Installer
         'stubs/app/Support/helpers.php' => 'app/Support/helpers.php',
         'stubs/bootstrap/app.php' => 'bootstrap/app.php',
         'stubs/bootstrap/providers.php.stub' => 'bootstrap/providers.php',
+        'stubs/database/seeders/DatabaseSeeder.php' => 'database/seeders/DatabaseSeeder.php',
         'stubs/public/.user.ini' => 'public/.user.ini',
         'stubs/public/favicon.svg' => 'public/favicon.svg',
         'stubs/resources/svg/.gitkeep' => 'resources/svg/.gitkeep',
@@ -305,6 +307,17 @@ final class Installer
             'app/Support/helpers.php',
         ]));
 
+        $dontDiscover = $composer['extra']['laravel']['dont-discover'] ?? [];
+
+        if (! is_array($dontDiscover)) {
+            throw new RuntimeException('Project composer.json extra.laravel.dont-discover must be an array.');
+        }
+
+        $composer['extra']['laravel']['dont-discover'] = array_values(array_unique([
+            ...$dontDiscover,
+            'laravel/fortify',
+        ]));
+
         $composer['scripts']['post-autoload-dump'] = [
             'Illuminate\\Foundation\\ComposerScripts::postAutoloadDump',
             '@php artisan package:discover --ansi',
@@ -348,7 +361,21 @@ final class Installer
         $this->processRunner->run(['php', 'artisan', 'lang:update', '--no-interaction'], $this->projectRoot);
         $this->processRunner->run(['php', 'artisan', 'migrate:fresh', '--seed', '--force', '--no-interaction'], $this->projectRoot);
         $this->processRunner->run(['php', 'artisan', 'storage:link', '--force', '--no-interaction'], $this->projectRoot);
-        $this->processRunner->run(['php', 'artisan', 'shield:safe-regenerate', '--no-interaction'], $this->projectRoot);
+
+        if ($this->hasFeature('filament')) {
+            $this->processRunner->run(['php', 'artisan', 'shield:safe-regenerate', '--no-interaction'], $this->projectRoot);
+        }
+
+        $this->processRunner->run([
+            'php',
+            'artisan',
+            'accelerator:provision-admin',
+            '--name='.$this->plan->adminName,
+            '--username='.$this->plan->adminUsername,
+            '--email='.$this->plan->adminEmail,
+            '--password-hash='.$this->plan->adminPasswordHash,
+            '--no-interaction',
+        ], $this->projectRoot);
 
         if ($this->hasFeature('pwa')) {
             $this->processRunner->run(['bunx', 'laravel-pwa', 'icons'], $this->projectRoot);
@@ -436,6 +463,7 @@ final class Installer
             'SCOUT_DRIVER' => $this->hasFeature('scout') ? 'database' : 'collection',
             'NIGHTWATCH_ENABLED' => $this->boolean($this->hasFeature('nightwatch')),
             'ACCELERATOR_FEATURE_FILAMENT' => $this->boolean($this->hasFeature('filament')),
+            'ACCELERATOR_FEATURE_FORTIFY' => $this->boolean($this->hasFeature('fortify')),
             'ACCELERATOR_FEATURE_PANELS' => $this->boolean($this->hasFeature('panels')),
             'ACCELERATOR_FEATURE_OAUTH' => $this->boolean($this->hasFeature('oauth')),
             'ACCELERATOR_FEATURE_INSIDER' => $this->boolean($this->hasFeature('insider')),
@@ -642,11 +670,6 @@ final class Installer
         if ($this->hasFeature('filament')) {
             $providerImports[] = 'use App\\Providers\\Filament\\AdminPanelProvider;';
             $providers[] = '    AdminPanelProvider::class,';
-        }
-
-        if ($this->hasFeature('fortify')) {
-            $providerImports[] = 'use Laravel\\Fortify\\FortifyServiceProvider;';
-            $providers[] = '    FortifyServiceProvider::class,';
         }
 
         if ($this->hasFeature('horizon')) {

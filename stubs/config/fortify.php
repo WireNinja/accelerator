@@ -2,8 +2,6 @@
 
 declare(strict_types=1);
 
-use Laravel\Fortify\Features;
-
 return [
 
     /*
@@ -132,7 +130,7 @@ return [
     |
     */
 
-    'views' => true,
+    'views' => false,
 
     /*
     |--------------------------------------------------------------------------
@@ -145,14 +143,6 @@ return [
     |
     */
 
-    'features' => [
-        Features::resetPasswords(),
-        Features::emailVerification(),
-        Features::twoFactorAuthentication([
-            'confirm' => true,
-            'confirmPassword' => true,
-            // 'window' => 0
-        ]),
-    ],
+    'features' => [],
 
 ];

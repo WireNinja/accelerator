@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace WireNinja\Accelerator\Console\Agent;
 
+use BackedEnum;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
@@ -11,6 +12,8 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Schema;
 use JsonException;
+use Laravel\Fortify\FortifyServiceProvider;
+use Spatie\Permission\Models\Role;
 use Symfony\Component\Process\ExecutableFinder;
 use Throwable;
 use WireNinja\Accelerator\AcceleratorServiceProvider;
@@ -129,6 +132,7 @@ final class DoctorCommand extends Command
             'app/Support/helpers.php',
             'bootstrap/app.php',
             'bootstrap/providers.php',
+            'database/seeders/DatabaseSeeder.php',
             'public/.user.ini',
             'public/favicon.svg',
             'phpstan.neon',
@@ -233,6 +237,7 @@ final class DoctorCommand extends Command
     {
         $featureNames = [
             'filament',
+            'fortify',
             'panels',
             'oauth',
             'insider',
@@ -274,7 +279,16 @@ final class DoctorCommand extends Command
         );
 
         $filamentEnabled = (bool) config('accelerator.features.filament', false);
+        $fortifyEnabled = (bool) config('accelerator.features.fortify', false);
         $panelsEnabled = (bool) config('accelerator.features.panels', false);
+        $fortifyLoaded = app()->getProvider(FortifyServiceProvider::class) !== null;
+        $this->assert(
+            category: 'Configuration',
+            label: 'Fortify activation',
+            value: $fortifyLoaded ? 'loaded' : 'not loaded',
+            passed: $fortifyEnabled === $fortifyLoaded,
+            message: 'Fortify provider activation does not match ACCELERATOR_FEATURE_FORTIFY.',
+        );
         $this->assert(
             category: 'Configuration',
             label: 'Panel dependency',
@@ -284,6 +298,13 @@ final class DoctorCommand extends Command
         );
 
         $oauthEnabled = (bool) config('accelerator.features.oauth', false);
+        $this->assert(
+            category: 'Configuration',
+            label: 'OAuth dependency',
+            value: $oauthEnabled ? 'enabled' : 'disabled',
+            passed: ! $oauthEnabled || $filamentEnabled,
+            message: 'ACCELERATOR_FEATURE_OAUTH requires ACCELERATOR_FEATURE_FILAMENT=true.',
+        );
         $oauthMode = (string) config('accelerator.oauth.mode', 'disabled');
         $configuredOauthDomains = config('accelerator.oauth.allowed_domains', []);
         $oauthDomains = is_array($configuredOauthDomains)
@@ -301,6 +322,16 @@ final class DoctorCommand extends Command
             value: $oauthMode,
             passed: $oauthValid,
             message: 'Enabled OAuth requires existing_only, or allowed_domains with ACCELERATOR_OAUTH_ALLOWED_DOMAINS.',
+        );
+        $oauthCredentialsReady = filled(config('services.google.client_id'))
+            && filled(config('services.google.client_secret'));
+        $this->assert(
+            category: 'Configuration',
+            label: 'Google OAuth credentials',
+            value: $oauthCredentialsReady ? 'configured' : 'not configured',
+            passed: ! $oauthEnabled || $oauthCredentialsReady,
+            message: 'OAuth is selected but GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are CONFIG_REQUIRED.',
+            failureStatus: 'warning',
         );
 
         $uploadMegabytes = (int) config('accelerator.uploads.max_megabytes', 100);
@@ -328,6 +359,40 @@ final class DoctorCommand extends Command
                 value: $missingTables === [] ? count($tables).' core tables present' : implode(', ', $missingTables),
                 passed: $missingTables === [],
                 message: 'Database schema is incomplete: '.implode(', ', $missingTables),
+            );
+
+            if ($missingTables !== []) {
+                return;
+            }
+
+            $roleEnum = config('accelerator.enums.role');
+            $expectedRoles = is_string($roleEnum) && enum_exists($roleEnum)
+                ? array_values(array_filter(array_map(
+                    static fn (mixed $case): ?string => $case instanceof BackedEnum && is_string($case->value)
+                        ? $case->value
+                        : null,
+                    $roleEnum::cases(),
+                )))
+                : [];
+            $existingRoles = Role::query()->whereIn('name', $expectedRoles)->pluck('name')->all();
+            $missingRoles = array_values(array_diff($expectedRoles, $existingRoles));
+            $this->assert(
+                category: 'Database',
+                label: 'Application roles',
+                value: $missingRoles === [] ? count($expectedRoles).' synchronized' : implode(', ', $missingRoles),
+                passed: $expectedRoles !== [] && $missingRoles === [],
+                message: 'RoleEnum is not synchronized; run php artisan shield:safe-regenerate.',
+            );
+
+            $superAdminRole = (string) config('filament-shield.super_admin.name', 'super_admin');
+            $superAdmin = Role::findByName($superAdminRole);
+            $activeSuperAdmins = $superAdmin->users()->whereNull('suspended_at')->count();
+            $this->assert(
+                category: 'Database',
+                label: 'Active Super Admin',
+                value: (string) $activeSuperAdmins,
+                passed: $activeSuperAdmins > 0,
+                message: 'No active Super Admin account is provisioned.',
             );
         } catch (Throwable $throwable) {
             $this->record(

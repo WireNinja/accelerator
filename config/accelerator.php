@@ -8,6 +8,7 @@ use App\Enums\System\RoleEnum;
 return [
     'features' => [
         'filament' => env('ACCELERATOR_FEATURE_FILAMENT', false),
+        'fortify' => env('ACCELERATOR_FEATURE_FORTIFY', false),
         'panels' => env('ACCELERATOR_FEATURE_PANELS', false),
         'oauth' => env('ACCELERATOR_FEATURE_OAUTH', false),
         'insider' => env('ACCELERATOR_FEATURE_INSIDER', false),
@@ -52,6 +53,7 @@ return [
     'oauth' => [
         'mode' => env('ACCELERATOR_OAUTH_MODE', 'disabled'),
         'allowed_domains' => array_values(array_filter(explode(',', (string) env('ACCELERATOR_OAUTH_ALLOWED_DOMAINS', '')))),
+        'default_role' => env('ACCELERATOR_OAUTH_DEFAULT_ROLE', 'user'),
     ],
 
     'uploads' => [
