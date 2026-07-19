@@ -136,11 +136,7 @@ final class DoctorCommand extends Command
             'resources/css/app.css',
             'resources/css/filament/theme.css',
             'resources/js/app.ts',
-            'resources/js/env.d.ts',
-            'resources/js/Pages/Home.vue',
             'resources/views/app.blade.php',
-            'resources/views/layouts/app.blade.php',
-            'resources/views/pages/home.blade.php',
             'routes/channels.php',
             'routes/console.php',
             'routes/web.php',
@@ -157,10 +153,10 @@ final class DoctorCommand extends Command
         ));
         $this->assert(
             category: 'Install recipe',
-            label: 'Generated files',
+            label: 'Required files',
             value: $missingFiles === [] ? count($requiredFiles).' present' : implode(', ', $missingFiles),
             passed: $missingFiles === [],
-            message: 'Required generated files are missing: '.implode(', ', $missingFiles),
+            message: 'Required application files are missing: '.implode(', ', $missingFiles),
         );
 
         $configuredUserClass = config('auth.providers.users.model');
