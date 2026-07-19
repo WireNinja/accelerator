@@ -108,7 +108,7 @@ Every release retains its own immutable env symlink. `current` selects code that
 3. scoped release/shared/archive layout and ACL creation;
 4. immutable runtime env staging;
 5. rendered Nginx and Supervisor installation with backups and validation;
-6. exact shallow clone of the local/remote commit;
+6. exact shallow clone of the local/remote commit plus any tracked Composer path-repository submodules;
 7. shared links, locked Composer install, locked Bun install, and asset build;
 8. release permissions, normal migration, initial Super Admin provisioning, storage link, and Laravel caches;
 9. atomic current switch, stage service activation, and `/up` health check;

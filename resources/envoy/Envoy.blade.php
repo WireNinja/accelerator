@@ -643,6 +643,35 @@
         echo "[release] cloned $actual_sha, expected {{ $releaseSha }}."
         exit 1
     }
+
+    while IFS= read -r package_path; do
+        package_path="${package_path#./}"
+        case "$package_path" in
+            ''|/*|../*|*/../*|*/..)
+                echo "[release] Unsafe Composer path repository: $package_path"
+                exit 1
+                ;;
+        esac
+
+        package_mode="$(git -C {{ $releasePath }} ls-files --stage -- "$package_path" | awk 'NR == 1 { print $1 }')"
+        if [ "$package_mode" = "160000" ]; then
+            git -C {{ $releasePath }} submodule update --init --depth=1 -- "$package_path"
+        fi
+
+        test -s {{ $releasePath }}/"$package_path"/composer.json || {
+            echo "[release] Composer path repository is unavailable: $package_path"
+            exit 1
+        }
+    done < <({{ $config->phpBinary }} -r '
+        $composer = json_decode(file_get_contents($argv[1]), true, flags: JSON_THROW_ON_ERROR);
+        foreach ($composer["repositories"] ?? [] as $repository) {
+            if (($repository["type"] ?? null) !== "path" || ! is_string($repository["url"] ?? null)) {
+                continue;
+            }
+            echo rtrim($repository["url"], "/"), PHP_EOL;
+        }
+    ' {{ $releasePath }}/composer.json)
+
     echo "[release] cloned exact commit {{ $releaseSha }}."
 @endtask
 
