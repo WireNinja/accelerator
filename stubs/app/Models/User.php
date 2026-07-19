@@ -106,7 +106,7 @@ class User extends Authenticatable implements AcceleratorUser, HasAppAuthenticat
 
     public function canAccessPanel(Panel $panel): bool
     {
-        return (! $this->isSuspended()) && $this->hasVerifiedEmail();
+        return ! $this->isSuspended();
     }
 
     public function getFilamentAvatarUrl(): ?string

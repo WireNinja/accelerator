@@ -53,6 +53,12 @@ Google OAuth is disabled unless its feature and mode are enabled. `existing_only
 
 `system.password_reset_enabled` and `system.email_verification_enabled` are removed. Filament password reset, email verification, and email-change verification routes are registered during panel configuration for every Accelerator panel. They cannot be enabled or disabled from `SystemSettings`, because route registration is complete before Filament runs `bootUsing()`. Existing settings rows are deleted by the v2 settings migration. Public self-registration remains disabled.
 
+`App\Models\User::canAccessPanel()` must not reject an unverified user. Return false for suspended/unauthorized users, but let Filament's email-verification middleware own the verified-email gate; otherwise the verification prompt and link are registered but unreachable.
+
+### 🟡 AWARENESS — Local log mail is observable again
+
+Fresh local `.env` / `.env.example` now use `LOG_LEVEL=debug`, while generated staging and production seeds force `LOG_LEVEL=error`. This makes the default local `MAIL_MAILER=log` useful for password-reset and verification links. Those notifications are queued by Filament, so run the generated queue worker before reading the mail log.
+
 ### 🔴 BREAKING — Schedule wrappers and dead system widget removed
 
 `BuiltinSystemSchedule` and the unused `SystemInfoWidget` are removed. Define schedules directly with Laravel's `Schedule` facade. Fresh installs always schedule database/file backups and only render ticketing, Horizon, or telemetry schedules when onboarding activates that feature.

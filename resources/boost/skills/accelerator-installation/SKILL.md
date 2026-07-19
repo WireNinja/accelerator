@@ -67,11 +67,13 @@ The saved plan is authoritative during resume. Do not expect different CLI flags
 - Authentication is internal-facing; public registration is absent.
 - The fresh recipe removes Laravel's demo user and provisions exactly one verified `super_admin`; its password is never written in plaintext to the install journal.
 - Fortify activation is real, not Composer auto-discovery: inactive means zero Fortify routes; active provides headless login/logout/password-confirmation endpoints. Filament owns the ready-made password reset, verification, and MFA UI.
+- `canAccessPanel()` rejects suspended users only. Do not reject unverified users there: Filament must authenticate them first so its email-verification middleware can route them to the verification prompt.
 - OAuth is disabled unless selected; selected OAuth starts in `existing_only` mode. `allowed_domains` accepts only Google-verified email addresses, assigns the configured default role (`user`), and never stores provider access or refresh tokens.
 - Suspended users are rejected by Filament, Fortify, OAuth, normal web sessions, and impersonation. Filament owns the default MFA UI; the separate Fortify 2FA schema remains available for a future frontend that explicitly owns its challenge UI.
 - File upload policy is 100 MB. The recipe sets FPM `upload_max_filesize=100M`, PHP/Nginx request envelopes to 110 MB, and the Octane Supervisor command to the same PHP limits.
 - Themes are discovered from `resources/css/filament/**/theme.css`.
 - `resources/svg` and the public favicon are created before icon-dependent commands run.
+- Local `.env` / `.env.example` use `LOG_LEVEL=debug`, so the default `MAIL_MAILER=log` can actually write password-reset and verification messages. Generated staging/production env files override the level to `error`. Queued mail still requires the generated local queue worker (`composer run dev` or an explicit worker).
 - Accelerator is added to `boost.json`; missing Accelerator skills fail installation instead of reporting false success.
 
 ## Deployment Setup
