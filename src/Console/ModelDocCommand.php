@@ -17,7 +17,6 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection as SupportCollection;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Schema;
-use Illuminate\Support\Str;
 use ReflectionClass;
 use ReflectionMethod;
 use ReflectionNamedType;
@@ -25,7 +24,6 @@ use Symfony\Component\Finder\SplFileInfo;
 use Throwable;
 use WireNinja\Accelerator\Console\Concerns\HasBanner;
 use WireNinja\Accelerator\Database\Casts\BigDecimalCast;
-use WireNinja\Accelerator\Model\Concerns\HasTypedColumnMethods;
 use WireNinja\Accelerator\Support\Cast;
 
 use function Laravel\Prompts\search;
@@ -132,19 +130,12 @@ class ModelDocCommand extends Command
     protected function generateDocBlock(Model $model, ReflectionClass $reflection): string
     {
         $properties = [];
-        $methods = [];
-        $usesTypedColumnMethods = $this->usesTypedColumnMethods($reflection);
 
         foreach ($this->getSchemaColumns($model->getTable()) as $column) {
             $columnName = Cast::strictString($column['name'] ?? null);
             $phpType = $this->resolveColumnPhpType($model, $columnName, $column);
 
             $properties[] = "@property {$phpType} \${$columnName}";
-
-            if ($usesTypedColumnMethods) {
-                $methods[] = $this->formatGetterMethod($columnName, $phpType);
-                $methods[] = $this->formatSetterMethod($columnName, $phpType);
-            }
         }
 
         foreach ($this->getRelationships($model, $reflection) as $name => $info) {
@@ -157,30 +148,9 @@ class ModelDocCommand extends Command
             $doc .= " * {$property}\n";
         }
 
-        if ($methods !== []) {
-            foreach (array_values(array_unique($methods)) as $method) {
-                $doc .= " * {$method}\n";
-            }
-        }
-
         $doc .= ' */';
 
         return $doc;
-    }
-
-    protected function usesTypedColumnMethods(ReflectionClass $reflection): bool
-    {
-        return in_array(HasTypedColumnMethods::class, class_uses_recursive($reflection->getName()), true);
-    }
-
-    protected function formatGetterMethod(string $columnName, string $phpType): string
-    {
-        return '@method '.$phpType.' getColumn'.Str::studly($columnName).'()';
-    }
-
-    protected function formatSetterMethod(string $columnName, string $phpType): string
-    {
-        return '@method $this setColumn'.Str::studly($columnName).'('.$phpType.' $value)';
     }
 
     /**

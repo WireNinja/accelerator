@@ -95,4 +95,4 @@ composer phpstan
 php artisan accelerator:verify-resource {resourceKey} --compact
 ```
 
-If PHP model docs or typed column access changed, run the relevant `php artisan accelerator:model-doc {Model} --write` before verification.
+If model columns, casts, or relationships changed, run the relevant `php artisan accelerator:model-doc {Model} --write` before verification.

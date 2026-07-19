@@ -203,14 +203,13 @@ Default answer for a new action class is **NO**.
 - Do NOT use `strval()`, `intval()`, `(string)`, `(int)` etc for application data flows. Use `WireNinja\Accelerator\Support\Cast` where boundary conversion is genuinely required.
 - Do NOT call `CarbonImmutable::now(config('app.timezone'))` for normal flows — `app.timezone` is global. `CarbonImmutable::now()` is enough unless a non-default timezone is explicitly required.
 
-### Business exception & typed column access
+### Business exception & Eloquent attributes
 
 - Throw `WireNinja\Accelerator\Exceptions\BusinessException` for known business-rule failures (status lifecycle invalid, parent aggregate not ready, period closed, record already active, etc). NOT raw `Exception`, `RuntimeException`, or `DomainException`.
-- For trivial typed column writes in action classes, prefer chainable typed accessors: `->setColumnStatus(...)`, `->setColumnClosedAt(...)`, getters like `->getColumnStatus()` (when the model uses the typed column trait). Lighter than DTOs.
-- For `BigDecimalCast` columns, do NOT recast model values via additional helpers. Use `->getColumnQuantity()` / `$model->quantity` directly.
-- For `BetterEnum`-cast columns, the typed getter returns the enum instance. Compare with `->is(...)`, `->isNot(...)`, `->isAny(...)`, `->isNone(...)`. Never downgrade to `->value` for comparison.
-- Typed column methods are only for real columns, NOT relationships, accessors, or pseudo-fields.
-- After adding/changing a column, cast, or nullability, run `php artisan accelerator:model-doc ModelName --write` so `@property` and `@method getColumn.../setColumn...` stay in sync. NEVER write those `@method` docblocks by hand.
+- Use normal Eloquent properties for reads and direct assignment, `fill()`, or `update()` for writes. Prefer `fill()` when one transition changes several attributes.
+- For `BigDecimalCast` columns, do NOT recast model values via additional helpers. Use `$model->quantity` directly.
+- For `BetterEnum`-cast columns, the property is the enum instance. Compare with `->is(...)`, `->isNot(...)`, `->isAny(...)`, `->isNone(...)`. Never downgrade to `->value` for comparison.
+- After adding or changing a column, cast, relationship, or nullability, run `php artisan accelerator:model-doc ModelName --write` so model property PHPDoc stays in sync. Runtime behavior must never depend on PHPDoc.
 
 ### Relationship save hooks are an escape hatch
 

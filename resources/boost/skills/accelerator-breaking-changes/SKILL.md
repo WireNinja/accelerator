@@ -29,6 +29,10 @@ The database-backed `registration_enabled` toggle and Filament registration rout
 
 `PanelPreset` now requests only the resolved application theme. Accelerator CSS is imported by that theme and is no longer requested as an impossible second vendor manifest entry.
 
+### 🔴 BREAKING — Runtime typed-column magic removed
+
+`HasTypedColumnMethods` and its generated `getColumn*()` / `setColumn*()` API are removed. Read casted Eloquent attributes directly and write them with property assignment, `fill()`, or `update()`. `accelerator:model-doc` now generates property and relationship types only; it no longer turns PHPDoc into a runtime validation system or queries the schema from `Model::__call()`.
+
 ## v1.1.79
 
 No deployment contract changes beyond v1.1.66.
