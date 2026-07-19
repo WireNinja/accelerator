@@ -31,7 +31,7 @@ Core files:
 - `WireNinja\Accelerator\Support\ActivityLog\RelationshipActivityLogger`: relationship snapshot/diff logging.
 - `WireNinja\Accelerator\Filament\Concerns\LogsResourceRelationshipActivity`: Filament create/edit lifecycle hook integration.
 - `WireNinja\Accelerator\Filament\RelationManagers\ActivitiesRelationManager`: reusable read-only activity relation manager.
-- `WireNinja\Accelerator\Filament\RelationManagers\AuditRelationGroup`: reusable audit relation group wrapper. Pass relation managers into `AuditRelationGroup::make([...])` so resources stay consistent and relation badges are deferred by default.
+- Native Filament `RelationGroup`: group the shared activity relation manager under `Audit` and call `deferBadge()` directly. Accelerator does not wrap this one-line API.
 - `WireNinja\Accelerator\Policies\ActivityPolicy`: built-in policy for `Spatie\Activitylog\Models\Activity`. Accelerator registers it when no app policy exists, so strict Filament authorization works out of the box.
 
 ## Add Activity Logging To A Model
@@ -54,7 +54,6 @@ Core files:
 ```php
 use Filament\Resources\RelationManagers\RelationGroup;
 use WireNinja\Accelerator\Filament\RelationManagers\ActivitiesRelationManager;
-use WireNinja\Accelerator\Filament\RelationManagers\AuditRelationGroup;
 
 /**
  * @return array<int, RelationGroup>
@@ -62,9 +61,9 @@ use WireNinja\Accelerator\Filament\RelationManagers\AuditRelationGroup;
 public static function getRelations(): array
 {
     return [
-        AuditRelationGroup::make([
+        RelationGroup::make('Audit', [
             ActivitiesRelationManager::class,
-        ]),
+        ])->deferBadge(),
     ];
 }
 ```
@@ -91,7 +90,7 @@ Run the minimum verification:
 
 ```bash
 vendor/bin/pint --dirty --format agent
-composer phpstan
+composer analyse
 php artisan accelerator:verify-resource {resourceKey} --compact
 ```
 

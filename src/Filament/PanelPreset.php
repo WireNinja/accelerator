@@ -36,6 +36,8 @@ use WireNinja\Accelerator\Support\BuiltinExceptions;
 
 final class PanelPreset
 {
+    private const SIDEBAR_SUPPORT_RENDER_HOOK = 'accelerator::sidebar.support';
+
     public static function configure(Panel $panel, string $id = 'admin'): Panel
     {
         return $panel
@@ -128,7 +130,7 @@ final class PanelPreset
                     : ''
             )
             ->renderHook(
-                AcceleratorPanelsRenderHook::SIDEBAR_SUPPORT,
+                self::SIDEBAR_SUPPORT_RENDER_HOOK,
                 fn () => config('accelerator.features.settings')
                     ? view('accelerator::filament.sidebar.support')
                     : ''

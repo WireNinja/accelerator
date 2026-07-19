@@ -15,7 +15,7 @@ Format per entry:
 
 ### 🔴 BREAKING — Fake contracts and thin Filament wrappers removed
 
-`HasHandle`, `PanelColor`, `Profile`, `TypeCaster`, `BetterActionGroup`, widget lazy/polling traits, and the created/updated/deleted timestamp aliases no longer exist. Use concrete action classes, literal Filament color names, env-backed support config, `Cast`, native `ActionGroup`, native widget properties, and `TimestampSummaryColumn` directly.
+`HasHandle`, `PanelColor`, `Profile`, `TypeCaster`, `BetterActionGroup`, `AuditRelationGroup`, `AcceleratorPanelsRenderHook`, widget lazy/polling traits, and the created/updated/deleted timestamp aliases no longer exist. Use concrete action classes, literal Filament color names, env-backed support config, `Cast`, native `ActionGroup`/`RelationGroup`, native render-hook strings, native widget properties, and `TimestampSummaryColumn` directly.
 
 ### 🔴 BREAKING — Support identity is application configuration
 
