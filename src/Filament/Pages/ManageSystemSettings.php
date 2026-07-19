@@ -64,8 +64,6 @@ class ManageSystemSettings extends Page implements HasForms
             'brand_name' => $this->settings->brand_name,
             'brand_logo' => blank($this->settings->brand_logo) ? null : $this->settings->brand_logo,
             'brand_favicon' => blank($this->settings->brand_favicon) ? null : $this->settings->brand_favicon,
-            'password_reset_enabled' => $this->settings->password_reset_enabled,
-            'email_verification_enabled' => $this->settings->email_verification_enabled,
             'support_enabled' => $this->settings->support_enabled,
             'telegram_bot_token' => $this->settings->telegram_bot_token,
             'telegram_api_base_uri' => $this->settings->telegram_api_base_uri,
@@ -123,21 +121,6 @@ class ManageSystemSettings extends Page implements HasForms
                                         ->image()
                                         ->disk('public')
                                         ->directory('app-settings/branding'),
-                                ]),
-                        ]),
-                    Step::make('Autentikasi')
-                        ->icon('lucide-shield-check')
-                        ->schema([
-                            Section::make('Kebijakan Akses')
-                                ->description('Konfigurasi pemulihan akun dan keamanan email.')
-                                ->columns(2)
-                                ->schema([
-                                    Toggle::make('password_reset_enabled')
-                                        ->label('Izinkan Reset Kata Sandi')
-                                        ->helperText('Izinkan pengguna mereset kata sandi mereka yang terlupa.'),
-                                    Toggle::make('email_verification_enabled')
-                                        ->label('Wajibkan Verifikasi Email')
-                                        ->helperText('Paksa pengguna untuk memverifikasi alamat email mereka sebelum mengakses sistem.'),
                                 ]),
                         ]),
                     Step::make('Notifikasi Telegram')
@@ -207,7 +190,7 @@ class ManageSystemSettings extends Page implements HasForms
                         ]),
                 ])
                     ->navigationHeading('Pengaturan Sistem')
-                    ->navigationDescription('Kelola identitas brand, autentikasi, dan preferensi sistem inti.')
+                    ->navigationDescription('Kelola identitas brand dan preferensi sistem inti.')
                     ->sticky(false)
                     ->skippable()
                     ->columnSpanFull(),
@@ -240,8 +223,6 @@ class ManageSystemSettings extends Page implements HasForms
         $this->settings->brand_name = $state['brand_name'];
         $this->settings->brand_logo = $state['brand_logo'];
         $this->settings->brand_favicon = $state['brand_favicon'];
-        $this->settings->password_reset_enabled = $state['password_reset_enabled'];
-        $this->settings->email_verification_enabled = $state['email_verification_enabled'];
         $this->settings->support_enabled = $state['support_enabled'];
         $this->settings->telegram_bot_token = blank($state['telegram_bot_token']) ? null : $state['telegram_bot_token'];
         $this->settings->telegram_api_base_uri = blank($state['telegram_api_base_uri']) ? null : $state['telegram_api_base_uri'];

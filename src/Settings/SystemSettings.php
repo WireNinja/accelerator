@@ -16,10 +16,6 @@ final class SystemSettings extends Settings
 
     public ?string $brand_favicon;
 
-    public bool $password_reset_enabled;
-
-    public bool $email_verification_enabled;
-
     public bool $support_enabled;
 
     public ?string $telegram_bot_token;

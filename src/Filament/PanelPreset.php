@@ -5,9 +5,6 @@ namespace WireNinja\Accelerator\Filament;
 use Filament\Actions\Action;
 use Filament\Auth\MultiFactor\App\AppAuthentication;
 use Filament\Auth\MultiFactor\Email\EmailAuthentication;
-use Filament\Auth\Pages\EmailVerification\EmailVerificationPrompt;
-use Filament\Auth\Pages\PasswordReset\RequestPasswordReset;
-use Filament\Auth\Pages\PasswordReset\ResetPassword;
 use Filament\Enums\ThemeMode;
 use Filament\FontProviders\GoogleFontProvider;
 use Filament\Http\Middleware\Authenticate;
@@ -47,6 +44,8 @@ final class PanelPreset
             ->viteTheme(self::viteTheme($id))
             ->login(Login::class)
             ->passwordReset()
+            ->emailVerification()
+            ->emailChangeVerification()
             ->multiFactorAuthentication([
                 AppAuthentication::make()
                     ->recoverable()
@@ -149,9 +148,9 @@ final class PanelPreset
                 PanelsRenderHook::BODY_END,
                 fn () => view('accelerator::filament.business-exception-handler', BuiltinExceptions::getFilamentBusinessExceptionViewData())
             )
-            ->bootUsing(function (Panel $panel) {
+            ->bootUsing(function (Panel $panel): void {
                 if (! config('accelerator.features.settings')) {
-                    return $panel;
+                    return;
                 }
 
                 $settings = resolve(SystemSettings::class);
@@ -160,18 +159,9 @@ final class PanelPreset
 
                 $panel
                     ->font($settings->google_font->value, provider: GoogleFontProvider::class)
-                    ->passwordReset(
-                        $settings->password_reset_enabled ? RequestPasswordReset::class : null,
-                        $settings->password_reset_enabled ? ResetPassword::class : null,
-                    )
                     ->brandName($settings->brand_name)
                     ->brandLogo(self::resolveAssetUrl($settings->brand_logo))
                     ->favicon(self::resolveAssetUrl($settings->brand_favicon))
-                    ->emailVerification(
-                        $settings->email_verification_enabled ? EmailVerificationPrompt::class : null,
-                        $settings->email_verification_enabled,
-                    )
-                    ->emailChangeVerification($settings->email_verification_enabled)
                     ->userMenuItems([
                         Action::make('whatsapp_support')
                             ->label('Whatsapp Support')
@@ -186,8 +176,6 @@ final class PanelPreset
                             ->visible($settings->support_enabled && filled($telegram))
                             ->icon('lucide-send'),
                     ]);
-
-                return $panel;
             });
     }
 

@@ -9,8 +9,6 @@ return new class extends SettingsMigration
         $this->migrator->add('system.brand_name', (string) config('app.name', 'My App'));
         $this->migrator->add('system.brand_logo', null);
         $this->migrator->add('system.brand_favicon', null);
-        $this->migrator->add('system.password_reset_enabled', true);
-        $this->migrator->add('system.email_verification_enabled', false);
         $this->migrator->add('system.support_enabled', true);
         $this->migrator->add('system.telegram_bot_token', null);
         $this->migrator->add('system.telegram_api_base_uri', null);

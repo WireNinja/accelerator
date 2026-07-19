@@ -49,6 +49,10 @@ Google OAuth is disabled unless its feature and mode are enabled. `existing_only
 
 `BetterEnum` retains `is`, `isNot`, `isAny`, `isNone`, `resolve`, and the default gray `getColor`. Unused collection, array, presentation, name-resolution, and option aliases are removed. Pass the enum class directly to Filament `options()` and use native `cases()`, `getLabel()`, `getDescription()`, `getIcon()`, and `getColor()` APIs.
 
+### 🔴 BREAKING — Authentication routes are no longer database settings
+
+`system.password_reset_enabled` and `system.email_verification_enabled` are removed. Filament password reset, email verification, and email-change verification routes are registered during panel configuration for every Accelerator panel. They cannot be enabled or disabled from `SystemSettings`, because route registration is complete before Filament runs `bootUsing()`. Existing settings rows are deleted by the v2 settings migration. Public self-registration remains disabled.
+
 ## v1.1.79
 
 No deployment contract changes beyond v1.1.66.
