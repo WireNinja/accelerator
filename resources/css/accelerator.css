@@ -1,4 +1,4 @@
-@source "../views/**/*.blade.php";
+@source '../views/**/*.blade.php';
 
 /* base background color for entire app */
 .fi-layout {
@@ -7,11 +7,16 @@
 
 /* widen the content by reducing padding x */
 .fi-main {
-    @apply !px-5 sm:px-6 pt-4.5;
+    padding-inline: 1.25rem !important;
+    padding-top: 1.125rem;
+
+    @media (width >= 40rem) {
+        padding-inline: 1.5rem !important;
+    }
 }
 
 .fi-page-header-main-ctn {
-    @apply gap-4 pb-6 pt-4;
+    @apply gap-4 pt-4 pb-6;
 }
 
 .accelerator-sidebar-tenant-menu {
@@ -20,7 +25,7 @@
     }
 
     & .fi-tenant-menu-trigger {
-        @apply flex w-full items-center gap-3 rounded-xl bg-gray-100/60 px-2 py-2 text-sm outline-hidden ring-1 ring-gray-950/5 transition-colors hover:bg-gray-100 focus-visible:bg-gray-100 dark:bg-white/5 dark:ring-white/10 dark:hover:bg-white/10 dark:focus-visible:bg-white/10;
+        @apply flex w-full items-center gap-3 rounded-xl bg-gray-100/60 px-2 py-2 text-sm ring-1 ring-gray-950/5 outline-hidden transition-colors hover:bg-gray-100 focus-visible:bg-gray-100 dark:bg-white/5 dark:ring-white/10 dark:hover:bg-white/10 dark:focus-visible:bg-white/10;
     }
 
     & .fi-tenant-menu-trigger-text {
