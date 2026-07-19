@@ -19,10 +19,13 @@ export default defineConfigWithVueTs(
     },
     {
         ignores: [
-            'vendor',
-            'node_modules',
-            'public',
-            'bootstrap/ssr',
+            '.accelerator/**',
+            'bootstrap/cache/**',
+            'bootstrap/ssr/**',
+            'node_modules/**',
+            'public/**',
+            'storage/**',
+            'vendor/**',
             'resources/js/actions/**',
             'resources/js/routes/**',
             'resources/js/wayfinder/**',

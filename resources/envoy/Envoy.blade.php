@@ -273,12 +273,10 @@
         exit 1
     fi
 
-    vendor/bin/pint --format agent
-    if [ -n "$(git status --porcelain)" ]; then
-        echo "[preflight] Pint changed tracked files. Review and commit them before deployment."
-        git status --short
+    vendor/bin/pint --test --format agent || {
+        echo "[preflight] Pint found unformatted tracked PHP files. Run Pint, review, and commit them before deployment."
         exit 1
-    fi
+    }
 
     composer validate --no-check-publish --no-interaction
 
@@ -315,6 +313,12 @@
     @if(in_array($requestedTask, ['init', 'ssl'], true))
         command -v certbot >/dev/null || { echo "[preflight] Missing VPS command: certbot"; exit 1; }
     @endif
+
+    nginx_validation="$(sudo nginx -t 2>&1)" || {
+        printf '%s\n' "$nginx_validation"
+        echo "[preflight] Existing global Nginx configuration is invalid. Fix it before Accelerator mutates this stage."
+        exit 1
+    }
 
     actual_php="$({{ $config->phpBinary }} -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;')"
     [ "$actual_php" = "{{ $config->phpVersion }}" ] || {

@@ -104,7 +104,7 @@ Every release retains its own immutable env symlink. `current` selects code that
 `init` is resumable for the same Git commit and performs:
 
 1. local lock, env, Git, Composer, Pint, and remote-head checks;
-2. remote tools, PHP version, disk, runtime, port, and DNS checks;
+2. remote tools, existing global Nginx config, PHP version, disk, runtime, port, and DNS checks;
 3. scoped release/shared/archive layout and ACL creation;
 4. immutable runtime env staging;
 5. rendered Nginx and Supervisor installation with backups and validation;

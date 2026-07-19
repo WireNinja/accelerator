@@ -11,6 +11,7 @@ use Illuminate\Routing\Controller;
 use Laravel\Socialite\Facades\Socialite;
 use Laravel\Socialite\Two\InvalidStateException;
 use Laravel\Socialite\Two\User as OAuth2User;
+use RuntimeException;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Throwable;
 use WireNinja\Accelerator\Services\GoogleOAuthService;
@@ -38,7 +39,7 @@ final class GoogleAuthController extends Controller
             $googleUser = Socialite::driver('google')->user();
 
             if (! $googleUser instanceof OAuth2User) {
-                throw new \RuntimeException('Google OAuth did not return an OAuth 2 user.');
+                throw new RuntimeException('Google OAuth did not return an OAuth 2 user.');
             }
 
             $service->handle($googleUser);

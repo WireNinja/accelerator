@@ -65,6 +65,8 @@ vendor/bin/envoy run init --stage=production
 vendor/bin/envoy run deploy --stage=production
 ```
 
+Preflight is read-only. It rejects an unformatted, dirty, or unpushed local tree and an already-invalid global Nginx configuration before creating the remote stage layout.
+
 Valid stages are `staging` and `production`. Envoy renders scoped Nginx and Supervisor configuration, builds exact locked releases with Bun and Composer, keeps immutable per-release env files, backs up before continuous migrations, enforces maintenance in Nginx, checks `/up`, supports SSL repair and rollback, and never prunes the deployment archive.
 
 ## Local Verification

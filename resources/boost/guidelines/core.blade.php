@@ -38,7 +38,7 @@ Accelerator is an intentionally batteries-included foundation for internal Larav
 - Public flow: `vendor/bin/envoy run init --stage={stage}` once, then `vendor/bin/envoy run deploy --stage={stage}`.
 - `init` owns layout, env, code build, migration, initial administrator, Nginx, Supervisor, SSL, health, and pruning. There is no bootstrap ceremony in the happy path.
 - `bootstrap` and `ssl` are expert repair stories. `deploy-slim`, `bootstrap-ssl`, `test`, and `prod` are removed v1 contracts.
-- Every deploy requires clean/pushed Git, `composer.lock`, `bun.lock`, Bun `packageManager`, Pint, strict env boundaries, and exact remote SHA.
+- Every deploy requires clean/pushed Git, `composer.lock`, `bun.lock`, Bun `packageManager`, read-only Pint verification, strict env boundaries, exact remote SHA, and a valid existing global Nginx configuration before stage mutation.
 - Every release has an immutable env under `{root}/shared/env`; both code and env move together on deploy/rollback.
 - Nginx checks the shared Laravel maintenance marker before PHP/Octane/static/websocket handling, except `/up` and ACME.
 - Nginx and Supervisor files are rendered, scoped, archived before replacement, validated, and drift-checked.
