@@ -125,6 +125,14 @@ final class Installer
             $this->installDeveloperDependencies();
         });
         $this->step($journal, 'frontend', function (): void {
+            foreach (['package-lock.json', 'pnpm-lock.yaml', 'yarn.lock', 'bun.lockb'] as $legacyLock) {
+                $path = $this->projectRoot.'/'.$legacyLock;
+
+                if (is_file($path) && ! unlink($path)) {
+                    throw new RuntimeException("Unable to remove legacy frontend lock: {$legacyLock}");
+                }
+            }
+
             $this->processRunner->run(['bun', 'install'], $this->projectRoot);
         });
         $this->step($journal, 'application', function (): void {
@@ -137,7 +145,8 @@ final class Installer
         $journal->finish();
 
         if ($this->plan->deploy) {
-            outro('Accelerator v2 installed. Run vendor/bin/envoy run init --stage=test when the server is ready.');
+            $firstStage = $this->plan->deploymentMode === 'dual' ? 'staging' : 'production';
+            outro("Accelerator v2 installed. Complete .env.{$firstStage}, then run vendor/bin/envoy run init --stage={$firstStage}.");
 
             return;
         }
@@ -232,7 +241,7 @@ final class Installer
         $runtime = $this->renderEnvironment($template, $appKey);
         $example = $this->renderEnvironment($template, '');
 
-        $this->writeFile('.env', $runtime);
+        $this->writeFile('.env', $runtime, 0600);
         $this->writeFile('.env.example', $example);
     }
 
@@ -242,7 +251,8 @@ final class Installer
             return;
         }
 
-        $bridge = "@servers(['vps' => ['{$this->plan->sshHost}'], 'localhost' => '127.0.0.1'])\n\n"
+        $sshHost = var_export($this->plan->sshHost, true);
+        $bridge = "@servers(['vps' => [{$sshHost}], 'localhost' => '127.0.0.1'])\n\n"
             ."@import('vendor/wireninja/accelerator/resources/envoy/Envoy.blade.php')\n";
         $template = file_get_contents($this->packageRoot.'/.base-env.envoy.example');
 
@@ -251,39 +261,50 @@ final class Installer
         }
 
         $replacements = [
-            '{{ default_stage }}' => 'test',
+            '{{ default_stage }}' => $this->plan->deploymentMode === 'dual' ? 'staging' : 'production',
             '{{ project }}' => $this->plan->project,
             '{{ ssh_host }}' => $this->plan->sshHost,
             '{{ repo }}' => $this->plan->repository,
-            '{{ branch }}' => 'main',
-            '{{ php_version }}' => '8.5',
-            '{{ php_bin }}' => '',
-            '{{ package_manager_bin }}' => 'bun',
-            '{{ run_user }}' => 'www-data',
-            '{{ ssl_email }}' => '',
-            '{{ test_enabled }}' => 'true',
-            '{{ prod_enabled }}' => 'true',
-            '{{ domain }}' => $this->plan->domain,
-            '{{ root }}' => $this->plan->deployRoot,
-            '{{ group }}' => $this->plan->project.'_production',
+            '{{ branch }}' => $this->plan->repositoryBranch,
+            '{{ ssl_email }}' => $this->plan->adminEmail,
+            '{{ admin_name }}' => $this->plan->adminName,
+            '{{ admin_username }}' => $this->plan->adminUsername,
+            '{{ admin_email }}' => $this->plan->adminEmail,
+            '{{ admin_password_hash }}' => $this->plan->adminPasswordHash,
+            '{{ staging_enabled }}' => $this->boolean($this->plan->deploymentMode === 'dual'),
+            '{{ staging_domain }}' => $this->plan->stagingDomain,
+            '{{ staging_root }}' => $this->plan->stagingDeployRoot,
+            '{{ production_domain }}' => $this->plan->domain,
+            '{{ production_root }}' => $this->plan->deployRoot,
             '{{ http_runtime }}' => $this->plan->httpRuntime,
-            '{{ fpm_pool }}' => '',
-            '{{ fpm_socket }}' => '',
-            '{{ fpm_service }}' => '',
-            '{{ octane_server }}' => 'swoole',
-            '{{ octane_port }}' => '9010',
-            '{{ reverb_port }}' => '9011',
-            '{{ nightwatch_port }}' => '2410',
+            '{{ horizon_enabled }}' => $this->boolean($this->hasFeature('horizon')),
+            '{{ queue_worker_enabled }}' => $this->boolean(! $this->hasFeature('horizon')),
+            '{{ queue_connection }}' => $this->plan->useRedis ? 'redis' : 'database',
+            '{{ reverb_enabled }}' => $this->boolean($this->hasFeature('reverb')),
+            '{{ nightwatch_enabled }}' => $this->boolean($this->hasFeature('nightwatch')),
         ];
 
         $this->writeFile('Envoy.blade.php', $bridge);
-        $this->writeFile('.env.envoy', strtr($template, $replacements));
+        $this->writeFile('.env.envoy', strtr($template, $replacements), 0600);
 
         $runtime = file_get_contents($this->projectRoot.'/.env.example');
 
         if (is_string($runtime)) {
-            $this->writeFile('.env.staging', $this->productionEnvironment($runtime, 'staging'));
-            $this->writeFile('.env.production', $this->productionEnvironment($runtime, 'production'));
+            if ($this->plan->deploymentMode === 'dual') {
+                $this->writeFile('.env.staging', $this->productionEnvironment(
+                    $runtime,
+                    'staging',
+                    $this->plan->stagingDomain,
+                    $this->plan->stagingDeployRoot,
+                ), 0600);
+            }
+
+            $this->writeFile('.env.production', $this->productionEnvironment(
+                $runtime,
+                'production',
+                $this->plan->domain,
+                $this->plan->deployRoot,
+            ), 0600);
         }
     }
 
@@ -479,6 +500,16 @@ final class Installer
             'VITE_APP_NAME' => '"'.addcslashes($this->plan->appName, '"\\').'"',
         ];
 
+        if ($this->hasFeature('reverb') && $appKey !== '') {
+            $reverbKey = bin2hex(random_bytes(16));
+            $values += [
+                'REVERB_APP_ID' => bin2hex(random_bytes(8)),
+                'REVERB_APP_KEY' => $reverbKey,
+                'REVERB_APP_SECRET' => bin2hex(random_bytes(32)),
+                'VITE_REVERB_APP_KEY' => $reverbKey,
+            ];
+        }
+
         if ($this->plan->database !== 'sqlite') {
             $values += [
                 'DB_HOST' => '127.0.0.1',
@@ -496,18 +527,36 @@ final class Installer
         return rtrim($template).PHP_EOL;
     }
 
-    private function productionEnvironment(string $contents, string $environment): string
+    private function productionEnvironment(string $contents, string $stage, string $domain, string $deployRoot): string
     {
         $contents = $this->setEnvironmentValue($contents, 'APP_ENV', 'production');
+        $contents = $this->setEnvironmentValue($contents, 'APP_KEY', 'base64:'.base64_encode(random_bytes(32)));
         $contents = $this->setEnvironmentValue($contents, 'APP_DEBUG', 'false');
-        $contents = $this->setEnvironmentValue($contents, 'APP_URL', "https://{$this->plan->domain}");
+        $contents = $this->setEnvironmentValue($contents, 'APP_URL', "https://{$domain}");
         $contents = $this->setEnvironmentValue($contents, 'LOG_LEVEL', 'error');
 
-        if ($environment === 'staging') {
-            $contents = $this->setEnvironmentValue($contents, 'APP_URL', "https://staging.{$this->plan->domain}");
+        if ($this->plan->database === 'sqlite') {
+            $contents = $this->setEnvironmentValue($contents, 'DB_DATABASE', rtrim($deployRoot, '/').'/shared/database/database.sqlite');
+        } else {
+            $database = str_replace('-', '_', $this->plan->project).'_'.$stage;
+            $contents = $this->setEnvironmentValue($contents, 'DB_DATABASE', $database);
         }
 
-        foreach (['APP_KEY', 'DB_PASSWORD', 'GOOGLE_CLIENT_SECRET', 'NIGHTWATCH_TOKEN', 'REVERB_APP_SECRET', 'TELEGRAM_BOT_TOKEN', 'VAPID_PRIVATE_KEY'] as $key) {
+        if ($this->hasFeature('reverb')) {
+            $reverbKey = bin2hex(random_bytes(16));
+            $contents = $this->setEnvironmentValue($contents, 'REVERB_APP_ID', bin2hex(random_bytes(8)));
+            $contents = $this->setEnvironmentValue($contents, 'REVERB_APP_KEY', $reverbKey);
+            $contents = $this->setEnvironmentValue($contents, 'REVERB_APP_SECRET', bin2hex(random_bytes(32)));
+            $contents = $this->setEnvironmentValue($contents, 'REVERB_HOST', $domain);
+            $contents = $this->setEnvironmentValue($contents, 'REVERB_PORT', '443');
+            $contents = $this->setEnvironmentValue($contents, 'REVERB_SCHEME', 'https');
+            $contents = $this->setEnvironmentValue($contents, 'VITE_REVERB_APP_KEY', $reverbKey);
+            $contents = $this->setEnvironmentValue($contents, 'VITE_REVERB_HOST', $domain);
+            $contents = $this->setEnvironmentValue($contents, 'VITE_REVERB_PORT', '443');
+            $contents = $this->setEnvironmentValue($contents, 'VITE_REVERB_SCHEME', 'https');
+        }
+
+        foreach (['DB_PASSWORD', 'GOOGLE_CLIENT_SECRET', 'NIGHTWATCH_TOKEN', 'TELEGRAM_BOT_TOKEN', 'VAPID_PRIVATE_KEY'] as $key) {
             $contents = $this->setEnvironmentValue($contents, $key, '');
         }
 
@@ -520,7 +569,7 @@ final class Installer
         $replacement = "{$key}={$value}";
 
         if (preg_match($pattern, $contents) === 1) {
-            return (string) preg_replace($pattern, $replacement, $contents, 1);
+            return (string) preg_replace_callback($pattern, static fn (): string => $replacement, $contents, 1);
         }
 
         return rtrim($contents).PHP_EOL.$replacement.PHP_EOL;
@@ -707,7 +756,7 @@ final class Installer
         ]);
     }
 
-    private function writeFile(string $relativePath, string $contents): void
+    private function writeFile(string $relativePath, string $contents, int $permissions = 0644): void
     {
         $path = $this->projectRoot.'/'.$relativePath;
         $directory = dirname($path);
@@ -718,7 +767,11 @@ final class Installer
 
         $temporaryPath = $path.'.accelerator-tmp';
 
-        if (file_put_contents($temporaryPath, $contents, LOCK_EX) === false || ! rename($temporaryPath, $path)) {
+        if (
+            file_put_contents($temporaryPath, $contents, LOCK_EX) === false
+            || ! chmod($temporaryPath, $permissions)
+            || ! rename($temporaryPath, $path)
+        ) {
             throw new RuntimeException("Unable to write file: {$relativePath}");
         }
     }

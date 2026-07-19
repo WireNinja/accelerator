@@ -37,9 +37,12 @@ Options:
   exposing it in shell history. Without it, a secure password is shown once.
   --features=filament,fortify,panels,settings,ticketing,pwa,insider,scout,wayfinder
   --redis
-  --deploy --project=app --ssh-host=onidel --repo=git@example/app.git \
-    --domain=app.example.com --deploy-root=/var/www/app.example.com \
-    --http-runtime=octane
+  --deploy --deployment-mode=single --project=app --ssh-host=server \
+    --repo=git@example/app.git --branch=main --domain=app.example.com \
+    --deploy-root=/var/www/app.example.com --http-runtime=octane
+
+  For dual stages, use --deployment-mode=dual plus --staging-domain and
+  --staging-deploy-root. Deployment is production-only by default.
 HELP;
     echo PHP_EOL;
 

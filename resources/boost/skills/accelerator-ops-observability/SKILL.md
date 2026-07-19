@@ -17,12 +17,12 @@ Use `accelerator-env-config` when the task is about `.env`, `.env.envoy`, config
 Use Envoy for deploy/service state:
 
 ```bash
-vendor/bin/envoy run status --stage=test
-vendor/bin/envoy run releases --stage=test
-vendor/bin/envoy run logs --stage=test --service=octane
+vendor/bin/envoy run status --stage=staging
+vendor/bin/envoy run releases --stage=staging
+vendor/bin/envoy run logs --stage=staging --service=octane
 ```
 
-Use `--stage=prod` only after confirming production is the intended target.
+Use `--stage=production` only after confirming production is the intended target.
 Do not run `restart`, `deploy`, `rollback`, `bootstrap`, or `prune` from this skill unless the user explicitly asks for a mutating operation; switch to `accelerator-deployment` for that workflow.
 
 ## Backup Status
@@ -97,7 +97,7 @@ curl -s -o /dev/null -w "%{http_code}" -H "Host: {domain}" http://127.0.0.1:{oct
 curl -s -o /dev/null -w "%{http_code}" -L https://{domain}/up
 ```
 
-Use the health command matching `OPS_DEPLOY_{STAGE}_HTTP_RUNTIME`. Envoy checks Octane directly, while FPM is checked through the Nginx vhost.
+Use the health command matching `OPS_DEPLOY_{STAGE}_HTTP_RUNTIME`. Envoy always checks `/up` through the rendered Nginx vhost so the public routing boundary and selected backend are both exercised.
 
 ## Reaudit After Cleanup
 
@@ -121,10 +121,10 @@ Expected clean state:
 
 ## OPcache
 
-- Per-release `opcache_invalidate()` during deploy.
-- Do NOT use global `opcache_reset()` as the default — OPcache may be shared with unrelated PHP apps.
-- Healthy deploy state has `restart_pending=false` after the deploy settles.
-- If `validate_timestamps=false`, changed PHP files require deploy invalidation + service restart.
+- PHP-FPM releases use distinct real paths, so new code receives distinct OPcache keys without reloading a shared FPM service.
+- Octane deploys restart only the configured stage Supervisor group, replacing that process-owned cache state.
+- Do not use global `opcache_reset()` as a deploy default; OPcache may be shared with unrelated PHP applications.
+- Healthy runtime state has `restart_pending=false` after deployment settles.
 
 ## Nightwatch
 

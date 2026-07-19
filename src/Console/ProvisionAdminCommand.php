@@ -42,12 +42,26 @@ final class ProvisionAdminCommand extends Command
         $existing = $userClass::query()
             ->where('email', $email)
             ->orWhere('username', $username)
-            ->exists();
+            ->first();
 
-        if ($existing) {
-            $this->components->error('The Super Admin email or username is already in use.');
+        if ($existing !== null) {
+            if (! $existing instanceof AcceleratorUser) {
+                throw new LogicException('The configured user model is incompatible with Accelerator.');
+            }
 
-            return self::FAILURE;
+            $sameIdentity = strtolower((string) $existing->getAttribute('email')) === $email
+                && strtolower((string) $existing->getAttribute('username')) === $username;
+
+            if (! $sameIdentity) {
+                $this->components->error('The Super Admin email or username is already in use by another identity.');
+
+                return self::FAILURE;
+            }
+
+            $existing->syncRoles([$this->ensureApplicationRoles()]);
+            $this->components->success("Super Admin [{$email}] is already provisioned.");
+
+            return self::SUCCESS;
         }
 
         DB::transaction(function () use ($email, $name, $passwordHash, $userClass, $username): void {

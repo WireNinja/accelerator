@@ -1,1397 +1,1024 @@
-{{--
-  Accelerator Envoy release deployer
-  ----------------------------------
-
-  This file is intentionally shell-first. It does not bootstrap Laravel.
-  Deployment config is read from `.env.envoy` in the project root using a tiny
-  local PHP parser.
-
-  Stories:
-    init         First-time deploy. Layout + first release. SKIPS db-backup,
-                 maintenance, prune (would crash on empty state).
-    deploy       Continuous full deploy with asset rebuild. INCLUDES db-backup,
-                 maintenance window, health-check, prune.
-    deploy-slim  Continuous deploy minus build-release (hot patch backend only).
-    deploy-fresh-seed
-                 DESTRUCTIVE redeploy that runs migrate:fresh --seed with dev
-                 dependencies available, then prunes dev packages before switch.
-    rollback    Atomic switch back to a verified previous release. NO maintenance
-                 window — emergency speed prioritised.
-    releases     Print release history + current pointer + prune target.
-    status, restart, logs
-                 Operate only on programs configured for the selected stage.
---}}
+{{-- WireNinja Accelerator v2 deployment bridge. Laravel is never booted here. --}}
 
 @setup
-    $root = getcwd();
-    $envoyFile = $root.'/.env.envoy';
-
-    if (! is_file($envoyFile)) {
-        throw new RuntimeException('Missing .env.envoy. Create it from OPS_DEPLOY_* values before running Envoy.');
-    }
-
-    $parseEnvFile = function (string $path): array {
-        $values = [];
-
-        foreach (file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
-            $line = trim($line);
-
-            if ($line === '' || str_starts_with($line, '#') || ! str_contains($line, '=')) {
-                continue;
-            }
-
-            [$key, $value] = explode('=', $line, 2);
-            $key = trim($key);
-            $value = trim($value);
-
-            if (
-                (str_starts_with($value, '"') && str_ends_with($value, '"')) ||
-                (str_starts_with($value, "'") && str_ends_with($value, "'"))
-            ) {
-                $value = substr($value, 1, -1);
-            }
-
-            $values[$key] = $value;
-        }
-
-        return $values;
-    };
-
-    $value = function (array $env, string $key, ?string $default = null): string {
-        return array_key_exists($key, $env) && $env[$key] !== '' ? $env[$key] : (string) $default;
-    };
-
-    $truthy = fn (string $value): bool => in_array(strtolower($value), ['1', 'true', 'yes', 'on'], true);
-
-    $envoy = $parseEnvFile($envoyFile);
-    $stage = isset($stage) ? $stage : (isset($env) ? $env : $value($envoy, 'OPS_DEPLOY_DEFAULT_STAGE', 'test'));
-    $stageKey = strtoupper($stage);
-
-    if (! in_array($stage, ['test', 'prod'], true)) {
-        throw new InvalidArgumentException('Unsupported deploy stage ['.$stage.']. Expected [test] or [prod].');
-    }
-
-    $enabled = $truthy($value($envoy, "OPS_DEPLOY_{$stageKey}_ENABLED", 'true'));
-
-    if (! $enabled) {
-        throw new RuntimeException('Deploy stage ['.$stage.'] is disabled in .env.envoy.');
-    }
-
-    $remoteCommandPath = function (string $sshHost, array $commands): string {
-        $candidates = implode(' ', array_map('escapeshellarg', $commands));
-        $script = "for c in {$candidates}; do command -v \"\$c\" 2>/dev/null && exit 0; done";
-
-        return trim((string) shell_exec('ssh '.escapeshellarg($sshHost).' '.escapeshellarg($script).' 2>/dev/null'));
-    };
-
-    $phpVersionFromBin = function (string $phpBin): string {
-        $phpCommand = basename($phpBin);
-
-        return preg_match('/php(\d+\.\d+)/', $phpCommand, $matches) === 1 ? $matches[1] : '';
-    };
-
-    $remoteSystemdServiceExists = function (string $sshHost, string $service): bool {
-        $script = 'systemctl list-unit-files '.escapeshellarg($service).' --no-legend 2>/dev/null | grep -q . || systemctl status '.escapeshellarg($service).' >/dev/null 2>&1';
-
-        exec('ssh '.escapeshellarg($sshHost).' '.escapeshellarg($script).' 2>/dev/null', $output, $status);
-
-        return $status === 0;
-    };
-
-    $remoteFpmSocket = function (string $sshHost, string $phpBin, string $phpVersion = '', string $fpmPool = '') use ($phpVersionFromBin): string {
-        $socketCandidates = [];
-        $version = $phpVersion !== '' ? $phpVersion : $phpVersionFromBin($phpBin);
-
-        if ($version !== '' && $fpmPool !== '') {
-            $socketCandidates[] = "/run/php/php{$version}-fpm-{$fpmPool}.sock";
-        }
-
-        if ($version !== '') {
-            $socketCandidates[] = "/run/php/php{$version}-fpm.sock";
-        }
-
-        if ($fpmPool !== '') {
-            foreach (['8.5', '8.4', '8.3'] as $fallbackVersion) {
-                $socketCandidates[] = "/run/php/php{$fallbackVersion}-fpm-{$fpmPool}.sock";
-            }
-        }
-
-        $socketCandidates = array_values(array_unique([
-            ...$socketCandidates,
-            '/run/php/php8.5-fpm.sock',
-            '/run/php/php8.4-fpm.sock',
-            '/run/php/php8.3-fpm.sock',
-            '/run/php/php-fpm.sock',
-        ]));
-        $candidates = implode(' ', array_map('escapeshellarg', $socketCandidates));
-        $script = "for s in {$candidates}; do test -S \"\$s\" && echo \"\$s\" && exit 0; done";
-
-        return trim((string) shell_exec('ssh '.escapeshellarg($sshHost).' '.escapeshellarg($script).' 2>/dev/null'));
-    };
-
-    $project = $value($envoy, 'OPS_DEPLOY_PROJECT', 'laravel');
-    $domain = $value($envoy, "OPS_DEPLOY_{$stageKey}_DOMAIN");
-    $deployRoot = rtrim($value($envoy, "OPS_DEPLOY_{$stageKey}_ROOT"), '/');
-    $repo = $value($envoy, "OPS_DEPLOY_{$stageKey}_REPO", $value($envoy, 'OPS_DEPLOY_REPO'));
-    $branch = $value($envoy, "OPS_DEPLOY_{$stageKey}_BRANCH", $value($envoy, 'OPS_DEPLOY_BRANCH', 'main'));
-    $group = $value($envoy, "OPS_DEPLOY_{$stageKey}_GROUP");
-    $runUser = $value($envoy, "OPS_DEPLOY_{$stageKey}_RUN_USER", $value($envoy, 'OPS_DEPLOY_RUN_USER', 'www-data'));
-    $sshHost = $value($envoy, "OPS_DEPLOY_{$stageKey}_SSH_HOST", $value($envoy, 'OPS_DEPLOY_SSH_HOST', 'onidel'));
-    $phpVersion = $value($envoy, "OPS_DEPLOY_{$stageKey}_PHP_VERSION", $value($envoy, 'OPS_DEPLOY_PHP_VERSION'));
-    $fpmPool = $value($envoy, "OPS_DEPLOY_{$stageKey}_FPM_POOL", $value($envoy, 'OPS_DEPLOY_FPM_POOL'));
-    $phpBin = $value($envoy, "OPS_DEPLOY_{$stageKey}_PHP_BIN", $value($envoy, 'OPS_DEPLOY_PHP_BIN'));
-
-    if ($phpBin === '') {
-        $phpBinCandidates = $phpVersion !== '' ? ["php{$phpVersion}"] : ['php8.5', 'php8.4', 'php8.3', 'php'];
-        $phpBin = $remoteCommandPath($sshHost, $phpBinCandidates) ?: ($phpVersion !== '' ? "php{$phpVersion}" : 'php');
-    }
-
-    if ($phpVersion === '') {
-        $phpVersion = $phpVersionFromBin($phpBin);
-    }
-
-    $packageManagerBin = $value(
-        $envoy,
-        "OPS_DEPLOY_{$stageKey}_PACKAGE_MANAGER_BIN",
-        $value($envoy, 'OPS_DEPLOY_PACKAGE_MANAGER_BIN', $value($envoy, "OPS_DEPLOY_{$stageKey}_NPM_BIN", $value($envoy, 'OPS_DEPLOY_NPM_BIN')))
-    );
-
-    if ($packageManagerBin === '') {
-        $packageManagerBin = $remoteCommandPath($sshHost, ['pnpm', 'bun', 'npm']) ?: 'npm';
-    }
-
-    $httpRuntime = $value($envoy, "OPS_DEPLOY_{$stageKey}_HTTP_RUNTIME", 'fpm');
-    $octaneServer = $value($envoy, "OPS_DEPLOY_{$stageKey}_OCTANE_SERVER", $value($envoy, "OPS_DEPLOY_{$stageKey}_RUNTIME", 'swoole'));
-    $fpmSocket = $value($envoy, "OPS_DEPLOY_{$stageKey}_FPM_SOCKET");
-    $fpmService = $value($envoy, "OPS_DEPLOY_{$stageKey}_FPM_SERVICE", $value($envoy, 'OPS_DEPLOY_FPM_SERVICE'));
-
-    if ($fpmSocket === '') {
-        $fpmSocket = $remoteFpmSocket($sshHost, $phpBin, $phpVersion, $fpmPool) ?: ($phpVersion !== '' ? "/run/php/php{$phpVersion}-fpm.sock" : '/run/php/php8.5-fpm.sock');
-    }
-
-    if ($fpmService === '' && $phpVersion !== '') {
-        $dedicatedFpmService = $fpmPool !== '' ? "php{$phpVersion}-fpm-{$fpmPool}.service" : '';
-        $sharedFpmService = "php{$phpVersion}-fpm.service";
-        $fpmService = $dedicatedFpmService !== '' && $remoteSystemdServiceExists($sshHost, $dedicatedFpmService)
-            ? $dedicatedFpmService
-            : $sharedFpmService;
-    }
-
-    $octanePort = $value($envoy, "OPS_DEPLOY_{$stageKey}_OCTANE_PORT");
-    $octaneWorkers = $value($envoy, "OPS_DEPLOY_{$stageKey}_OCTANE_WORKERS", '1');
-    $octaneTaskWorkers = $value($envoy, "OPS_DEPLOY_{$stageKey}_OCTANE_TASK_WORKERS", '1');
-    $horizonEnabled = $truthy($value($envoy, "OPS_DEPLOY_{$stageKey}_HORIZON_ENABLED", 'false'));
-    $queueWorkerEnabled = $truthy($value($envoy, "OPS_DEPLOY_{$stageKey}_QUEUE_WORKER_ENABLED", 'false'));
-    $queueWorkerConnection = $value($envoy, "OPS_DEPLOY_{$stageKey}_QUEUE_WORKER_CONNECTION", 'redis');
-    $queueWorkerQueue = $value($envoy, "OPS_DEPLOY_{$stageKey}_QUEUE_WORKER_QUEUE", 'default');
-    $queueWorkerProcesses = $value($envoy, "OPS_DEPLOY_{$stageKey}_QUEUE_WORKER_PROCESSES", '1');
-    $reverbEnabled = $truthy($value($envoy, "OPS_DEPLOY_{$stageKey}_REVERB_ENABLED", 'false'));
-    $reverbPort = $value($envoy, "OPS_DEPLOY_{$stageKey}_REVERB_PORT");
-    $schedulerEnabled = $truthy($value($envoy, "OPS_DEPLOY_{$stageKey}_SCHEDULER_ENABLED", 'false'));
-    $nightwatchEnabled = $truthy($value($envoy, "OPS_DEPLOY_{$stageKey}_NIGHTWATCH_ENABLED", 'false'));
-    $nightwatchPort = $value($envoy, "OPS_DEPLOY_{$stageKey}_NIGHTWATCH_PORT");
-    $keepReleases = (int) $value($envoy, 'OPS_DEPLOY_KEEP_RELEASES', '5');
-    $service = isset($service) ? $service : 'all';
-    $seedEnvFile = $root.'/'.($stage === 'prod' ? '.env.production' : '.env.staging');
-    $freshSeedConfirmationPhrase = 'aku mengkonfirmasi remigrate fresh seed';
-    $freshSeedConfirmation = isset($iUnderstandThisWillDropAndReseedDatabase)
-        ? (string) $iUnderstandThisWillDropAndReseedDatabase
-        : (isset($i_understand_this_will_drop_and_reseed_database) ? (string) $i_understand_this_will_drop_and_reseed_database : '');
+    $projectRoot = getcwd();
     $requestedTask = isset($__task) ? (string) $__task : '';
-    $freshSeedProtectedTasks = ['deploy-fresh-seed', 'assert-fresh-seed-confirmed', 'prepare-laravel-fresh-seed'];
+    $requestedStage = isset($stage) && is_string($stage) ? $stage : null;
+    $config = \WireNinja\Accelerator\Deployment\DeploymentConfig::load($projectRoot, $requestedStage);
+    $renderer = new \WireNinja\Accelerator\Deployment\DeploymentRenderer($config);
+    $truthy = static fn (mixed $value): bool => in_array(strtolower((string) $value), ['1', 'true', 'yes', 'on'], true);
 
-    if (in_array($requestedTask, $freshSeedProtectedTasks, true) && $freshSeedConfirmation !== $freshSeedConfirmationPhrase) {
+    $releaseSha = trim((string) shell_exec('git rev-parse HEAD 2>/dev/null'));
+    if (preg_match('/^[a-f0-9]{40}$/', $releaseSha) !== 1) {
+        throw new RuntimeException('Deployment requires a Git commit at the project root.');
+    }
+
+    $releaseShortSha = substr($releaseSha, 0, 8);
+    $initialRelease = $requestedTask === 'init';
+    $freshSeed = $requestedTask === 'deploy-fresh-seed';
+    $releaseId = $initialRelease
+        ? 'init_'.$releaseSha
+        : date('Y-m-d_H-i-s').'_'.$releaseShortSha.'_'.bin2hex(random_bytes(2)).($freshSeed ? '_fresh' : '');
+    $releasePath = $config->releasesPath().'/'.$releaseId;
+    $releaseEnvironmentPath = $config->sharedPath().'/env/'.$releaseId.'.env';
+    $nextSymlink = $config->deployRoot.'/current.next';
+    $rollbackSymlink = $config->deployRoot.'/current.rollback';
+    $maintenanceOwner = $config->sharedPath().'/.accelerator-maintenance-owner';
+    $allowDestructiveMigrations = $truthy($allowDestructiveMigrations ?? false);
+    $freshSeedConfirmationPhrase = 'aku mengkonfirmasi remigrate fresh seed';
+    $freshSeedConfirmation = (string) ($iUnderstandThisWillDropAndReseedDatabase ?? '');
+
+    if ($freshSeed && $freshSeedConfirmation !== $freshSeedConfirmationPhrase) {
         throw new RuntimeException(
             'Refusing destructive fresh-seed deploy. Re-run with --i-understand-this-will-drop-and-reseed-database="'.
-            $freshSeedConfirmationPhrase.
-            '".'
+            $freshSeedConfirmationPhrase.'".'
         );
     }
 
-    foreach (['domain' => $domain, 'root' => $deployRoot, 'repo' => $repo, 'group' => $group] as $name => $required) {
-        if ($required === '') {
-            throw new RuntimeException("Missing OPS deploy {$name} for stage [{$stage}] in .env.envoy.");
-        }
+    $service = isset($service) ? (string) $service : 'all';
+    if (! in_array($service, ['all', 'octane', 'horizon', 'queue', 'reverb', 'scheduler', 'nightwatch'], true)) {
+        throw new InvalidArgumentException("Unsupported service [{$service}].");
     }
 
-    if (! in_array($httpRuntime, ['fpm', 'octane'], true)) {
-        throw new RuntimeException("Invalid HTTP runtime [{$httpRuntime}] for stage [{$stage}]. Expected [fpm] or [octane].");
-    }
+    $nginxHttp = $renderer->nginx(false);
+    $nginxSsl = $renderer->nginx(true);
+    $supervisor = $renderer->supervisor();
+    $nginxHttpBase64 = base64_encode($nginxHttp);
+    $nginxSslBase64 = base64_encode($nginxSsl);
+    $supervisorBase64 = base64_encode($supervisor);
+    $nginxHttpHash = hash('sha256', $nginxHttp);
+    $nginxSslHash = hash('sha256', $nginxSsl);
+    $supervisorHash = hash('sha256', $supervisor);
+    $hasSupervisorPrograms = $config->hasSupervisorPrograms();
 
-    if ($phpVersion !== '' && preg_match('/^\d+\.\d+$/', $phpVersion) !== 1) {
-        throw new RuntimeException("Invalid PHP version [{$phpVersion}]. Expected a major.minor value such as [8.5] or [8.4].");
-    }
-
-    if ($fpmPool !== '' && preg_match('/^[A-Za-z0-9_.-]+$/', $fpmPool) !== 1) {
-        throw new RuntimeException("Invalid FPM pool [{$fpmPool}]. Use only letters, numbers, dots, underscores, or dashes.");
-    }
-
-    if ($fpmService !== '' && preg_match('/^[A-Za-z0-9_.@-]+\.service$/', $fpmService) !== 1) {
-        throw new RuntimeException("Invalid FPM service [{$fpmService}]. Expected a systemd service unit name.");
-    }
-
-    if ($httpRuntime === 'fpm' && $fpmSocket === '') {
-        throw new RuntimeException("Unable to resolve FPM socket for stage [{$stage}]. Set OPS_DEPLOY_PHP_VERSION with optional OPS_DEPLOY_{$stageKey}_FPM_POOL, or provide OPS_DEPLOY_{$stageKey}_FPM_SOCKET as an override.");
-    }
-
-    if ($httpRuntime === 'octane') {
-        if ($octanePort === '') {
-            throw new RuntimeException("Missing OPS_DEPLOY_{$stageKey}_OCTANE_PORT for Octane stage [{$stage}].");
-        }
-
-        if (! in_array($octaneServer, ['swoole', 'roadrunner', 'frankenphp'], true)) {
-            throw new RuntimeException("Invalid Octane server [{$octaneServer}] for stage [{$stage}].");
-        }
-
-        if (! ctype_digit($octaneWorkers) || (int) $octaneWorkers < 1) {
-            throw new RuntimeException("OPS_DEPLOY_{$stageKey}_OCTANE_WORKERS must be an integer greater than zero.");
-        }
-
-        if (! ctype_digit($octaneTaskWorkers)) {
-            throw new RuntimeException("OPS_DEPLOY_{$stageKey}_OCTANE_TASK_WORKERS must be a non-negative integer.");
-        }
-
-        if ($octaneServer === 'swoole' && (int) $octaneTaskWorkers < 1) {
-            throw new RuntimeException("OPS_DEPLOY_{$stageKey}_OCTANE_TASK_WORKERS must be greater than zero for Swoole because Laravel Octane dispatches its server tick through the task queue.");
-        }
-    }
-
-    if ($horizonEnabled && $queueWorkerEnabled) {
-        throw new RuntimeException("OPS_DEPLOY_{$stageKey}_HORIZON_ENABLED and OPS_DEPLOY_{$stageKey}_QUEUE_WORKER_ENABLED cannot both be true.");
-    }
-
-    if ($queueWorkerEnabled) {
-        if (! preg_match('/^[A-Za-z0-9_.-]+$/', $queueWorkerConnection) || ! preg_match('/^[A-Za-z0-9_,.-]+$/', $queueWorkerQueue)) {
-            throw new RuntimeException("Invalid queue worker connection or queue for stage [{$stage}].");
-        }
-
-        if (! ctype_digit($queueWorkerProcesses) || (int) $queueWorkerProcesses < 1) {
-            throw new RuntimeException("OPS_DEPLOY_{$stageKey}_QUEUE_WORKER_PROCESSES must be an integer greater than zero.");
-        }
-    }
-
-    if ($reverbEnabled && (! ctype_digit($reverbPort) || (int) $reverbPort < 1)) {
-        throw new RuntimeException("OPS_DEPLOY_{$stageKey}_REVERB_PORT must be an integer greater than zero when Reverb is enabled.");
-    }
-
-    if ($nightwatchEnabled && (! ctype_digit($nightwatchPort) || (int) $nightwatchPort < 1)) {
-        throw new RuntimeException("OPS_DEPLOY_{$stageKey}_NIGHTWATCH_PORT must be an integer greater than zero when Nightwatch is enabled.");
-    }
-
-    $sharedPath = $deployRoot.'/shared';
-    $releasesPath = $deployRoot.'/releases';
-    $archivePath = $deployRoot.'/archive';
-    $currentPath = $deployRoot.'/current';
-    $releaseSha = trim((string) shell_exec('git ls-remote '.escapeshellarg($repo).' '.escapeshellarg($branch).' | awk \'{print $1}\''));
-
-    if ($releaseSha === '') {
-        throw new RuntimeException("Unable to resolve remote SHA for [{$repo}] [{$branch}].");
-    }
-
-    $releaseShortSha = substr($releaseSha, 0, 7);
-    $releaseId = date('Y-m-d_H-i-s').'_'.$releaseShortSha;
-    $releasePath = $releasesPath.'/'.$releaseId;
-    $nextSymlink = $deployRoot.'/current.next';
-    $rollbackSymlink = $deployRoot.'/current.rollback';
-
-    /*
-     * Maintenance secret — random per deploy, surfaced once in Envoy output so
-     * the operator can bypass the down() page during the migrate window.
-     */
-    $maintenanceSecret = bin2hex(random_bytes(16));
-
-    /*
-     * Bootstrap stub paths — used by `bootstrap-nginx` / `bootstrap-supervisor`
-     * to render initial /etc/nginx + /etc/supervisor config.
-     *
-     * The stubs ship with the accelerator package; resolve from vendor first,
-     * fall back to the in-tree path when running from the package itself.
-     */
-    $nginxStub = $root.'/vendor/wireninja/accelerator/stubs/vps/nginx-vhost-http.conf.stub';
-    if (! is_file($nginxStub)) {
-        $nginxStub = $root.'/packages/accelerator/stubs/vps/nginx-vhost-http.conf.stub';
-    }
-    $nginxSslStub = $root.'/vendor/wireninja/accelerator/stubs/vps/nginx-vhost-ssl.conf.stub';
-    if (! is_file($nginxSslStub)) {
-        $nginxSslStub = $root.'/packages/accelerator/stubs/vps/nginx-vhost-ssl.conf.stub';
-    }
-    $supervisorStub = $root.'/vendor/wireninja/accelerator/stubs/vps/supervisor.conf.stub';
-    if (! is_file($supervisorStub)) {
-        $supervisorStub = $root.'/packages/accelerator/stubs/vps/supervisor.conf.stub';
-    }
-
-    $sslEmail = $value($envoy, 'OPS_DEPLOY_SSL_EMAIL', 'admin@'.$domain);
-
-    $octaneServerCommand = "octane:start --server={$octaneServer}";
-    $octaneTaskWorkersOption = $octaneServer === 'swoole'
-        ? "--task-workers={$octaneTaskWorkers}"
-        : '';
-
-    /*
-     * Render bootstrap stubs locally so we can scp the rendered output to the
-     * VPS. Pure str_replace — keeps stubs framework-free and reviewable.
-     */
-    $replaceVars = function (string $content, array $vars): string {
-        foreach ($vars as $key => $value) {
-            $content = str_replace('{' . '{ ' . $key . ' }' . '}', (string) $value, $content);
-            $content = str_replace('%%'.$key.'%%', (string) $value, $content);
-        }
-
-        return $content;
-    };
-
-    $renderStub = function (string $stubPath, array $vars) use ($replaceVars): string {
-        if (! is_file($stubPath)) {
-            throw new RuntimeException("Bootstrap stub not found: {$stubPath}");
-        }
-
-        return $replaceVars(file_get_contents($stubPath), $vars);
-    };
-
-    $reverbLocation = $reverbEnabled ? $replaceVars(<<<'NGINX'
-    # Reverb websocket
-    location ~ ^/(app|apps|pusher)/ {
-        proxy_pass http://127.0.0.1:%%reverb_port%%;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header X-Forwarded-Port $server_port;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "Upgrade";
-    }
-
-NGINX, ['reverb_port' => $reverbPort]) : '';
-
-    if ($httpRuntime === 'octane') {
-        $dynamicFallback = '@octane';
-        $applicationLocations = $replaceVars(<<<'NGINX'
-    # Static assets - nginx serves directly, fallback to Octane
-    location = /index.php { try_files /not_exists @octane; }
-    location ~* \.(css|js|png|jpg|jpeg|gif|ico|svg|webp|woff|woff2|ttf|eot|map|txt)$ {
-        try_files $uri @octane;
-        expires 365d;
-        add_header Cache-Control "public, immutable";
-    }
-
-    location / { try_files $uri @octane; }
-
-    location @octane {
-        set $suffix "";
-        if ($uri = /index.php) { set $suffix ?$query_string; }
-        proxy_pass http://127.0.0.1:%%octane_port%%$suffix;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "";
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header X-Forwarded-Port $server_port;
-        proxy_set_header X-Forwarded-Host $host;
-        proxy_buffering off;
-        proxy_read_timeout 60s;
-    }
-NGINX, ['octane_port' => $octanePort]);
-    } else {
-        $dynamicFallback = '/index.php?$query_string';
-        $applicationLocations = $replaceVars(<<<'NGINX'
-    # Resolve the document-root request through Laravel's front controller.
-    index index.php;
-
-    # Static assets - nginx serves directly, fallback to PHP-FPM
-    location ~* \.(css|js|png|jpg|jpeg|gif|ico|svg|webp|woff|woff2|ttf|eot|map|txt)$ {
-        try_files $uri /index.php?$query_string;
-        expires 365d;
-        add_header Cache-Control "public, immutable";
-    }
-
-    location / { try_files $uri $uri/ /index.php?$query_string; }
-
-    location ~ \.php$ {
-        try_files $uri =404;
-        fastcgi_pass unix:%%fpm_socket%%;
-        fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;
-        include fastcgi_params;
-        fastcgi_hide_header X-Powered-By;
-    }
-NGINX, ['fpm_socket' => $fpmSocket]);
-    }
-
-    $serviceWorkerLocation = $replaceVars(<<<'NGINX'
-    # SW served from /build/ but must be at root scope for PWA
-    location = /build/sw.js {
-        rewrite ^ /sw.js break;
-        expires 0;
-        add_header Cache-Control "no-cache";
-        default_type application/javascript;
-        try_files $uri %%dynamic_fallback%%;
-    }
-
-NGINX, ['dynamic_fallback' => $dynamicFallback]);
-
-    $supervisorProgramNames = [];
-    $supervisorDefinitions = [];
-    $addSupervisorProgram = function (string $program, string $definition) use (&$supervisorProgramNames, &$supervisorDefinitions): void {
-        $supervisorProgramNames[] = $program;
-        $supervisorDefinitions[] = $definition;
-    };
-
-    if ($httpRuntime === 'octane') {
-        $addSupervisorProgram("{$group}_octane", $replaceVars(<<<'CONF'
-[program:%%group%%_octane]
-command=%%php_bin%% -d upload_max_filesize=100M -d post_max_size=110M %%root%%/current/artisan %%octane_server_command%% --host=127.0.0.1 --port=%%octane_port%% --workers=%%octane_workers%% %%octane_task_workers_option%%
-directory=%%root%%/current
-user=%%run_user%%
-autostart=true
-autorestart=true
-stopasgroup=true
-killasgroup=true
-stdout_logfile=%%root%%/shared/storage/logs/octane.log
-stdout_logfile_maxbytes=20MB
-stdout_logfile_backups=5
-redirect_stderr=true
-CONF, [
-            'group' => $group,
-            'php_bin' => $phpBin,
-            'root' => $deployRoot,
-            'octane_server_command' => $octaneServerCommand,
-            'octane_port' => $octanePort,
-            'octane_workers' => $octaneWorkers,
-            'octane_task_workers_option' => $octaneTaskWorkersOption,
-            'run_user' => $runUser,
-        ]));
-    }
-
-    if ($horizonEnabled) {
-        $addSupervisorProgram("{$group}_horizon", $replaceVars(<<<'CONF'
-[program:%%group%%_horizon]
-command=%%php_bin%% %%root%%/current/artisan horizon
-directory=%%root%%/current
-user=%%run_user%%
-autostart=true
-autorestart=true
-stopwaitsecs=3600
-stopasgroup=true
-killasgroup=true
-stdout_logfile=%%root%%/shared/storage/logs/horizon.log
-stdout_logfile_maxbytes=20MB
-stdout_logfile_backups=5
-redirect_stderr=true
-CONF, ['group' => $group, 'php_bin' => $phpBin, 'root' => $deployRoot, 'run_user' => $runUser]));
-    }
-
-    if ($queueWorkerEnabled) {
-        $addSupervisorProgram("{$group}_queue_worker", $replaceVars(<<<'CONF'
-[program:%%group%%_queue_worker]
-process_name=%(program_name)s_%(process_num)02d
-command=%%php_bin%% %%root%%/current/artisan queue:work %%queue_connection%% --queue=%%queue_queue%% --sleep=3 --tries=3 --timeout=60 --max-time=3600
-directory=%%root%%/current
-user=%%run_user%%
-numprocs=%%queue_processes%%
-autostart=true
-autorestart=true
-stopwaitsecs=3600
-stopasgroup=true
-killasgroup=true
-stdout_logfile=%%root%%/shared/storage/logs/queue_worker.log
-stdout_logfile_maxbytes=20MB
-stdout_logfile_backups=5
-redirect_stderr=true
-CONF, [
-            'group' => $group,
-            'php_bin' => $phpBin,
-            'root' => $deployRoot,
-            'queue_connection' => $queueWorkerConnection,
-            'queue_queue' => $queueWorkerQueue,
-            'queue_processes' => $queueWorkerProcesses,
-            'run_user' => $runUser,
-        ]));
-    }
-
-    if ($reverbEnabled) {
-        $addSupervisorProgram("{$group}_reverb", $replaceVars(<<<'CONF'
-[program:%%group%%_reverb]
-command=%%php_bin%% %%root%%/current/artisan reverb:start
-directory=%%root%%/current
-user=%%run_user%%
-autostart=true
-autorestart=true
-stopasgroup=true
-killasgroup=true
-stdout_logfile=%%root%%/shared/storage/logs/reverb.log
-stdout_logfile_maxbytes=20MB
-stdout_logfile_backups=5
-redirect_stderr=true
-CONF, ['group' => $group, 'php_bin' => $phpBin, 'root' => $deployRoot, 'run_user' => $runUser]));
-    }
-
-    if ($schedulerEnabled) {
-        $addSupervisorProgram("{$group}_scheduler", $replaceVars(<<<'CONF'
-[program:%%group%%_scheduler]
-command=%%php_bin%% %%root%%/current/artisan schedule:work
-directory=%%root%%/current
-user=%%run_user%%
-autostart=true
-autorestart=true
-stopasgroup=true
-killasgroup=true
-stdout_logfile=%%root%%/shared/storage/logs/scheduler.log
-stdout_logfile_maxbytes=20MB
-stdout_logfile_backups=5
-redirect_stderr=true
-CONF, ['group' => $group, 'php_bin' => $phpBin, 'root' => $deployRoot, 'run_user' => $runUser]));
-    }
-
-    if ($nightwatchEnabled) {
-        $addSupervisorProgram("{$group}_nightwatch", $replaceVars(<<<'CONF'
-[program:%%group%%_nightwatch]
-command=%%php_bin%% %%root%%/current/artisan nightwatch:agent --listen-on=127.0.0.1:%%nightwatch_port%% --server=%%domain%% --silent
-directory=%%root%%/current
-user=%%run_user%%
-autostart=true
-autorestart=true
-stopasgroup=true
-killasgroup=true
-stdout_logfile=%%root%%/shared/storage/logs/nightwatch.log
-stdout_logfile_maxbytes=20MB
-stdout_logfile_backups=5
-redirect_stderr=true
-CONF, [
-            'group' => $group,
-            'php_bin' => $phpBin,
-            'root' => $deployRoot,
-            'nightwatch_port' => $nightwatchPort,
-            'domain' => $domain,
-            'run_user' => $runUser,
-        ]));
-    }
-
-    $hasSupervisorPrograms = $supervisorProgramNames !== [];
-    $supervisorPrograms = $hasSupervisorPrograms
-        ? implode(PHP_EOL.PHP_EOL, $supervisorDefinitions).PHP_EOL.PHP_EOL."[group:{$group}]".PHP_EOL.'programs='.implode(',', $supervisorProgramNames).PHP_EOL
-        : '';
-
-    $stubVars = [
-        'group' => $group,
-        'domain' => $domain,
-        'root' => $deployRoot,
-        'run_user' => $runUser,
-        'php_bin' => $phpBin,
-        'octane_port' => $octanePort,
-        'ssl_email' => $sslEmail,
-        'reverb_location' => $reverbLocation,
-        'service_worker_location' => $serviceWorkerLocation,
-        'application_locations' => $applicationLocations,
-        'supervisor_programs' => $supervisorPrograms,
-    ];
-
-    $renderedNginxConf = is_file($nginxStub) ? $renderStub($nginxStub, $stubVars) : '';
-    $renderedNginxSslConf = is_file($nginxSslStub) ? $renderStub($nginxSslStub, $stubVars) : '';
-    $renderedSupervisorConf = $hasSupervisorPrograms && is_file($supervisorStub) ? $renderStub($supervisorStub, $stubVars) : '';
-
-    $localTmp = sys_get_temp_dir().'/accelerator-bootstrap-'.bin2hex(random_bytes(4));
-    $localNginx = $localTmp.'-nginx.conf';
-    $localNginxSsl = $localTmp.'-nginx-ssl.conf';
-    $localSupervisor = $localTmp.'-supervisor.conf';
-    if ($renderedNginxConf !== '') {
-        @mkdir(dirname($localNginx), 0700, true);
-        file_put_contents($localNginx, $renderedNginxConf);
-    }
-    if ($renderedNginxSslConf !== '') {
-        @mkdir(dirname($localNginxSsl), 0700, true);
-        file_put_contents($localNginxSsl, $renderedNginxSslConf);
-    }
-    if ($renderedSupervisorConf !== '') {
-        @mkdir(dirname($localSupervisor), 0700, true);
-        file_put_contents($localSupervisor, $renderedSupervisorConf);
-    }
+    $runtimeEnvironmentFile = escapeshellarg($config->runtimeEnvironmentFile());
+    $repository = escapeshellarg($config->repository);
+    $branch = escapeshellarg($config->branch);
+    $sshHost = escapeshellarg($config->sshHost);
+    $adminName = escapeshellarg($config->adminName);
+    $adminUsername = escapeshellarg($config->adminUsername);
+    $adminEmail = escapeshellarg($config->adminEmail);
+    $adminPasswordHash = escapeshellarg($config->adminPasswordHash);
+    $localPhp = escapeshellarg(PHP_BINARY);
 @endsetup
 
-{{-- ════════════════════════════════════════════════════════════════════
-     Stories
-     ──────────────────────────────────────────────────────────────────── --}}
-
 @story('init')
+    local-preflight
+    remote-preflight
+    dns-preflight
     prepare-layout
-    ensure-deploy-tools
-    sync-env
+    upload-env
+    stage-env
+    install-infrastructure
     clone-release
     link-shared
     build-release
     harden-release
-    prepare-laravel
+    activate-env
+    prepare-release
     switch-current
-    invalidate-opcache
-    restart-service
+    activate-runtime
     health-check
-@endstory
-
-@story('deploy')
-    ensure-deploy-tools
-    sync-env
-    clone-release
-    link-shared
-    build-release
-    harden-release
-    clear-cache
-    migration-safety
-    db-backup
-    maintenance-on
-    prepare-laravel
-    switch-current
-    invalidate-opcache
-    restart-service
-    health-check
-    maintenance-off
+    ensure-ssl
+    https-check
     prune-releases
 @endstory
 
-@story('deploy-slim')
-    ensure-deploy-tools
-    sync-env
+@story('deploy')
+    local-preflight
+    remote-preflight
+    infrastructure-drift
+    prepare-layout
+    upload-env
+    stage-env
     clone-release
     link-shared
+    build-release
     harden-release
-    clear-cache
     migration-safety
     db-backup
     maintenance-on
-    prepare-laravel
+    activate-env
+    prepare-release
     switch-current
-    invalidate-opcache
-    restart-service
+    activate-runtime
     health-check
     maintenance-off
     prune-releases
 @endstory
 
 @story('deploy-fresh-seed')
-    assert-fresh-seed-confirmed
-    ensure-deploy-tools
-    sync-env
+    local-preflight
+    remote-preflight
+    infrastructure-drift
+    prepare-layout
+    upload-env
+    stage-env
     clone-release
     link-shared
-    build-release-with-dev
+    build-release
     harden-release
-    clear-cache
     db-backup
     maintenance-on
-    prepare-laravel-fresh-seed
+    activate-env
+    prepare-release
     prune-dev-dependencies
     switch-current
-    invalidate-opcache
-    restart-service
+    activate-runtime
     health-check
     maintenance-off
     prune-releases
+@endstory
+
+@story('preflight')
+    local-preflight
+    remote-preflight
+    dns-preflight
+@endstory
+
+@story('bootstrap')
+    remote-preflight
+    dns-preflight
+    prepare-layout
+    install-infrastructure
+    activate-runtime
+    health-check
+@endstory
+
+@story('ssl')
+    remote-preflight
+    dns-preflight
+    ensure-ssl
+    https-check
+@endstory
+
+@story('restart')
+    remote-preflight
+    activate-runtime
+    health-check
+@endstory
+
+@story('rollback')
+    rollback-release
+    activate-runtime
+    health-check
+    clear-deploy-maintenance
 @endstory
 
 @story('status')
     check-status
 @endstory
 
-@story('restart')
-    restart-service
-@endstory
-
 @story('logs')
     view-logs
-@endstory
-
-@story('rollback')
-    rollback-release
-    invalidate-current-opcache
-    restart-service
-    health-check
 @endstory
 
 @story('releases')
     list-releases
 @endstory
 
-@story('bootstrap')
-    bootstrap-nginx
-    bootstrap-supervisor
-@endstory
-
-@story('bootstrap-ssl')
-    obtain-cert
-    upgrade-nginx-ssl
-@endstory
-
 @story('backups')
     list-backups
 @endstory
 
-{{-- ════════════════════════════════════════════════════════════════════
-     Layout & tooling
-     ──────────────────────────────────────────────────────────────────── --}}
+@story('render')
+    render-config
+@endstory
 
-@task('prepare-layout', ['on' => 'vps'])
-    set -euo pipefail
-    mkdir -p {{ $deployRoot }} {{ $releasesPath }} {{ $sharedPath }} {{ $archivePath }} \
-        {{ $sharedPath }}/storage/app/public \
-        {{ $sharedPath }}/storage/framework/views \
-        {{ $sharedPath }}/storage/framework/cache \
-        {{ $sharedPath }}/storage/framework/sessions \
-        {{ $sharedPath }}/storage/logs \
-        {{ $sharedPath }}/database
+@task('local-preflight', ['on' => 'localhost'])
+    set -Eeuo pipefail
+    cd {{ escapeshellarg($projectRoot) }}
 
-    # Ensure deploy root is owned by deploy user
-    sudo chown -R $(whoami):{{ $runUser }} {{ $deployRoot }}
+    runtime_env={{ $runtimeEnvironmentFile }}
+    test -s "$runtime_env" || { echo "[preflight] Missing runtime seed: $runtime_env"; exit 1; }
+    test -s composer.lock || { echo "[preflight] composer.lock is required."; exit 1; }
+    test -s bun.lock || { echo "[preflight] bun.lock is required."; exit 1; }
+    test -x vendor/bin/pint || { echo "[preflight] vendor/bin/pint is required."; exit 1; }
+    for legacy_lock in package-lock.json pnpm-lock.yaml yarn.lock bun.lockb; do
+        [ ! -e "$legacy_lock" ] || { echo "[preflight] Remove legacy frontend lock: $legacy_lock"; exit 1; }
+    done
+    package_manager="$({{ $localPhp }} -r '$package = json_decode(file_get_contents("package.json"), true, flags: JSON_THROW_ON_ERROR); echo $package["packageManager"] ?? "";')"
+    case "$package_manager" in bun@*) ;; *) echo "[preflight] package.json must declare packageManager=bun@..."; exit 1 ;; esac
 
-    # Set default ACL on shared storage so www-data can write from first boot
-    sudo setfacl -R -m u:{{ $runUser }}:rwx -m u:$(whoami):rwx {{ $sharedPath }}/storage
-    sudo setfacl -dR -m u:{{ $runUser }}:rwx -m u:$(whoami):rwx {{ $sharedPath }}/storage
-
-    # If SQLite, create database file with correct permissions
-    if [ -f {{ $sharedPath }}/.env ]; then
-        db_conn=$(grep -E "^DB_CONNECTION=" {{ $sharedPath }}/.env 2>/dev/null | cut -d= -f2 | tr -d '"' | tr -d "'" || true)
-        if [ "$db_conn" = "sqlite" ]; then
-            db_path=$(grep -E "^DB_DATABASE=" {{ $sharedPath }}/.env 2>/dev/null | cut -d= -f2 | tr -d '"' | tr -d "'" || true)
-            if [ -n "$db_path" ] && [ ! -f "$db_path" ]; then
-                mkdir -p "$(dirname "$db_path")"
-                touch "$db_path"
-                chmod 664 "$db_path"
-                sudo setfacl -m u:{{ $runUser }}:rw -m u:$(whoami):rw "$db_path"
-                echo "[prepare-layout] created SQLite database: $db_path"
-            fi
-            # Also ACL the database directory
-            sudo setfacl -R -m u:{{ $runUser }}:rwx -m u:$(whoami):rwx {{ $sharedPath }}/database
-            sudo setfacl -dR -m u:{{ $runUser }}:rwx -m u:$(whoami):rwx {{ $sharedPath }}/database
-        fi
-    fi
-
-    test -d {{ $deployRoot }}
-    test -d {{ $releasesPath }}
-    test -d {{ $sharedPath }}
-    test -d {{ $archivePath }}
-    echo "[prepare-layout] layout ready at {{ $deployRoot }}"
-@endtask
-
-@task('sync-env', ['on' => 'localhost'])
-    set -euo pipefail
-    test -s {{ $seedEnvFile }}
-    ssh {{ $sshHost }} 'set -euo pipefail; mkdir -p {{ $sharedPath }} {{ $archivePath }}; if [ -f {{ $sharedPath }}/.env ]; then cp {{ $sharedPath }}/.env {{ $archivePath }}/.env.before-seed-$(date +%Y-%m-%d_%H-%M-%S); fi'
-    scp {{ $seedEnvFile }} {{ $sshHost }}:{{ $sharedPath }}/.env
-    ssh {{ $sshHost }} 'set -euo pipefail; chmod 600 {{ $sharedPath }}/.env; sudo setfacl -m u:{{ $runUser }}:r {{ $sharedPath }}/.env'
-@endtask
-
-@task('ensure-deploy-tools', ['on' => 'vps'])
-    set -euo pipefail
-    command -v git >/dev/null
-    command -v composer >/dev/null
-    command -v {{ $phpBin }} >/dev/null
-    command -v {{ $packageManagerBin }} >/dev/null
-    command -v larahelp >/dev/null
-    command -v setfacl >/dev/null
-    command -v curl >/dev/null
-    test -f {{ $sharedPath }}/.env
-@endtask
-
-{{-- ════════════════════════════════════════════════════════════════════
-     Release build
-     ──────────────────────────────────────────────────────────────────── --}}
-
-@task('clone-release', ['on' => 'vps'])
-    set -euo pipefail
-    mkdir -p {{ $releasesPath }} {{ $archivePath }}
-    if [ -e {{ $releasePath }} ]; then
-        echo "Release already exists: {{ $releasePath }}"
+    if grep -Eq '^OPS_DEPLOY_' "$runtime_env"; then
+        echo "[preflight] Runtime env must not contain OPS_DEPLOY_* keys."
         exit 1
     fi
-    git clone --branch {{ $branch }} --single-branch --depth 1 {{ $repo }} {{ $releasePath }}
-    cd {{ $releasePath }}
-    git fetch --depth 1 origin {{ $releaseSha }} 2>/dev/null || true
-    git reset --hard {{ $releaseSha }}
+
+    env_value() {
+        sed -n "s/^${1}=//p" "$runtime_env" | tail -n 1 | sed -e 's/^"//' -e 's/"$//'
+    }
+
+    [ "$(env_value APP_ENV)" = "production" ] || { echo "[preflight] APP_ENV must be production."; exit 1; }
+    [ "$(env_value APP_DEBUG)" = "false" ] || { echo "[preflight] APP_DEBUG must be false."; exit 1; }
+    [ -n "$(env_value APP_KEY)" ] || { echo "[preflight] APP_KEY is blank in $runtime_env."; exit 1; }
+
+    app_url="$(env_value APP_URL)"
+    case "$app_url" in
+        https://{{ $config->domain }}|https://{{ $config->domain }}/) ;;
+        *) echo "[preflight] APP_URL must be https://{{ $config->domain }} for stage {{ $config->stage }}."; exit 1 ;;
+    esac
+
+    db_connection="$(env_value DB_CONNECTION)"
+    [ -n "$db_connection" ] || { echo "[preflight] DB_CONNECTION is blank."; exit 1; }
+    if [ "$db_connection" = "sqlite" ]; then
+        expected_db={{ escapeshellarg($config->sharedPath().'/database/database.sqlite') }}
+        [ "$(env_value DB_DATABASE)" = "$expected_db" ] || {
+            echo "[preflight] SQLite DB_DATABASE must be $expected_db so releases share one database."
+            exit 1
+        }
+    else
+        [ -n "$(env_value DB_DATABASE)" ] || { echo "[preflight] DB_DATABASE is blank."; exit 1; }
+        [ -n "$(env_value DB_USERNAME)" ] || { echo "[preflight] DB_USERNAME is blank."; exit 1; }
+    fi
+
+    for ignored in .env .env.envoy .env.staging .env.production; do
+        if git ls-files --error-unmatch "$ignored" >/dev/null 2>&1; then
+            echo "[preflight] $ignored contains local configuration and must not be tracked."
+            exit 1
+        fi
+    done
+
+    if [ -n "$(git status --porcelain)" ]; then
+        echo "[preflight] Git worktree is dirty. Commit or restore every change before deployment."
+        git status --short
+        exit 1
+    fi
+
+    vendor/bin/pint --format agent
+    if [ -n "$(git status --porcelain)" ]; then
+        echo "[preflight] Pint changed tracked files. Review and commit them before deployment."
+        git status --short
+        exit 1
+    fi
+
+    composer validate --no-check-publish --no-interaction
+
+    current_branch="$(git branch --show-current)"
+    [ "$current_branch" = {{ $branch }} ] || {
+        echo "[preflight] Current branch [$current_branch] does not match configured branch {{ $config->branch }}."
+        exit 1
+    }
+
+    local_sha="$(git rev-parse HEAD)"
+    remote_sha="$(git ls-remote {{ $repository }} {{ $branch }} | awk 'NR == 1 { print $1 }')"
+    [ -n "$remote_sha" ] || { echo "[preflight] Unable to resolve configured remote branch."; exit 1; }
+    [ "$local_sha" = "$remote_sha" ] || {
+        echo "[preflight] Commit $local_sha is not the remote head ($remote_sha). Push before deployment."
+        exit 1
+    }
+
+    echo "[preflight] local configuration, locks, Git, Composer, and Pint are ready."
+@endtask
+
+@task('remote-preflight', ['on' => 'vps'])
+    set -Eeuo pipefail
+    sudo -n true >/dev/null || { echo "[preflight] Passwordless sudo is required for scoped Nginx/Supervisor operations."; exit 1; }
+
+    for command in git composer {{ $config->phpBinary }} {{ $config->bunBinary }} curl base64 sha256sum setfacl nginx; do
+        command -v "$command" >/dev/null || { echo "[preflight] Missing VPS command: $command"; exit 1; }
+    done
+    @if($hasSupervisorPrograms)
+        command -v supervisorctl >/dev/null || { echo "[preflight] Missing VPS command: supervisorctl"; exit 1; }
+    @endif
+    @if($config->httpRuntime === 'octane' || $config->reverbEnabled || $config->nightwatchEnabled)
+        command -v ss >/dev/null || { echo "[preflight] Missing VPS command: ss"; exit 1; }
+    @endif
+    @if(in_array($requestedTask, ['init', 'ssl'], true))
+        command -v certbot >/dev/null || { echo "[preflight] Missing VPS command: certbot"; exit 1; }
+    @endif
+
+    actual_php="$({{ $config->phpBinary }} -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;')"
+    [ "$actual_php" = "{{ $config->phpVersion }}" ] || {
+        echo "[preflight] {{ $config->phpBinary }} is PHP $actual_php; expected {{ $config->phpVersion }}."
+        exit 1
+    }
+
+    probe={{ $config->deployRoot }}
+    while [ ! -d "$probe" ] && [ "$probe" != "/" ]; do probe="$(dirname "$probe")"; done
+    free_mb="$(df -Pm "$probe" | awk 'NR == 2 { print $4 }')"
+    [ "${free_mb:-0}" -ge 1024 ] || { echo "[preflight] Less than 1024 MB is free below $probe."; exit 1; }
+
+    @if($config->httpRuntime === 'fpm')
+        [ -S {{ $config->fpmSocket }} ] || { echo "[preflight] Missing FPM socket: {{ $config->fpmSocket }}"; exit 1; }
+        systemctl status {{ $config->fpmService }} >/dev/null 2>&1 || { echo "[preflight] Missing FPM service: {{ $config->fpmService }}"; exit 1; }
+    @endif
+
+    @if(in_array($requestedTask, ['deploy', 'deploy-fresh-seed', 'bootstrap', 'ssl', 'restart'], true))
+        current="$(readlink -f {{ $config->currentPath() }} 2>/dev/null || true)"
+        [ -n "$current" ] && [ -f "$current/vendor/autoload.php" ] && [ -L "$current/.env" ] || {
+            echo "[preflight] No valid current release. Run envoy init first."
+            exit 1
+        }
+    @endif
+
+    @if($requestedTask === 'init')
+        current="$(readlink -f {{ $config->currentPath() }} 2>/dev/null || true)"
+        if [ -n "$current" ] && [ "$current" != {{ escapeshellarg($releasePath) }} ]; then
+            echo "[preflight] This stage was already initialized. Use envoy deploy for a new commit."
+            exit 1
+        fi
+        if [ -z "$current" ]; then
+            @if($config->httpRuntime === 'octane')
+                ss -H -ltn "sport = :{{ $config->octanePort }}" | grep -q . && { echo "[preflight] Octane port {{ $config->octanePort }} is already in use."; exit 1; }
+            @endif
+            @if($config->reverbEnabled)
+                ss -H -ltn "sport = :{{ $config->reverbPort }}" | grep -q . && { echo "[preflight] Reverb port {{ $config->reverbPort }} is already in use."; exit 1; }
+            @endif
+            @if($config->nightwatchEnabled)
+                ss -H -ltn "sport = :{{ $config->nightwatchPort }}" | grep -q . && { echo "[preflight] Nightwatch port {{ $config->nightwatchPort }} is already in use."; exit 1; }
+            @endif
+        fi
+    @endif
+
+    echo "[preflight] remote tools, runtime, disk, and stage state are ready."
+@endtask
+
+@task('dns-preflight', ['on' => 'vps'])
+    set -Eeuo pipefail
+    dns_ips="$({{ $config->phpBinary }} -r '$records = dns_get_record($argv[1], DNS_A | DNS_AAAA); foreach ($records ?: [] as $record) { $ip = $record["ip"] ?? $record["ipv6"] ?? null; if (is_string($ip)) { echo $ip, PHP_EOL; } }' {{ escapeshellarg($config->domain) }})"
+    [ -n "$dns_ips" ] || { echo "[dns] {{ $config->domain }} has no A or AAAA record."; exit 1; }
+
+    server_ip="$(printf '%s\n' "${SSH_CONNECTION:-}" | awk '{ print $3 }')"
+    @if($config->dnsDirect)
+        [ -n "$server_ip" ] || { echo "[dns] Unable to determine the VPS address from SSH_CONNECTION."; exit 1; }
+        printf '%s\n' "$dns_ips" | grep -Fx "$server_ip" >/dev/null || {
+            echo "[dns] {{ $config->domain }} does not resolve directly to this VPS ($server_ip)."
+            echo "[dns] Set OPS_DEPLOY_{{ strtoupper($config->stage) }}_DNS_DIRECT=false only when a deliberate reverse proxy is in front."
+            exit 1
+        }
+    @endif
+
+    echo "[dns] {{ $config->domain }} resolves and matches the configured topology."
+@endtask
+
+@task('prepare-layout', ['on' => 'vps'])
+    set -Eeuo pipefail
+    deploy_user="$(id -un)"
+    deploy_group="$(id -gn)"
+
+    sudo install -d -o "$deploy_user" -g "$deploy_group" -m 0755 \
+        {{ $config->deployRoot }} {{ $config->releasesPath() }} {{ $config->archivePath() }} {{ $config->sharedPath() }}
+    sudo install -d -o "$deploy_user" -g {{ $config->runUser }} -m 2775 \
+        {{ $config->sharedPath() }}/storage/app/public \
+        {{ $config->sharedPath() }}/storage/framework/cache \
+        {{ $config->sharedPath() }}/storage/framework/sessions \
+        {{ $config->sharedPath() }}/storage/framework/views \
+        {{ $config->sharedPath() }}/storage/logs \
+        {{ $config->sharedPath() }}/database \
+        {{ $config->sharedPath() }}/acme/.well-known/acme-challenge
+    sudo install -d -o "$deploy_user" -g {{ $config->runUser }} -m 0750 {{ $config->sharedPath() }}/env
+
+    sudo setfacl -R -m u:"$deploy_user":rwx -m u:{{ $config->runUser }}:rwx {{ $config->sharedPath() }}/storage {{ $config->sharedPath() }}/database
+    sudo setfacl -dR -m u:"$deploy_user":rwx -m u:{{ $config->runUser }}:rwx {{ $config->sharedPath() }}/storage {{ $config->sharedPath() }}/database
+    echo "[layout] release layout ready at {{ $config->deployRoot }}."
+@endtask
+
+@task('upload-env', ['on' => 'localhost'])
+    set -Eeuo pipefail
+    test -s {{ $runtimeEnvironmentFile }}
+    ssh {{ $sshHost }} 'umask 077; cat > /tmp/{{ $config->group }}-runtime-env' < {{ $runtimeEnvironmentFile }}
+    echo "[env] uploaded the {{ $config->stage }} runtime seed to a temporary remote path."
+@endtask
+
+@task('stage-env', ['on' => 'vps'])
+    set -Eeuo pipefail
+    source=/tmp/{{ $config->group }}-runtime-env
+    test -s "$source"
+    if grep -Eq '^OPS_DEPLOY_' "$source"; then
+        echo "[env] Refusing runtime env containing OPS_DEPLOY_* keys."
+        exit 1
+    fi
+    @if($initialRelease)
+        current="$(readlink -f {{ $config->currentPath() }} 2>/dev/null || true)"
+        if [ "$current" = {{ escapeshellarg($releasePath) }} ] && [ -f {{ $releaseEnvironmentPath }} ] && ! cmp -s "$source" {{ $releaseEnvironmentPath }}; then
+            echo "[env] init resume received a changed runtime env. Use envoy deploy so backup and maintenance protections apply."
+            exit 1
+        fi
+    @endif
+    candidate={{ $releaseEnvironmentPath }}.upload
+    install -m 0600 "$source" "$candidate"
+    mv -f "$candidate" {{ $releaseEnvironmentPath }}
+    rm -f "$source"
+    sudo setfacl -m u:{{ $config->runUser }}:r {{ $releaseEnvironmentPath }}
+    echo "[env] staged immutable environment for release {{ $releaseId }}."
+@endtask
+
+@task('install-infrastructure', ['on' => 'vps'])
+    set -Eeuo pipefail
+    timestamp="$(date +%Y-%m-%d_%H-%M-%S)"
+    nginx_target=/etc/nginx/sites-available/{{ $config->domain }}.conf
+    nginx_link=/etc/nginx/sites-enabled/{{ $config->domain }}.conf
+    nginx_candidate="/tmp/{{ $config->group }}-nginx-$$.conf"
+    nginx_backup=""
+    trap 'rm -f "$nginx_candidate" /tmp/{{ $config->group }}-supervisor-$$.conf' EXIT
+
+    if sudo test -s /etc/letsencrypt/live/{{ $config->domain }}/fullchain.pem; then
+        printf '%s' {{ escapeshellarg($nginxSslBase64) }} | base64 --decode > "$nginx_candidate"
+    else
+        printf '%s' {{ escapeshellarg($nginxHttpBase64) }} | base64 --decode > "$nginx_candidate"
+    fi
+
+    enabled_target="$(sudo readlink -f "$nginx_link" 2>/dev/null || true)"
+    previous_link="$(sudo readlink "$nginx_link" 2>/dev/null || true)"
+    previous_link_existed=0
+    sudo test -L "$nginx_link" && previous_link_existed=1
+    if ! sudo test -f "$nginx_target" || ! cmp -s "$nginx_candidate" "$nginx_target" || [ "$enabled_target" != "$nginx_target" ]; then
+        if sudo test -f "$nginx_target"; then
+            nginx_backup={{ $config->archivePath() }}/nginx-{{ $config->domain }}-before-$timestamp.conf
+            sudo cp "$nginx_target" "$nginx_backup"
+            sudo chown "$(id -un):$(id -gn)" "$nginx_backup"
+        fi
+
+        sudo install -o root -g root -m 0644 "$nginx_candidate" "$nginx_target"
+        sudo ln -sfn "$nginx_target" "$nginx_link"
+        if ! sudo nginx -t; then
+            if [ -n "$nginx_backup" ]; then
+                sudo cp "$nginx_backup" "$nginx_target"
+            else
+                sudo rm -f "$nginx_target"
+            fi
+            if [ "$previous_link_existed" = 1 ]; then
+                sudo ln -sfn "$previous_link" "$nginx_link"
+            else
+                sudo rm -f "$nginx_link"
+            fi
+            sudo nginx -t || true
+            echo "[bootstrap] Nginx candidate failed validation; the previous config was restored."
+            exit 1
+        fi
+        sudo systemctl reload nginx
+    fi
+
+    supervisor_target=/etc/supervisor/conf.d/{{ $config->group }}.conf
+    supervisor_backup=""
+    supervisor_changed=0
+    @if($hasSupervisorPrograms)
+        supervisor_candidate="/tmp/{{ $config->group }}-supervisor-$$.conf"
+        printf '%s' {{ escapeshellarg($supervisorBase64) }} | base64 --decode > "$supervisor_candidate"
+        if ! sudo test -f "$supervisor_target" || ! cmp -s "$supervisor_candidate" "$supervisor_target"; then
+            if sudo test -f "$supervisor_target"; then
+                supervisor_backup={{ $config->archivePath() }}/supervisor-{{ $config->group }}-before-$timestamp.conf
+                sudo cp "$supervisor_target" "$supervisor_backup"
+                sudo chown "$(id -un):$(id -gn)" "$supervisor_backup"
+            fi
+            sudo install -o root -g root -m 0644 "$supervisor_candidate" "$supervisor_target"
+            supervisor_changed=1
+        fi
+    @else
+        if sudo test -f "$supervisor_target"; then
+            command -v supervisorctl >/dev/null || { echo "[bootstrap] supervisorctl is required to retire the old scoped config."; exit 1; }
+            supervisor_backup={{ $config->archivePath() }}/supervisor-{{ $config->group }}-before-disable-$timestamp.conf
+            sudo cp "$supervisor_target" "$supervisor_backup"
+            sudo chown "$(id -un):$(id -gn)" "$supervisor_backup"
+            sudo rm -f "$supervisor_target"
+            supervisor_changed=1
+        fi
+    @endif
+
+    @if($hasSupervisorPrograms)
+        if [ "$supervisor_changed" = 1 ] && ! sudo supervisorctl reread; then
+            if [ -n "$supervisor_backup" ]; then
+                sudo cp "$supervisor_backup" "$supervisor_target"
+            else
+                sudo rm -f "$supervisor_target"
+            fi
+            sudo supervisorctl reread || true
+            echo "[bootstrap] Supervisor candidate failed validation; the previous config was restored."
+            exit 1
+        fi
+    @else
+        if [ "$supervisor_changed" = 1 ]; then
+            if ! sudo supervisorctl reread || ! sudo supervisorctl update; then
+                sudo cp "$supervisor_backup" "$supervisor_target"
+                sudo supervisorctl reread || true
+                sudo supervisorctl update || true
+                echo "[bootstrap] Unable to retire the scoped Supervisor config; the previous file was restored."
+                exit 1
+            fi
+        fi
+    @endif
+
+    echo "[bootstrap] scoped Nginx and Supervisor candidates installed; service activation is deferred until a valid current release exists."
+@endtask
+
+@task('infrastructure-drift', ['on' => 'vps'])
+    set -Eeuo pipefail
+    nginx_target=/etc/nginx/sites-available/{{ $config->domain }}.conf
+    nginx_link=/etc/nginx/sites-enabled/{{ $config->domain }}.conf
+    if sudo test -s /etc/letsencrypt/live/{{ $config->domain }}/fullchain.pem; then expected_nginx={{ $nginxSslHash }}; else expected_nginx={{ $nginxHttpHash }}; fi
+    actual_nginx="$(sudo sha256sum "$nginx_target" 2>/dev/null | awk '{ print $1 }')"
+    enabled_target="$(sudo readlink -f "$nginx_link" 2>/dev/null || true)"
+    [ "$actual_nginx" = "$expected_nginx" ] && [ "$enabled_target" = "$nginx_target" ] || {
+        echo "[preflight] Nginx config drift detected. Run: vendor/bin/envoy run bootstrap --stage={{ $config->stage }}"
+        exit 1
+    }
+
+    supervisor_target=/etc/supervisor/conf.d/{{ $config->group }}.conf
+    @if($hasSupervisorPrograms)
+        actual_supervisor="$(sudo sha256sum "$supervisor_target" 2>/dev/null | awk '{ print $1 }')"
+        [ "$actual_supervisor" = "{{ $supervisorHash }}" ] || {
+            echo "[preflight] Supervisor config drift detected. Run: vendor/bin/envoy run bootstrap --stage={{ $config->stage }}"
+            exit 1
+        }
+    @else
+        if sudo test -e "$supervisor_target"; then
+            echo "[preflight] Obsolete scoped Supervisor config exists. Run envoy bootstrap."
+            exit 1
+        fi
+    @endif
+
+    echo "[preflight] deployed infrastructure matches the v2 renderer."
+@endtask
+
+@task('clone-release', ['on' => 'vps'])
+    set -Eeuo pipefail
+    current="$(readlink -f {{ $config->currentPath() }} 2>/dev/null || true)"
+    if [ "$current" = {{ escapeshellarg($releasePath) }} ] && [ -f {{ $releasePath }}/.accelerator-prepared ]; then
+        echo "[release] initial release already prepared; resuming init."
+        exit 0
+    fi
+
+    if [ -e {{ $releasePath }} ]; then
+        existing_sha="$(git -C {{ $releasePath }} rev-parse HEAD 2>/dev/null || true)"
+        if [ "$existing_sha" = "{{ $releaseSha }}" ]; then
+            echo "[release] reusing incomplete release {{ $releaseId }}."
+            exit 0
+        fi
+        mv {{ $releasePath }} {{ $config->archivePath() }}/incomplete-{{ $releaseId }}-$(date +%Y-%m-%d_%H-%M-%S)
+    fi
+
+    git clone --branch {{ $branch }} --single-branch --depth=1 {{ $repository }} {{ $releasePath }}
+    actual_sha="$(git -C {{ $releasePath }} rev-parse HEAD)"
+    [ "$actual_sha" = "{{ $releaseSha }}" ] || {
+        echo "[release] cloned $actual_sha, expected {{ $releaseSha }}."
+        exit 1
+    }
+    echo "[release] cloned exact commit {{ $releaseSha }}."
 @endtask
 
 @task('link-shared', ['on' => 'vps'])
-    set -euo pipefail
+    set -Eeuo pipefail
+    current="$(readlink -f {{ $config->currentPath() }} 2>/dev/null || true)"
+    if [ "$current" = {{ escapeshellarg($releasePath) }} ] && [ -f {{ $releasePath }}/.accelerator-prepared ]; then
+        exit 0
+    fi
+
+    test -s {{ $releaseEnvironmentPath }}
     cd {{ $releasePath }}
+    rm -f .env
+    ln -s {{ $releaseEnvironmentPath }} .env
 
-    if [ -e .env ] || [ -L .env ]; then
-        mv .env {{ $archivePath }}/release-env-{{ $releaseId }}
-    fi
-    ln -s {{ $sharedPath }}/.env .env
+    rm -rf -- storage
+    ln -s {{ $config->sharedPath() }}/storage storage
+    mkdir -p public bootstrap/cache
+    rm -rf -- public/storage
+    ln -s {{ $config->sharedPath() }}/storage/app/public public/storage
 
-    if [ -e storage ] || [ -L storage ]; then
-        mv storage {{ $archivePath }}/release-storage-{{ $releaseId }}
+    db_connection="$(sed -n 's/^DB_CONNECTION=//p' {{ $releaseEnvironmentPath }} | tail -n 1 | tr -d '"')"
+    if [ "$db_connection" = "sqlite" ]; then
+        database={{ $config->sharedPath() }}/database/database.sqlite
+        touch "$database"
+        chmod 0660 "$database"
+        sudo setfacl -m u:{{ $config->runUser }}:rw "$database"
     fi
-    ln -s {{ $sharedPath }}/storage storage
 
-    mkdir -p {{ $sharedPath }}/storage/app/public public
-    if [ -e public/storage ] || [ -L public/storage ]; then
-        mv public/storage {{ $archivePath }}/release-public-storage-{{ $releaseId }}
-    fi
-    ln -s {{ $sharedPath }}/storage/app/public public/storage
+    sudo setfacl -R -m u:{{ $config->runUser }}:rwx bootstrap/cache
+    sudo setfacl -dR -m u:{{ $config->runUser }}:rwx bootstrap/cache
+    echo "[release] linked staged env and shared writable state."
 @endtask
 
 @task('build-release', ['on' => 'vps'])
-    set -euo pipefail
-    cd {{ $releasePath }}
-    test -s composer.lock || { echo "[build-release] composer.lock is required; refusing dependency resolution during deployment."; exit 1; }
-    composer validate --no-check-all --strict --ansi
-    composer install --no-dev --no-scripts --optimize-autoloader --classmap-authoritative --no-interaction --no-progress --quiet --ansi
-    @if(str_contains($packageManagerBin, 'bun'))
-        {{ $packageManagerBin }} install --frozen-lockfile --no-scripts --quiet
-        {{ $packageManagerBin }} run build
-    @elseif(str_contains($packageManagerBin, 'pnpm'))
-        {{ $packageManagerBin }} install --frozen-lockfile --no-scripts --quiet
-        {{ $packageManagerBin }} run build
-    @else
-        {{ $packageManagerBin }} ci --no-audit --no-fund --quiet
-        {{ $packageManagerBin }} run build
-    @endif
-@endtask
+    set -Eeuo pipefail
+    current="$(readlink -f {{ $config->currentPath() }} 2>/dev/null || true)"
+    if [ "$current" = {{ escapeshellarg($releasePath) }} ] && [ -f {{ $releasePath }}/.accelerator-prepared ]; then
+        echo "[build] prepared initial release already exists; skipping rebuild."
+        exit 0
+    fi
 
-@task('build-release-with-dev', ['on' => 'vps'])
-    set -euo pipefail
     cd {{ $releasePath }}
-    test -s composer.lock || { echo "[build-release-with-dev] composer.lock is required; refusing dependency resolution during deployment."; exit 1; }
-    composer validate --no-check-all --strict --ansi
-    composer install --no-scripts --no-interaction --no-progress --quiet --ansi
-    @if(str_contains($packageManagerBin, 'bun'))
-        {{ $packageManagerBin }} install --frozen-lockfile --no-scripts --quiet
-        {{ $packageManagerBin }} run build
-    @elseif(str_contains($packageManagerBin, 'pnpm'))
-        {{ $packageManagerBin }} install --frozen-lockfile --no-scripts --quiet
-        {{ $packageManagerBin }} run build
+    test -s composer.lock || { echo "[build] composer.lock is required."; exit 1; }
+    test -s bun.lock || { echo "[build] bun.lock is required."; exit 1; }
+    composer validate --no-check-publish --no-interaction
+    @if($freshSeed)
+        composer install --prefer-dist --optimize-autoloader --classmap-authoritative --no-interaction --no-progress
     @else
-        {{ $packageManagerBin }} ci --no-audit --no-fund --quiet
-        {{ $packageManagerBin }} run build
+        composer install --no-dev --prefer-dist --optimize-autoloader --classmap-authoritative --no-interaction --no-progress
     @endif
+    {{ $config->bunBinary }} install --frozen-lockfile
+    {{ $config->bunBinary }} run build
+    rm -rf -- {{ $releasePath }}/node_modules
+    printf '%s\n' {{ escapeshellarg($releaseSha) }} > .accelerator-build-complete
+    echo "[build] locked Composer and Bun build completed."
 @endtask
 
 @task('harden-release', ['on' => 'vps'])
-    set -euo pipefail
-    cd {{ $releasePath }}
-    # Vendor is intentionally excluded: composer install already sets correct 644/755
-    # and re-traversing thousands of vendor files is expensive with no benefit.
-    find . -type d -not -path "./storage*" -not -path "./bootstrap/cache*" -not -path "./vendor*" -exec chmod 755 {} +
-    find . -type f -not -path "./storage*" -not -path "./bootstrap/cache*" -not -path "./vendor*" -not -name "artisan" -exec chmod 644 {} +
-    chmod 755 artisan
-    chmod 600 {{ $sharedPath }}/.env
-    sudo setfacl -m u:{{ $runUser }}:r {{ $sharedPath }}/.env
-@endtask
-
-{{-- ════════════════════════════════════════════════════════════════════
-     Risky zone — past this line, production state is touched
-     ──────────────────────────────────────────────────────────────────── --}}
-
-@task('clear-cache', ['on' => 'vps'])
-    set -euo pipefail
-    cd {{ $currentPath }}
-    {{ $phpBin }} artisan optimize:clear --no-interaction --ansi
-@endtask
-
-@task('db-backup', ['on' => 'vps'])
-    set -euo pipefail
-    cd {{ $currentPath }}
-    {{ $phpBin }} artisan backup:run \
-        --config=backup_predeploy \
-        --only-db \
-        --disable-notifications \
-        --no-interaction \
-        --ansi
-@endtask
-
-@task('assert-fresh-seed-confirmed', ['on' => 'localhost'])
-    set -euo pipefail
-    @if($freshSeedConfirmation !== $freshSeedConfirmationPhrase)
-        echo "[deploy-fresh-seed] missing explicit destructive confirmation flag."
-        exit 1
-    @endif
-    echo "[deploy-fresh-seed] destructive confirmation accepted for {{ $stage }}."
+    set -Eeuo pipefail
+    chmod 0755 {{ $releasePath }} {{ $releasePath }}/artisan {{ $releasePath }}/public {{ $releasePath }}/bootstrap/cache
+    chmod 0600 {{ $releaseEnvironmentPath }}
+    sudo setfacl -m u:{{ $config->runUser }}:r {{ $releaseEnvironmentPath }}
+    sudo setfacl -R -m u:{{ $config->runUser }}:rwx {{ $releasePath }}/bootstrap/cache
+    sudo setfacl -dR -m u:{{ $config->runUser }}:rwx {{ $releasePath }}/bootstrap/cache
+    echo "[release] permissions hardened without traversing vendor or source trees."
 @endtask
 
 @task('migration-safety', ['on' => 'vps'])
-    set -euo pipefail
-    # Pre-flight scan for destructive migration ops in the NEW release vs current.
-    # Runs before db-backup so the operator can abort cheaply.
-    # Heuristic-only: greps for dropColumn / dropTable / renameColumn / drop( in
-    # migration files modified or added since the current release's git SHA.
-    new_dir={{ $releasePath }}
-    cur_dir="$(readlink -f {{ $currentPath }} 2>/dev/null || true)"
-    if [ -z "$cur_dir" ] || [ ! -d "$cur_dir/database/migrations" ]; then
-        echo "[migration-safety] no current symlink — skip (init flow)"
-        exit 0
-    fi
-    # Diff migration filenames; if a migration file is in NEW but not in CURRENT, scan it.
-    new_files=$(ls -1 "$new_dir/database/migrations" 2>/dev/null || true)
-    cur_files=$(ls -1 "$cur_dir/database/migrations" 2>/dev/null || true)
-    added=$(comm -23 <(echo "$new_files" | sort) <(echo "$cur_files" | sort) || true)
-    if [ -z "$added" ]; then
-        echo "[migration-safety] no new migrations vs current — pass"
-        exit 0
-    fi
+    set -Eeuo pipefail
+    current="$(readlink -f {{ $config->currentPath() }} 2>/dev/null || true)"
+    [ -n "$current" ] && [ -d "$current/database/migrations" ] || { echo "[migrations] no current migration tree; skipped."; exit 0; }
+
     flagged=0
-    while IFS= read -r f; do
-        [ -z "$f" ] && continue
-        path="$new_dir/database/migrations/$f"
-        # Match exact destructive APIs only — avoid false positives like "dropdown".
-        if grep -E '->\s*(dropColumn|dropTable|renameColumn|drop)\b|Schema::\s*(drop|dropIfExists|rename)\b' "$path" >/dev/null 2>&1; then
-            echo "[migration-safety] DESTRUCTIVE op in $f"
-            grep -nE '->\s*(dropColumn|dropTable|renameColumn|drop)\b|Schema::\s*(drop|dropIfExists|rename)\b' "$path" || true
-            flagged=$((flagged+1))
+    while IFS= read -r -d '' migration; do
+        relative="${migration#{{ $releasePath }}/database/migrations/}"
+        old="$current/database/migrations/$relative"
+        if [ -f "$old" ] && cmp -s "$migration" "$old"; then continue; fi
+        if grep -nE -- '->\s*(dropColumn|renameColumn|drop)\b|Schema::\s*(drop|dropIfExists|rename)\b' "$migration"; then
+            echo "[migrations] destructive operation found in $relative"
+            flagged=$((flagged + 1))
         fi
-    done <<< "$added"
-    if [ "$flagged" -gt 0 ]; then
-        echo "[migration-safety] $flagged new migration(s) contain destructive ops."
-        echo "[migration-safety] Pre-deploy backup will run next, but review before letting it through."
-        echo "[migration-safety] Set MIGRATION_SAFETY_ALLOW=1 in .env.envoy to ack and proceed."
-        if ! grep -E '^MIGRATION_SAFETY_ALLOW=(1|true|yes|on)' {{ $sharedPath }}/.env >/dev/null 2>&1; then
-            cd_envoy="$(grep -E '^MIGRATION_SAFETY_ALLOW' {{ $sharedPath }}/.env 2>/dev/null || true)"
-            echo "[migration-safety] aborted (current env: ${cd_envoy:-unset})"
-            exit 1
-        fi
-        echo "[migration-safety] MIGRATION_SAFETY_ALLOW set — proceeding."
+    done < <(find {{ $releasePath }}/database/migrations -type f -name '*.php' -print0 2>/dev/null)
+
+    if [ "$flagged" -gt 0 ] && [ "{{ $allowDestructiveMigrations ? '1' : '0' }}" != "1" ]; then
+        echo "[migrations] Refusing $flagged added or modified destructive migration(s)."
+        echo "[migrations] Review them, then re-run with --allow-destructive-migrations=true when intentional."
+        exit 1
     fi
-    echo "[migration-safety] scanned $(echo "$added" | wc -l) new migration(s) — pass"
+    echo "[migrations] added and modified migration scan passed."
+@endtask
+
+@task('db-backup', ['on' => 'vps'])
+    set -Eeuo pipefail
+    cd {{ $config->currentPath() }}
+    {{ $config->phpBinary }} artisan backup:run --config=backup_predeploy --only-db --disable-notifications --no-interaction --ansi
+    echo "[backup] pre-deploy database backup completed against the still-active env."
 @endtask
 
 @task('maintenance-on', ['on' => 'vps'])
-    set -euo pipefail
-    cd {{ $currentPath }}
-    {{ $phpBin }} artisan down \
-        --secret={{ $maintenanceSecret }} \
-        --redirect=/ \
-        --no-interaction \
-        --ansi
-    echo ""
-    echo "──────────────────────────────────────────────────────────────"
-    echo "  Maintenance bypass URL: https://{{ $domain }}/{{ $maintenanceSecret }}"
-    echo "  Visit ONCE to set bypass cookie, then preview while deploy continues."
-    echo "──────────────────────────────────────────────────────────────"
-    echo ""
-@endtask
-
-@task('prepare-laravel', ['on' => 'vps'])
-    set -euo pipefail
-    cd {{ $releasePath }}
-    larahelp --reoptimize
-    larahelp --setfacl
-    {{ $phpBin }} artisan migrate --force --no-interaction --ansi
-    {{ $phpBin }} artisan storage:link --force --no-interaction --ansi
-@endtask
-
-@task('prepare-laravel-fresh-seed', ['on' => 'vps'])
-    set -euo pipefail
-    @if($freshSeedConfirmation !== $freshSeedConfirmationPhrase)
-        echo "[deploy-fresh-seed] missing explicit destructive confirmation flag."
+    set -Eeuo pipefail
+    marker={{ $config->sharedPath() }}/storage/framework/down
+    if [ -f "$marker" ] && [ ! -f {{ $maintenanceOwner }} ]; then
+        echo "[maintenance] Existing maintenance marker is not owned by Envoy; refusing to overwrite it."
         exit 1
-    @endif
+    fi
+    cd {{ $config->currentPath() }}
+    {{ $config->phpBinary }} artisan down --retry=60 --refresh=15 --no-interaction --ansi
+    printf '%s\n' {{ escapeshellarg($releaseId) }} > {{ $maintenanceOwner }}
+    echo "[maintenance] Nginx now blocks application, static, and websocket traffic before PHP."
+@endtask
+
+@task('activate-env', ['on' => 'vps'])
+    set -Eeuo pipefail
+    active={{ $config->sharedPath() }}/.env
+    candidate={{ $releaseEnvironmentPath }}
+    test -s "$candidate"
+
+    if [ -e "$active" ] || [ -L "$active" ]; then
+        previous="$(readlink -f "$active" 2>/dev/null || printf '%s' "$active")"
+        test -f "$previous"
+        cp "$previous" {{ $config->archivePath() }}/.env-before-{{ $releaseId }}
+        chmod 0600 {{ $config->archivePath() }}/.env-before-{{ $releaseId }}
+    fi
+
+    active_next={{ $config->sharedPath() }}/.env.next
+    rm -f "$active_next"
+    ln -s "$candidate" "$active_next"
+    mv -Tf "$active_next" "$active"
+    echo "[env] shared .env now points to the release-specific environment."
+@endtask
+
+@task('prepare-release', ['on' => 'vps'])
+    set -Eeuo pipefail
     cd {{ $releasePath }}
-    larahelp --setfacl
-    larahelp --reoptimize
-    {{ $phpBin }} -r 'require "vendor/autoload.php"; $app = require "bootstrap/app.php"; $kernel = $app->make(Illuminate\Contracts\Console\Kernel::class); $kernel->bootstrap(); Illuminate\Support\Facades\DB::prohibitDestructiveCommands(false); $status = $kernel->call("migrate:fresh", ["--seed" => true, "--force" => true, "--no-interaction" => true, "--ansi" => true]); echo $kernel->output(); exit($status);'
-    {{ $phpBin }} artisan storage:link --force --no-interaction --ansi
+    current="$(readlink -f {{ $config->currentPath() }} 2>/dev/null || true)"
+    if [ "$current" = {{ escapeshellarg($releasePath) }} ] && [ -f .accelerator-prepared ]; then
+        {{ $config->phpBinary }} artisan optimize --no-interaction --ansi
+        echo "[laravel] refreshed caches for resumed init."
+        exit 0
+    fi
+
+    {{ $config->phpBinary }} artisan optimize:clear --no-interaction --ansi
+    @if($freshSeed)
+        {{ $config->phpBinary }} -r 'require "vendor/autoload.php"; $app = require "bootstrap/app.php"; $kernel = $app->make(Illuminate\Contracts\Console\Kernel::class); $kernel->bootstrap(); Illuminate\Support\Facades\DB::prohibitDestructiveCommands(false); $status = $kernel->call("migrate:fresh", ["--seed" => true, "--force" => true, "--no-interaction" => true, "--ansi" => true]); echo $kernel->output(); exit($status);'
+    @else
+        {{ $config->phpBinary }} artisan migrate --force --no-interaction --ansi
+    @endif
+
+    @if(($initialRelease || $freshSeed) && $config->initialAdminEnabled)
+        {{ $config->phpBinary }} artisan accelerator:provision-admin \
+            --name={{ $adminName }} \
+            --username={{ $adminUsername }} \
+            --email={{ $adminEmail }} \
+            --password-hash={{ $adminPasswordHash }} \
+            --no-interaction
+    @endif
+
+    {{ $config->phpBinary }} artisan storage:link --force --no-interaction --ansi
+    {{ $config->phpBinary }} artisan optimize --no-interaction --ansi
+    printf '%s\n' {{ escapeshellarg($releaseSha) }} > .accelerator-prepared
+    echo "[laravel] migration, bootstrap identity, storage, and caches are ready."
 @endtask
 
 @task('prune-dev-dependencies', ['on' => 'vps'])
-    set -euo pipefail
+    set -Eeuo pipefail
     cd {{ $releasePath }}
-    test -s composer.lock || { echo "[prune-dev-dependencies] composer.lock is required; refusing dependency resolution during deployment."; exit 1; }
-    composer install --no-dev --no-scripts --optimize-autoloader --classmap-authoritative --no-interaction --no-progress --quiet --ansi
-    # The seeded release was optimized while dev providers were installed.
-    # Remove boot manifests before Laravel boots against the pruned vendor tree.
+    composer install --no-dev --prefer-dist --optimize-autoloader --classmap-authoritative --no-interaction --no-progress
     find bootstrap/cache -maxdepth 1 -type f -name '*.php' -delete
-    larahelp --reoptimize
-    larahelp --setfacl
+    {{ $config->phpBinary }} artisan optimize --no-interaction --ansi
+    echo "[build] development dependencies removed after explicit fresh seed."
 @endtask
 
 @task('switch-current', ['on' => 'vps'])
-    set -euo pipefail
-    if [ -e {{ $nextSymlink }} ] || [ -L {{ $nextSymlink }} ]; then
-        mv {{ $nextSymlink }} {{ $archivePath }}/current.next.{{ $releaseId }}
+    set -Eeuo pipefail
+    test -f {{ $releasePath }}/vendor/autoload.php
+    test -L {{ $releasePath }}/.env
+    test -f {{ $releasePath }}/.accelerator-prepared
+
+    current="$(readlink -f {{ $config->currentPath() }} 2>/dev/null || true)"
+    if [ "$current" = {{ escapeshellarg($releasePath) }} ]; then
+        echo "[switch] current already points to {{ $releaseId }}."
+        exit 0
     fi
+
+    if [ -n "$current" ]; then
+        ln -s "$current" {{ $config->archivePath() }}/current-before-{{ $releaseId }}
+    elif [ -e {{ $config->currentPath() }} ] && [ ! -L {{ $config->currentPath() }} ]; then
+        mv {{ $config->currentPath() }} {{ $config->archivePath() }}/legacy-current-before-{{ $releaseId }}
+    fi
+
+    rm -f {{ $nextSymlink }}
     ln -s {{ $releasePath }} {{ $nextSymlink }}
-    if [ -e {{ $currentPath }} ] || [ -L {{ $currentPath }} ]; then
-        mv {{ $currentPath }} {{ $archivePath }}/current.before-{{ $releaseId }}
-    fi
-    mv {{ $nextSymlink }} {{ $currentPath }}
+    mv -Tf {{ $nextSymlink }} {{ $config->currentPath() }}
+    echo "[switch] current -> {{ $releaseId }}."
 @endtask
 
-@task('invalidate-opcache', ['on' => 'vps'])
-    set -euo pipefail
-    {{ $phpBin }} -r '$root = $argv[1]; if (! function_exists("opcache_invalidate")) { exit(0); } $iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root, FilesystemIterator::SKIP_DOTS)); foreach ($iterator as $file) { if ($file->isFile() && $file->getExtension() === "php") { opcache_invalidate($file->getPathname(), true); } }' {{ $releasePath }}
-@endtask
-
-@task('invalidate-current-opcache', ['on' => 'vps'])
-    set -euo pipefail
-    {{ $phpBin }} -r '$root = $argv[1]; if (! function_exists("opcache_invalidate")) { exit(0); } $iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root, FilesystemIterator::SKIP_DOTS)); foreach ($iterator as $file) { if ($file->isFile() && $file->getExtension() === "php") { opcache_invalidate($file->getPathname(), true); } }' {{ $currentPath }}
-@endtask
-
-@task('restart-service', ['on' => 'vps'])
-    set -euo pipefail
-    @if($httpRuntime === 'fpm' && $fpmService !== '')
-        echo "[restart-service] Reloading PHP-FPM service {{ $fpmService }}."
-        sudo systemctl reload {{ $fpmService }}
-    @endif
-    @if(! $hasSupervisorPrograms)
-        echo "[restart-service] No Supervisor-managed programs enabled for {{ $stage }}."
-    @else
+@task('activate-runtime', ['on' => 'vps'])
+    set -Eeuo pipefail
+    @if($hasSupervisorPrograms)
+        sudo supervisorctl reread
+        sudo supervisorctl update
         @if($service === 'all')
-            sudo supervisorctl restart {{ $group }}:*
-            sleep 2
-            # Fail fast if an enabled program cannot boot after deployment.
-            if sudo supervisorctl status {{ $group }}:* | grep -E '\sFATAL\s' >/dev/null 2>&1; then
-                echo "[restart-service] One or more programs are FATAL after restart:"
-                sudo supervisorctl status {{ $group }}:*
-                exit 1
-            fi
+            sudo supervisorctl restart {{ $config->group }}:*
+            target={{ escapeshellarg($config->group.':*') }}
         @else
-            sudo supervisorctl restart {{ $group }}:{{ $group }}_{{ $service }}
-            sleep 2
-            if sudo supervisorctl status {{ $group }}:{{ $group }}_{{ $service }} | grep -E '\sFATAL\s' >/dev/null 2>&1; then
-                echo "[restart-service] {{ $service }} is FATAL after restart."
+            sudo supervisorctl restart {{ $config->group }}:{{ $config->group }}_{{ $service }}
+            target={{ escapeshellarg($config->group.':'.$config->group.'_'.$service) }}
+        @endif
+
+        for attempt in $(seq 1 15); do
+            status="$(sudo supervisorctl status "$target" 2>&1 || true)"
+            if printf '%s\n' "$status" | grep -Eq '\b(FATAL|BACKOFF|EXITED|STOPPED|UNKNOWN)\b'; then
+                printf '%s\n' "$status"
+                echo "[runtime] A configured process failed to start."
                 exit 1
             fi
-        @endif
+            if [ -n "$status" ] && ! printf '%s\n' "$status" | grep -Ev '\bRUNNING\b' >/dev/null; then break; fi
+            sleep 1
+        done
+        sudo supervisorctl status "$target"
     @endif
+
+    @if($config->httpRuntime === 'fpm')
+        echo "[runtime] PHP-FPM stays scoped and running; the new realpath creates distinct OPcache keys without reloading unrelated pools."
+    @else
+        echo "[runtime] enabled stage services restarted; process-owned OPcache state was replaced."
+    @endif
+    echo "[runtime] stage runtime activation completed."
 @endtask
 
 @task('health-check', ['on' => 'vps'])
-    set -euo pipefail
-    @if($httpRuntime === 'octane')
-        # Curl Octane directly to validate the long-running application process.
-        status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 -H "Host: {{ $domain }}" http://127.0.0.1:{{ $octanePort }}/up || echo "000")
-        if [ "$status" != "200" ]; then
-            echo "[health-check] /up returned HTTP $status from Octane at 127.0.0.1:{{ $octanePort }} (expected 200)."
-            echo "[health-check] App did NOT boot cleanly. Maintenance mode is still ON if this was deploy."
-            exit 1
+    set -Eeuo pipefail
+    if sudo test -s /etc/letsencrypt/live/{{ $config->domain }}/fullchain.pem; then
+        scheme=https
+        resolve="--resolve {{ $config->domain }}:443:127.0.0.1"
+    else
+        scheme=http
+        resolve="--resolve {{ $config->domain }}:80:127.0.0.1"
+    fi
+
+    status=000
+    for attempt in $(seq 1 20); do
+        status="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 $resolve "$scheme://{{ $config->domain }}/up" || true)"
+        [ "$status" = "200" ] && break
+        sleep 1
+    done
+
+    if [ "$status" != "200" ]; then
+        echo "[health] /up returned HTTP ${status:-000}; deploy-owned maintenance remains active."
+        @if($hasSupervisorPrograms)
+            sudo supervisorctl status {{ $config->group }}:* || true
+        @endif
+        tail -n 80 {{ $config->sharedPath() }}/storage/logs/laravel.log 2>/dev/null || true
+        exit 1
+    fi
+    echo "[health] Nginx and {{ $config->httpRuntime }} served /up with HTTP 200."
+@endtask
+
+@task('ensure-ssl', ['on' => 'vps'])
+    set -Eeuo pipefail
+    challenge=""
+    candidate=""
+    cleanup_ssl() {
+        [ -z "$challenge" ] || rm -f "$challenge"
+        [ -z "$candidate" ] || rm -f "$candidate"
+    }
+    report_partial() {
+        code=$?
+        trap - ERR EXIT
+        cleanup_ssl
+        if [ "$code" -ne 0 ]; then
+            echo "[ssl] PARTIAL_READY: the application is healthy over HTTP, but HTTPS setup failed."
+            echo "[ssl] Resume with: vendor/bin/envoy run ssl --stage={{ $config->stage }}"
         fi
-        echo "[health-check] OK: Octane at 127.0.0.1:{{ $octanePort }}/up returned 200."
-    @else
-        # FPM is managed by the OS service; validate it through the active Nginx vhost.
-        status=$(curl -L -s -o /dev/null -w "%{http_code}" --max-time 8 --resolve "{{ $domain }}:80:127.0.0.1" --resolve "{{ $domain }}:443:127.0.0.1" http://{{ $domain }}/up || echo "000")
-        if [ "$status" != "200" ]; then
-            echo "[health-check] /up returned HTTP $status through Nginx/PHP-FPM for {{ $domain }} (expected 200)."
-            echo "[health-check] App did NOT boot cleanly. Maintenance mode is still ON if this was deploy."
-            exit 1
+        exit "$code"
+    }
+    trap report_partial ERR
+    trap cleanup_ssl EXIT
+
+    if ! sudo test -s /etc/letsencrypt/live/{{ $config->domain }}/fullchain.pem; then
+        challenge={{ $config->sharedPath() }}/acme/.well-known/acme-challenge/accelerator-preflight
+        printf '%s\n' "{{ $releaseId }}" > "$challenge"
+        body="$(curl -fsS --max-time 8 http://{{ $config->domain }}/.well-known/acme-challenge/accelerator-preflight)"
+        rm -f "$challenge"
+        [ "$body" = "{{ $releaseId }}" ] || { echo "[ssl] Public ACME webroot check failed."; false; }
+
+        sudo certbot certonly --webroot \
+            -w {{ $config->sharedPath() }}/acme \
+            -d {{ $config->domain }} \
+            -m {{ $config->sslEmail }} \
+            --agree-tos --non-interactive --keep-until-expiring
+    fi
+
+    target=/etc/nginx/sites-available/{{ $config->domain }}.conf
+    candidate="/tmp/{{ $config->group }}-nginx-ssl-$$.conf"
+    backup={{ $config->archivePath() }}/nginx-{{ $config->domain }}-before-ssl-$(date +%Y-%m-%d_%H-%M-%S).conf
+    printf '%s' {{ escapeshellarg($nginxSslBase64) }} | base64 --decode > "$candidate"
+
+    if ! cmp -s "$candidate" "$target"; then
+        sudo cp "$target" "$backup"
+        sudo chown "$(id -un):$(id -gn)" "$backup"
+        sudo install -o root -g root -m 0644 "$candidate" "$target"
+        if ! sudo nginx -t; then
+            sudo cp "$backup" "$target"
+            sudo nginx -t || true
+            echo "[ssl] SSL Nginx candidate failed; previous config restored."
+            false
         fi
-        echo "[health-check] OK: Nginx/PHP-FPM served {{ $domain }}/up with HTTP 200."
-    @endif
+        sudo systemctl reload nginx
+    fi
+
+    trap - ERR
+    echo "[ssl] valid certificate and rendered HTTPS vhost are active."
+@endtask
+
+@task('https-check', ['on' => 'vps'])
+    set -Eeuo pipefail
+    local_status="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 8 --resolve {{ $config->domain }}:443:127.0.0.1 https://{{ $config->domain }}/up || true)"
+    public_status="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 12 https://{{ $config->domain }}/up || true)"
+    [ "$local_status" = "200" ] && [ "$public_status" = "200" ] || {
+        echo "[ssl] HTTPS verification failed (local=$local_status public=$public_status)."
+        exit 1
+    }
+    echo "[ssl] local and public HTTPS health checks returned 200."
 @endtask
 
 @task('maintenance-off', ['on' => 'vps'])
-    set -euo pipefail
-    cd {{ $currentPath }}
-    {{ $phpBin }} artisan up --no-interaction --ansi
+    set -Eeuo pipefail
+    if [ -f {{ $maintenanceOwner }} ] && [ "$(cat {{ $maintenanceOwner }})" = "{{ $releaseId }}" ]; then
+        cd {{ $config->currentPath() }}
+        {{ $config->phpBinary }} artisan up --no-interaction --ansi
+        rm -f {{ $maintenanceOwner }}
+        echo "[maintenance] deploy-owned marker removed."
+    else
+        echo "[maintenance] no marker owned by this deploy; nothing removed."
+    fi
+@endtask
+
+@task('clear-deploy-maintenance', ['on' => 'vps'])
+    set -Eeuo pipefail
+    if [ -f {{ $maintenanceOwner }} ]; then
+        cd {{ $config->currentPath() }}
+        {{ $config->phpBinary }} artisan up --no-interaction --ansi
+        rm -f {{ $maintenanceOwner }}
+        echo "[maintenance] stale deploy-owned marker cleared after healthy rollback."
+    fi
 @endtask
 
 @task('prune-releases', ['on' => 'vps'])
-    set -euo pipefail
-    keep={{ $keepReleases }}
-    if [ "$keep" -lt 1 ]; then
-        echo "[prune-releases] OPS_DEPLOY_KEEP_RELEASES=$keep is invalid (must be >=1). Skip."
-        exit 0
-    fi
-    current="$(readlink -f {{ $currentPath }} 2>/dev/null || true)"
-    # Sort releases newest-first, keep $keep including current. Anything beyond is pruned.
-    # `current` is always preserved even if it would have fallen off the list.
-    mapfile -t all_releases < <(find {{ $releasesPath }} -mindepth 1 -maxdepth 1 -type d | sort -r)
+    set -Eeuo pipefail
+    current="$(readlink -f {{ $config->currentPath() }} 2>/dev/null || true)"
+    mapfile -t releases < <(find {{ $config->releasesPath() }} -mindepth 1 -maxdepth 1 -type d -printf '%T@ %p\n' | sort -rn | cut -d' ' -f2-)
     kept=0
     pruned=0
-    for r in "${all_releases[@]}"; do
-        if [ "$r" = "$current" ]; then
-            kept=$((kept+1))
-            continue
-        fi
-        if [ "$kept" -lt "$keep" ]; then
-            kept=$((kept+1))
-            continue
-        fi
-        echo "[prune-releases] removing $(basename "$r")"
-        rm -rf "$r"
-        pruned=$((pruned+1))
+    for release in "${releases[@]}"; do
+        case "$release" in {{ $config->releasesPath() }}/*) ;; *) echo "[prune] unsafe release path: $release"; exit 1 ;; esac
+        if [ "$release" = "$current" ]; then kept=$((kept + 1)); continue; fi
+        if [ "$kept" -lt {{ $config->keepReleases }} ]; then kept=$((kept + 1)); continue; fi
+        release_env="$(readlink -f "$release/.env" 2>/dev/null || true)"
+        echo "[prune] removing old release $(basename "$release")"
+        rm -rf -- "$release"
+        case "$release_env" in
+            {{ $config->sharedPath() }}/env/*.env)
+                if ! find {{ $config->releasesPath() }} -mindepth 2 -maxdepth 2 -type l -name .env -exec readlink -f {} \; | grep -Fx "$release_env" >/dev/null; then
+                    rm -f -- "$release_env"
+                fi
+                ;;
+        esac
+        pruned=$((pruned + 1))
     done
-    echo "[prune-releases] kept=$kept pruned=$pruned (target keep=$keep)"
+    echo "[prune] kept=$kept pruned=$pruned; archive evidence was not touched."
 @endtask
 
-{{-- ════════════════════════════════════════════════════════════════════
-     Diagnostics, rollback, listing
-     ──────────────────────────────────────────────────────────────────── --}}
+@task('rollback-release', ['on' => 'vps', 'confirm' => true])
+    set -Eeuo pipefail
+    current="$(readlink -f {{ $config->currentPath() }} 2>/dev/null || true)"
+    target=""
+    while IFS= read -r candidate; do
+        [ "$candidate" = "$current" ] && continue
+        if [ -f "$candidate/vendor/autoload.php" ] && [ -L "$candidate/.env" ] && [ -f "$candidate/.accelerator-prepared" ]; then
+            target="$candidate"
+            break
+        fi
+    done < <(find {{ $config->releasesPath() }} -mindepth 1 -maxdepth 1 -type d -printf '%T@ %p\n' | sort -rn | cut -d' ' -f2-)
+
+    [ -n "$target" ] || { echo "[rollback] No complete previous release exists."; exit 1; }
+    case "$target" in {{ $config->releasesPath() }}/*) ;; *) echo "[rollback] unsafe target."; exit 1 ;; esac
+
+    target_env="$(readlink -f "$target/.env")"
+    case "$target_env" in {{ $config->sharedPath() }}/env/*.env) ;; *) echo "[rollback] unsafe release env target."; exit 1 ;; esac
+    test -s "$target_env"
+
+    rm -f {{ $rollbackSymlink }}
+    ln -s "$target" {{ $rollbackSymlink }}
+    if [ -n "$current" ]; then
+        ln -s "$current" {{ $config->archivePath() }}/current-before-rollback-$(date +%Y-%m-%d_%H-%M-%S)
+    fi
+    mv -Tf {{ $rollbackSymlink }} {{ $config->currentPath() }}
+    rm -f {{ $config->sharedPath() }}/.env.next
+    ln -s "$target_env" {{ $config->sharedPath() }}/.env.next
+    mv -Tf {{ $config->sharedPath() }}/.env.next {{ $config->sharedPath() }}/.env
+    echo "[rollback] current -> $(basename "$target"). Database rollback remains manual by design."
+@endtask
 
 @task('check-status', ['on' => 'vps'])
-    set -euo pipefail
-    echo "Stage: {{ $stage }}"
-    echo "Domain: {{ $domain }}"
-    echo "Root: {{ $deployRoot }}"
-    echo "HTTP runtime: {{ $httpRuntime }}"
-    echo "Current: $(readlink -f {{ $currentPath }} 2>/dev/null || true)"
-    echo "Shared .env: $(test -f {{ $sharedPath }}/.env && echo present || echo missing)"
+    set -Eeuo pipefail
+    current="$(readlink -f {{ $config->currentPath() }} 2>/dev/null || true)"
+    echo "stage={{ $config->stage }}"
+    echo "domain={{ $config->domain }}"
+    echo "root={{ $config->deployRoot }}"
+    echo "runtime={{ $config->httpRuntime }}"
+    echo "current=${current:-missing}"
+    echo "runtime_env=$(test -s {{ $config->sharedPath() }}/.env && echo present || echo missing)"
+    echo "maintenance=$(test -f {{ $config->sharedPath() }}/storage/framework/down && echo active || echo inactive)"
+    echo "maintenance_owner=$(test -f {{ $maintenanceOwner }} && echo envoy || echo none)"
+    echo "certificate=$(sudo test -s /etc/letsencrypt/live/{{ $config->domain }}/fullchain.pem && echo present || echo missing)"
+    sudo nginx -t
     @if($hasSupervisorPrograms)
-        sudo supervisorctl status {{ $group }}:*
-    @else
-        echo "Supervisor programs: none enabled"
+        sudo supervisorctl status {{ $config->group }}:* || true
     @endif
 @endtask
 
 @task('view-logs', ['on' => 'vps'])
-    set -euo pipefail
+    set -Eeuo pipefail
     @if($service === 'all')
-        tail -f {{ $sharedPath }}/storage/logs/laravel.log
+        log={{ $config->sharedPath() }}/storage/logs/laravel.log
     @else
-        tail -f {{ $sharedPath }}/storage/logs/{{ $service }}.log
+        log={{ $config->sharedPath() }}/storage/logs/{{ $service }}.log
     @endif
+    test -f "$log" || { echo "[logs] Missing log: $log"; exit 1; }
+    tail -n 200 "$log"
 @endtask
 
 @task('list-releases', ['on' => 'vps'])
-    set -euo pipefail
-    current="$(readlink -f {{ $currentPath }} 2>/dev/null || true)"
-    keep={{ $keepReleases }}
-    echo ""
-    printf "%-44s %-10s %-6s %s\n" "RELEASE" "SIZE" "AGE" "STATUS"
-    echo "──────────────────────────────────────────────────────────────────────────────"
-    idx=0
-    while IFS= read -r r; do
-        rel_name="$(basename "$r")"
-        size="$(du -sh "$r" 2>/dev/null | awk '{print $1}')"
-        mtime="$(stat -c '%Y' "$r" 2>/dev/null || stat -f '%m' "$r")"
-        now="$(date +%s)"
-        age_s=$((now - mtime))
-        if [ "$age_s" -lt 3600 ]; then
-            age=$((age_s / 60))m
-        elif [ "$age_s" -lt 86400 ]; then
-            age=$((age_s / 3600))h
-        else
-            age=$((age_s / 86400))d
-        fi
-        if [ "$r" = "$current" ]; then
-            status="CURRENT"
-        elif [ "$idx" -lt "$keep" ]; then
-            status="kept"
-        else
-            status="will-prune"
-        fi
-        printf "%-44s %-10s %-6s %s\n" "$rel_name" "$size" "$age" "$status"
-        idx=$((idx+1))
-    done < <(find {{ $releasesPath }} -mindepth 1 -maxdepth 1 -type d | sort -r)
-    echo ""
-    echo "OPS_DEPLOY_KEEP_RELEASES=${keep}"
+    set -Eeuo pipefail
+    current="$(readlink -f {{ $config->currentPath() }} 2>/dev/null || true)"
+    printf '%-56s %-10s %s\n' RELEASE SIZE STATUS
+    while IFS= read -r release; do
+        status=available
+        [ "$release" = "$current" ] && status=CURRENT
+        [ -f "$release/.accelerator-prepared" ] || status=incomplete
+        size="$(du -sh "$release" | awk '{ print $1 }')"
+        printf '%-56s %-10s %s\n' "$(basename "$release")" "$size" "$status"
+    done < <(find {{ $config->releasesPath() }} -mindepth 1 -maxdepth 1 -type d -printf '%T@ %p\n' | sort -rn | cut -d' ' -f2-)
 @endtask
-
-@task('rollback-release', ['on' => 'vps', 'confirm' => true])
-    set -euo pipefail
-    current="$(readlink -f {{ $currentPath }} 2>/dev/null || true)"
-    target=""
-    # Pick the newest release that is NOT current AND has a complete build
-    # (vendor/autoload.php and .env symlink both present).
-    while IFS= read -r r; do
-        if [ "$r" = "$current" ]; then
-            continue
-        fi
-        if [ ! -f "$r/vendor/autoload.php" ]; then
-            echo "[rollback] skipping incomplete release $(basename "$r") (no vendor/autoload.php)"
-            continue
-        fi
-        if [ ! -L "$r/.env" ]; then
-            echo "[rollback] skipping incomplete release $(basename "$r") (no .env symlink)"
-            continue
-        fi
-        target="$r"
-        break
-    done < <(find {{ $releasesPath }} -mindepth 1 -maxdepth 1 -type d | sort -r)
-
-    if [ -z "$target" ]; then
-        echo "[rollback] No valid previous release found. Aborting."
-        exit 1
-    fi
-
-    echo "[rollback] target: $(basename "$target")"
-
-    if [ -e {{ $rollbackSymlink }} ] || [ -L {{ $rollbackSymlink }} ]; then
-        mv {{ $rollbackSymlink }} {{ $archivePath }}/current.rollback.$(date +%Y-%m-%d_%H-%M-%S)
-    fi
-    ln -s "$target" {{ $rollbackSymlink }}
-    if [ -e {{ $currentPath }} ] || [ -L {{ $currentPath }} ]; then
-        mv {{ $currentPath }} {{ $archivePath }}/current.before-rollback-$(date +%Y-%m-%d_%H-%M-%S)
-    fi
-    mv {{ $rollbackSymlink }} {{ $currentPath }}
-    echo "[rollback] current -> $(basename "$target")"
-@endtask
-
-
-{{-- ════════════════════════════════════════════════════════════════════
-     Backup listing
-     ──────────────────────────────────────────────────────────────────── --}}
 
 @task('list-backups', ['on' => 'vps'])
-    set -euo pipefail
-    app_name=$(grep -E "^APP_NAME=" {{ $sharedPath }}/.env | cut -d= -f2 | tr -d '"' | tr -d "'")
-    backup_base="{{ $sharedPath }}/storage/app/private"
-
-    echo ""
-    echo "═══════════════════════════════════════════════════════════════"
-    echo "  PREDEPLOY BACKUPS: ${app_name}-predeploy"
-    echo "═══════════════════════════════════════════════════════════════"
-    predeploy_dir="${backup_base}/${app_name}-predeploy"
-    if [ -d "$predeploy_dir" ]; then
-        find "$predeploy_dir" -type f -name "*.zip" -printf "%T@ %s %p\n" 2>/dev/null | sort -rn | head -10 | while read -r modified size path; do
-            size_kb=$((size / 1024))
-            printf "  %6s KB  %s\n" "$size_kb" "$(basename "$path")"
-        done
-    else
-        echo "  (none)"
-    fi
-
-    echo ""
-    echo "═══════════════════════════════════════════════════════════════"
-    echo "  SCHEDULED BACKUPS: ${app_name}"
-    echo "═══════════════════════════════════════════════════════════════"
-    scheduled_dir="${backup_base}/${app_name}"
-    if [ -d "$scheduled_dir" ]; then
-        find "$scheduled_dir" -type f -name "*.zip" -printf "%T@ %s %p\n" 2>/dev/null | sort -rn | head -10 | while read -r modified size path; do
-            size_kb=$((size / 1024))
-            printf "  %6s KB  %s\n" "$size_kb" "$(basename "$path")"
-        done
-    else
-        echo "  (none)"
-    fi
-    echo ""
+    set -Eeuo pipefail
+    base={{ $config->sharedPath() }}/storage/app/private
+    find "$base" -type f -name '*.zip' -printf '%T@\t%s\t%p\n' 2>/dev/null | sort -rn | head -20 | while IFS=$'\t' read -r modified bytes path; do
+        printf '%10s KB  %s\n' "$((bytes / 1024))" "$path"
+    done
 @endtask
 
-{{-- ════════════════════════════════════════════════════════════════════
-     One-shot VPS bootstrap: nginx vhost + supervisor conf
-     ──────────────────────────────────────────────────────────────────── --}}
-
-@task('bootstrap-nginx', ['on' => 'localhost'])
-    set -euo pipefail
-
-    # Determine which stub to use: if cert already exists on VPS, use SSL stub
-    has_cert=$(ssh {{ $sshHost }} 'sudo test -f /etc/letsencrypt/live/{{ $domain }}/fullchain.pem && echo yes || echo no')
-
-    if [ "$has_cert" = "yes" ]; then
-        test -s {{ $localNginxSsl }}
-        conf_file="{{ $localNginxSsl }}"
-        echo "[bootstrap-nginx] SSL cert detected — using SSL+QUIC stub"
-    else
-        test -s {{ $localNginx }}
-        conf_file="{{ $localNginx }}"
-        echo "[bootstrap-nginx] No SSL cert — using HTTP-only stub"
-    fi
-
-    # Guard: if existing config has ssl_certificate, warn and require confirmation
-    has_ssl_config=$(ssh {{ $sshHost }} 'sudo grep -q "ssl_certificate" /etc/nginx/sites-available/{{ $domain }}.conf 2>/dev/null && echo yes || echo no')
-    if [ "$has_ssl_config" = "yes" ] && [ "$has_cert" = "no" ]; then
-        echo "[bootstrap-nginx] WARNING: existing config has SSL but no cert found."
-        echo "[bootstrap-nginx] Skipping to avoid downgrading SSL config. Fix the certificate path or restore the archived vhost."
-        exit 0
-    fi
-
-    echo "[bootstrap-nginx] uploading rendered {{ $httpRuntime }} vhost to {{ $sshHost }}…"
-    scp "$conf_file" {{ $sshHost }}:/tmp/{{ $domain }}.conf
-    ssh {{ $sshHost }} 'set -euo pipefail
-        sudo mkdir -p /etc/nginx/sites-available /etc/nginx/sites-enabled
-        if [ -f /etc/nginx/sites-available/{{ $domain }}.conf ]; then
-            sudo mkdir -p {{ $archivePath }}
-            sudo cp /etc/nginx/sites-available/{{ $domain }}.conf {{ $archivePath }}/nginx-{{ $domain }}.conf.before-bootstrap-$(date +%Y-%m-%d_%H-%M-%S)
-        fi
-        sudo mv /tmp/{{ $domain }}.conf /etc/nginx/sites-available/{{ $domain }}.conf
-        sudo chown root:root /etc/nginx/sites-available/{{ $domain }}.conf
-        sudo chmod 644 /etc/nginx/sites-available/{{ $domain }}.conf
-        sudo ln -sfn /etc/nginx/sites-available/{{ $domain }}.conf /etc/nginx/sites-enabled/{{ $domain }}.conf
-        sudo nginx -t
-        sudo systemctl reload nginx
-    '
-
-    if [ "$has_cert" = "yes" ]; then
-        echo "[bootstrap-nginx] SSL vhost live for {{ $domain }} (HTTPS + HTTP/2 + HTTP/3)"
-    else
-        echo "[bootstrap-nginx] HTTP-only vhost live for {{ $domain }}."
-        echo "[bootstrap-nginx] To enable SSL, run:"
-        echo "  vendor/bin/envoy run bootstrap-ssl --stage={{ $stage }}"
-    fi
-
-    rm -f {{ $localNginx }} {{ $localNginxSsl }}
-@endtask
-
-@task('bootstrap-supervisor', ['on' => 'localhost'])
-    set -euo pipefail
+@task('render-config', ['on' => 'localhost'])
+    set -Eeuo pipefail
+    echo "===== NGINX HTTP ====="
+    {{ $localPhp }} -r 'echo base64_decode($argv[1]);' {{ escapeshellarg($nginxHttpBase64) }}
+    echo "===== NGINX HTTPS ====="
+    {{ $localPhp }} -r 'echo base64_decode($argv[1]);' {{ escapeshellarg($nginxSslBase64) }}
+    echo "===== SUPERVISOR ====="
     @if($hasSupervisorPrograms)
-        test -s {{ $localSupervisor }}
-        echo "[bootstrap-supervisor] uploading rendered conf to {{ $sshHost }}…"
-        scp {{ $localSupervisor }} {{ $sshHost }}:/tmp/{{ $group }}.conf
-        ssh {{ $sshHost }} 'set -euo pipefail
-            sudo mkdir -p /etc/supervisor/conf.d
-            if [ -f /etc/supervisor/conf.d/{{ $group }}.conf ]; then
-                sudo mkdir -p {{ $archivePath }}
-                sudo cp /etc/supervisor/conf.d/{{ $group }}.conf {{ $archivePath }}/supervisor-{{ $group }}.conf.before-bootstrap-$(date +%Y-%m-%d_%H-%M-%S)
-            fi
-            sudo mv /tmp/{{ $group }}.conf /etc/supervisor/conf.d/{{ $group }}.conf
-            sudo chown root:root /etc/supervisor/conf.d/{{ $group }}.conf
-            sudo chmod 644 /etc/supervisor/conf.d/{{ $group }}.conf
-            sudo supervisorctl reread
-            sudo supervisorctl update
-            echo "[bootstrap-supervisor] {{ $group }} group registered. Programs:"
-            sudo supervisorctl status {{ $group }}:* || true
-        '
-        rm -f {{ $localSupervisor }}
+        {{ $localPhp }} -r 'echo base64_decode($argv[1]);' {{ escapeshellarg($supervisorBase64) }}
     @else
-        echo "[bootstrap-supervisor] No managed services enabled; removing any old {{ $group }} config."
-        ssh {{ $sshHost }} 'set -euo pipefail
-            if [ -f /etc/supervisor/conf.d/{{ $group }}.conf ]; then
-                sudo mkdir -p {{ $archivePath }}
-                sudo cp /etc/supervisor/conf.d/{{ $group }}.conf {{ $archivePath }}/supervisor-{{ $group }}.conf.before-disable-$(date +%Y-%m-%d_%H-%M-%S)
-                sudo rm /etc/supervisor/conf.d/{{ $group }}.conf
-                sudo supervisorctl reread
-                sudo supervisorctl update
-            fi
-        '
+        echo "(no Supervisor-managed programs)"
     @endif
-@endtask
-
-@task('obtain-cert', ['on' => 'localhost'])
-    set -euo pipefail
-    # Check if cert already exists
-    has_cert=$(ssh {{ $sshHost }} 'sudo test -f /etc/letsencrypt/live/{{ $domain }}/fullchain.pem && echo yes || echo no')
-    if [ "$has_cert" = "yes" ]; then
-        echo "[obtain-cert] Certificate already exists for {{ $domain }}. Skipping."
-        exit 0
-    fi
-
-    # Ensure webroot path exists
-    ssh {{ $sshHost }} 'sudo mkdir -p {{ $deployRoot }}/current/public/.well-known/acme-challenge'
-
-    echo "[obtain-cert] Requesting certificate via certbot webroot..."
-    ssh {{ $sshHost }} 'sudo certbot certonly \
-        --webroot \
-        -w {{ $deployRoot }}/current/public \
-        -d {{ $domain }} \
-        -m {{ $sslEmail }} \
-        --agree-tos \
-        --non-interactive'
-
-    echo "[obtain-cert] Certificate obtained for {{ $domain }}."
-@endtask
-
-@task('upgrade-nginx-ssl', ['on' => 'localhost'])
-    set -euo pipefail
-    # Verify cert exists after obtain-cert
-    has_cert=$(ssh {{ $sshHost }} 'sudo test -f /etc/letsencrypt/live/{{ $domain }}/fullchain.pem && echo yes || echo no')
-    if [ "$has_cert" != "yes" ]; then
-        echo "[upgrade-nginx-ssl] No certificate found. Run obtain-cert first or check certbot output."
-        exit 1
-    fi
-
-    test -s {{ $localNginxSsl }}
-    echo "[upgrade-nginx-ssl] Uploading SSL vhost config..."
-    scp {{ $localNginxSsl }} {{ $sshHost }}:/tmp/{{ $domain }}.conf
-    ssh {{ $sshHost }} 'set -euo pipefail
-        sudo mkdir -p {{ $archivePath }}
-        if [ -f /etc/nginx/sites-available/{{ $domain }}.conf ]; then
-            sudo cp /etc/nginx/sites-available/{{ $domain }}.conf {{ $archivePath }}/nginx-{{ $domain }}.conf.before-ssl-$(date +%Y-%m-%d_%H-%M-%S)
-        fi
-        sudo mv /tmp/{{ $domain }}.conf /etc/nginx/sites-available/{{ $domain }}.conf
-        sudo chown root:root /etc/nginx/sites-available/{{ $domain }}.conf
-        sudo chmod 644 /etc/nginx/sites-available/{{ $domain }}.conf
-        sudo ln -sfn /etc/nginx/sites-available/{{ $domain }}.conf /etc/nginx/sites-enabled/{{ $domain }}.conf
-        sudo nginx -t
-        sudo systemctl reload nginx
-    '
-    echo "[upgrade-nginx-ssl] SSL vhost live for {{ $domain }} (HTTPS + HTTP/2 + HTTP/3)"
-    rm -f {{ $localNginxSsl }}
 @endtask

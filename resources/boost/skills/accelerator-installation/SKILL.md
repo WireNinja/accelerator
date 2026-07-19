@@ -90,21 +90,24 @@ bash vendor/wireninja/accelerator/bin/install \
   --features=filament,fortify,panels,settings,horizon,reverb,nightwatch \
   --redis \
   --deploy \
+  --deployment-mode=single \
   --project=my-project \
-  --ssh-host=onidel \
+  --ssh-host=server \
   --repo=git@github.com:example/my-project.git \
+  --branch=main \
   --domain=app.example.com \
   --deploy-root=/var/www/app.example.com \
   --http-runtime=octane
 ```
 
-This creates `Envoy.blade.php`, `.env.envoy`, `.env.staging`, and `.env.production`. The three env files are local-only and gitignored.
+Single-stage mode creates `Envoy.blade.php`, `.env.envoy`, and `.env.production`. Dual-stage mode also requires `--staging-domain` / `--staging-deploy-root` and creates `.env.staging`. Runtime/deploy env files are local-only, gitignored, and mode `0600`.
 
 - Only `OPS_DEPLOY_*` keys belong in `.env.envoy`.
 - Runtime application keys belong in `.env.staging` / `.env.production`.
-- Fill real credentials locally; never invent or commit production secrets.
+- Generated stage files receive independent APP_KEY/Reverb credentials. Fill operator-owned database and third-party credentials locally; never invent or commit them.
 - Use an absolute shared database path for deployed SQLite.
 - Never enable Horizon and the plain queue worker together.
+- Valid Envoy stages are `staging` and `production`; use `init` once, then `deploy`.
 
 Use the deployment skill before running Envoy against a server.
 

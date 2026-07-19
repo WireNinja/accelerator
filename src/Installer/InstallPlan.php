@@ -5,9 +5,29 @@ declare(strict_types=1);
 namespace WireNinja\Accelerator\Installer;
 
 use InvalidArgumentException;
+use WireNinja\Accelerator\Deployment\DeploymentConfig;
 
 final readonly class InstallPlan
 {
+    /** @var list<string> */
+    private const FEATURES = [
+        'filament',
+        'fortify',
+        'panels',
+        'settings',
+        'ticketing',
+        'oauth',
+        'pwa',
+        'telegram',
+        'telemetry',
+        'insider',
+        'horizon',
+        'reverb',
+        'scout',
+        'nightwatch',
+        'wayfinder',
+    ];
+
     /**
      * @param  list<string>  $features
      */
@@ -23,19 +43,33 @@ final readonly class InstallPlan
         public bool $useRedis,
         public array $features,
         public bool $deploy,
+        public string $deploymentMode,
         public string $project,
         public string $sshHost,
         public string $repository,
+        public string $repositoryBranch,
         public string $domain,
         public string $deployRoot,
+        public string $stagingDomain,
+        public string $stagingDeployRoot,
         public string $httpRuntime,
     ) {
         if (! in_array($this->primaryFrontend, ['inertia', 'livewire'], true)) {
             throw new InvalidArgumentException('Primary frontend must be inertia or livewire.');
         }
 
-        if (trim($this->adminName) === '') {
-            throw new InvalidArgumentException('Super Admin name is required.');
+        if (trim($this->appName) === '' || preg_match('/[\x00-\x1F\x7F]/', $this->appName) === 1) {
+            throw new InvalidArgumentException('Application name is required and cannot contain control characters.');
+        }
+
+        $appScheme = parse_url($this->appUrl, PHP_URL_SCHEME);
+
+        if (! filter_var($this->appUrl, FILTER_VALIDATE_URL) || ! in_array($appScheme, ['http', 'https'], true)) {
+            throw new InvalidArgumentException('Application URL must be an absolute HTTP or HTTPS URL.');
+        }
+
+        if (trim($this->adminName) === '' || preg_match('/[\x00-\x1F\x7F]/', $this->adminName) === 1 || strlen($this->adminName) > 100) {
+            throw new InvalidArgumentException('Super Admin name is required, must be at most 100 bytes, and cannot contain control characters.');
         }
 
         if (preg_match('/^[a-z0-9._-]+$/', $this->adminUsername) !== 1) {
@@ -54,12 +88,41 @@ final readonly class InstallPlan
             throw new InvalidArgumentException('Database must be sqlite, mysql, or pgsql.');
         }
 
+        $unknownFeatures = array_values(array_diff($this->features, self::FEATURES));
+
+        if ($unknownFeatures !== []) {
+            throw new InvalidArgumentException('Unknown Accelerator features: '.implode(', ', $unknownFeatures));
+        }
+
         if (! in_array($this->httpRuntime, ['fpm', 'octane'], true)) {
             throw new InvalidArgumentException('HTTP runtime must be fpm or octane.');
         }
 
-        if ($this->deploy && ($this->repository === '' || $this->domain === '' || $this->deployRoot === '')) {
-            throw new InvalidArgumentException('Deployment repository, domain, and root are required.');
+        if (! in_array($this->deploymentMode, ['single', 'dual'], true)) {
+            throw new InvalidArgumentException('Deployment mode must be single or dual.');
+        }
+
+        if ($this->deploy && (
+            $this->repository === ''
+            || $this->repositoryBranch === ''
+            || $this->domain === ''
+            || $this->deployRoot === ''
+            || ($this->deploymentMode === 'dual' && ($this->stagingDomain === '' || $this->stagingDeployRoot === ''))
+        )) {
+            throw new InvalidArgumentException('Deployment repository, branch, domain, and enabled stage roots are required.');
+        }
+
+        if ($this->deploy) {
+            DeploymentConfig::validateInstallerTargets(
+                project: $this->project,
+                sshHost: $this->sshHost,
+                repository: $this->repository,
+                branch: $this->repositoryBranch,
+                productionDomain: $this->domain,
+                productionRoot: $this->deployRoot,
+                stagingDomain: $this->deploymentMode === 'dual' ? $this->stagingDomain : null,
+                stagingRoot: $this->deploymentMode === 'dual' ? $this->stagingDeployRoot : null,
+            );
         }
     }
 
@@ -88,11 +151,15 @@ final readonly class InstallPlan
             useRedis: (bool) ($data['useRedis'] ?? false),
             features: array_values(array_filter($data['features'] ?? [], is_string(...))),
             deploy: (bool) ($data['deploy'] ?? false),
+            deploymentMode: self::string($data, 'deploymentMode', 'single'),
             project: self::string($data, 'project'),
             sshHost: self::string($data, 'sshHost'),
             repository: self::string($data, 'repository'),
+            repositoryBranch: self::string($data, 'repositoryBranch', 'main'),
             domain: self::string($data, 'domain'),
             deployRoot: self::string($data, 'deployRoot'),
+            stagingDomain: self::string($data, 'stagingDomain'),
+            stagingDeployRoot: self::string($data, 'stagingDeployRoot'),
             httpRuntime: self::string($data, 'httpRuntime'),
         );
     }
@@ -100,8 +167,8 @@ final readonly class InstallPlan
     /**
      * @param  array<string, mixed>  $data
      */
-    private static function string(array $data, string $key): string
+    private static function string(array $data, string $key, string $default = ''): string
     {
-        return is_string($data[$key] ?? null) ? $data[$key] : '';
+        return is_string($data[$key] ?? null) ? $data[$key] : $default;
     }
 }

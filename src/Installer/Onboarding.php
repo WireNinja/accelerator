@@ -169,16 +169,29 @@ final class Onboarding
         );
 
         $project = $defaultProject;
-        $sshHost = 'onidel';
+        $sshHost = 'server';
         $repository = $this->processRunner->capture(['git', 'remote', 'get-url', 'origin'], $this->projectRoot);
+        $repositoryBranch = $this->processRunner->capture(['git', 'branch', '--show-current'], $this->projectRoot) ?: 'main';
+        $deploymentMode = 'single';
         $domain = (string) parse_url($appUrl, PHP_URL_HOST);
         $deployRoot = "/var/www/{$project}";
+        $stagingDomain = '';
+        $stagingDeployRoot = '';
         $httpRuntime = 'octane';
 
         if ($deploy) {
+            $deploymentMode = select(
+                label: 'Deployment topology',
+                options: [
+                    'single' => 'Production only',
+                    'dual' => 'Staging and production',
+                ],
+                default: 'single',
+            );
             $project = text(label: 'Deployment project key', default: $project, required: true);
             $sshHost = text(label: 'SSH host alias', default: $sshHost, required: true);
             $repository = text(label: 'Git repository URL', default: $repository, required: true);
+            $repositoryBranch = text(label: 'Git deployment branch', default: $repositoryBranch, required: true);
             $domain = text(
                 label: 'Production domain',
                 default: str_ends_with($domain, '.test') ? '' : $domain,
@@ -188,8 +201,21 @@ final class Onboarding
                     : 'Enter a valid hostname without a scheme or path.',
             );
             $deployRoot = text(label: 'Production release root', default: "/var/www/{$domain}", required: true);
+
+            if ($deploymentMode === 'dual') {
+                $stagingDomain = text(
+                    label: 'Staging domain',
+                    default: "staging.{$domain}",
+                    required: true,
+                    validate: static fn (string $value): ?string => preg_match('/^(?=.{1,253}$)(?!-)[a-z0-9.-]+(?<!-)$/i', $value)
+                        ? null
+                        : 'Enter a valid hostname without a scheme or path.',
+                );
+                $stagingDeployRoot = text(label: 'Staging release root', default: "/var/www/{$stagingDomain}", required: true);
+            }
+
             $httpRuntime = select(
-                label: 'Production HTTP runtime',
+                label: 'Deployment HTTP runtime',
                 options: ['octane' => 'Octane + Swoole', 'fpm' => 'PHP-FPM'],
                 default: 'octane',
             );
@@ -207,11 +233,15 @@ final class Onboarding
             useRedis: $useRedis,
             features: $features,
             deploy: $deploy,
+            deploymentMode: $deploymentMode,
             project: $project,
             sshHost: $sshHost,
             repository: $repository,
+            repositoryBranch: $repositoryBranch,
             domain: $domain,
             deployRoot: $deployRoot,
+            stagingDomain: $stagingDomain,
+            stagingDeployRoot: $stagingDeployRoot,
             httpRuntime: $httpRuntime,
         );
     }
@@ -259,7 +289,9 @@ final class Onboarding
             $features = $this->resolveFeatures($requestedFeatures);
         }
         $deploy = isset($options['deploy']);
+        $deploymentMode = $this->option($options, 'deployment-mode', 'single');
         $domain = $this->option($options, 'domain');
+        $stagingDomain = $this->option($options, 'staging-domain', $domain === '' ? '' : "staging.{$domain}");
         $adminPassword = $this->option($options, 'admin-password', (string) getenv('ACCELERATOR_ADMIN_PASSWORD'));
 
         if ($adminPassword === '') {
@@ -283,11 +315,15 @@ final class Onboarding
             useRedis: isset($options['redis']),
             features: $features,
             deploy: $deploy,
+            deploymentMode: $deploymentMode,
             project: $this->option($options, 'project', $defaultProject),
-            sshHost: $this->option($options, 'ssh-host', 'onidel'),
+            sshHost: $this->option($options, 'ssh-host', 'server'),
             repository: $this->option($options, 'repo'),
+            repositoryBranch: $this->option($options, 'branch', 'main'),
             domain: $domain,
             deployRoot: $this->option($options, 'deploy-root', $domain === '' ? '' : "/var/www/{$domain}"),
+            stagingDomain: $stagingDomain,
+            stagingDeployRoot: $this->option($options, 'staging-deploy-root', $stagingDomain === '' ? '' : "/var/www/{$stagingDomain}"),
             httpRuntime: $this->option($options, 'http-runtime', 'octane'),
         );
     }
