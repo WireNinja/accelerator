@@ -206,7 +206,6 @@ class ModelAuditCommand extends Command
                 Model::class,
                 'Illuminate\Database\Eloquent\Model',
                 'Illuminate\Foundation\Auth\User',
-                'WireNinja\Accelerator\Model\AcceleratedUser',
             ])) {
                 continue;
             }

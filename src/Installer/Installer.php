@@ -60,6 +60,7 @@ final class Installer
         'stubs/app/Enums/System/RoleEnum.php' => 'app/Enums/System/RoleEnum.php',
         'stubs/app/Models/User.php' => 'app/Models/User.php',
         'stubs/app/Providers/Filament/AdminPanelProvider.php' => 'app/Providers/Filament/AdminPanelProvider.php',
+        'stubs/app/Support/helpers.php' => 'app/Support/helpers.php',
         'stubs/bootstrap/app.php' => 'bootstrap/app.php',
         'stubs/bootstrap/providers.php.stub' => 'bootstrap/providers.php',
         'stubs/public/favicon.svg' => 'public/favicon.svg',
@@ -281,6 +282,17 @@ final class Installer
         if (! is_array($composer)) {
             throw new RuntimeException('Unable to parse project composer.json.');
         }
+
+        $autoloadFiles = $composer['autoload']['files'] ?? [];
+
+        if (! is_array($autoloadFiles)) {
+            throw new RuntimeException('Project composer.json autoload.files must be an array.');
+        }
+
+        $composer['autoload']['files'] = array_values(array_unique([
+            ...$autoloadFiles,
+            'app/Support/helpers.php',
+        ]));
 
         $composer['scripts']['post-autoload-dump'] = [
             'Illuminate\\Foundation\\ComposerScripts::postAutoloadDump',

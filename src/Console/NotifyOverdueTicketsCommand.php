@@ -7,8 +7,9 @@ namespace WireNinja\Accelerator\Console;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Notification;
+use WireNinja\Accelerator\Contracts\AcceleratorUser;
 use WireNinja\Accelerator\Enums\Ticket\TicketStatusEnum;
-use WireNinja\Accelerator\Model\AcceleratedUser;
 use WireNinja\Accelerator\Model\Ticket;
 use WireNinja\Accelerator\Notifications\TicketOverdueNotification;
 
@@ -41,8 +42,8 @@ class NotifyOverdueTicketsCommand extends Command
             /** @var Ticket $ticket */
             $assignee = $ticket->assigneeUser;
 
-            if ($assignee instanceof AcceleratedUser) {
-                $assignee->notify(new TicketOverdueNotification($ticket));
+            if ($assignee instanceof AcceleratorUser) {
+                Notification::send($assignee, new TicketOverdueNotification($ticket));
             }
 
             $ticket->timestamps = false;

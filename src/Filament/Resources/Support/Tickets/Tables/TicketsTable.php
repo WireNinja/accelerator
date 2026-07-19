@@ -16,6 +16,7 @@ use WireNinja\Accelerator\Enums\Ticket\TicketPriorityEnum;
 use WireNinja\Accelerator\Enums\Ticket\TicketStatusEnum;
 use WireNinja\Accelerator\Enums\Ticket\TicketTypeEnum;
 use WireNinja\Accelerator\Model\Ticket;
+use WireNinja\Accelerator\Support\UserModel;
 
 class TicketsTable
 {
@@ -94,7 +95,7 @@ class TicketsTable
                 TextColumn::make('access_scope')
                     ->label('Cakupan')
                     ->state(function (Ticket $record): string {
-                        $authUserId = (int) mustUser()->id;
+                        $authUserId = (int) UserModel::id();
 
                         if ((int) $record->reporter_id === $authUserId && (int) $record->assignee_id === $authUserId) {
                             return 'Milik Saya + Ditugaskan';
@@ -165,7 +166,7 @@ class TicketsTable
                         ->color('danger')
                         ->requiresConfirmation()
                         ->action(function (Ticket $record): void {
-                            app(ArchiveTicketAction::class)->handle($record, mustUser());
+                            app(ArchiveTicketAction::class)->handle($record, UserModel::current());
                         })
                         ->authorize('delete'),
                 ]),

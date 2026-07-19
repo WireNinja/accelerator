@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Override;
 use WireNinja\Accelerator\Model\Scopes\ExcludeArchivedScope;
+use WireNinja\Accelerator\Support\UserModel;
 
 /**
  * @property int $id
@@ -21,6 +22,7 @@ use WireNinja\Accelerator\Model\Scopes\ExcludeArchivedScope;
  * @property int|null $archived_by
  * @property CarbonImmutable $created_at
  * @property CarbonImmutable $updated_at
+ * @property Model|null $user
  */
 #[ScopedBy([ExcludeArchivedScope::class])]
 class TicketComment extends Model
@@ -43,15 +45,15 @@ class TicketComment extends Model
         return $this->belongsTo(Ticket::class);
     }
 
-    /** @return BelongsTo<AcceleratedUser, $this> */
+    /** @return BelongsTo<Model, $this> */
     public function user(): BelongsTo
     {
-        return $this->belongsTo(AcceleratedUser::class);
+        return $this->belongsTo(UserModel::className());
     }
 
-    /** @return BelongsTo<AcceleratedUser, $this> */
+    /** @return BelongsTo<Model, $this> */
     public function archivedByUser(): BelongsTo
     {
-        return $this->belongsTo(AcceleratedUser::class, 'archived_by');
+        return $this->belongsTo(UserModel::className(), 'archived_by');
     }
 }

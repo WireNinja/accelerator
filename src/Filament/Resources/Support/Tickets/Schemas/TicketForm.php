@@ -22,12 +22,13 @@ use WireNinja\Accelerator\Enums\Ticket\TicketTypeEnum;
 use WireNinja\Accelerator\Model\TicketBoard;
 use WireNinja\Accelerator\Model\TicketBoardColumn;
 use WireNinja\Accelerator\Support\Ticket\TicketVisibility;
+use WireNinja\Accelerator\Support\UserModel;
 
 class TicketForm
 {
     public static function configure(Schema $schema): Schema
     {
-        $canManageRouting = fn (): bool => TicketVisibility::canManageRouting(mustUser());
+        $canManageRouting = fn (): bool => TicketVisibility::canManageRouting(UserModel::current());
 
         return $schema
             ->components([
@@ -46,7 +47,7 @@ class TicketForm
                                                 Callout::make('Visibilitas Tiket')
                                                     ->icon('lucide-shield-alert')
                                                     ->warning()
-                                                    ->description(fn (): string => TicketVisibility::describeAccess(mustUser()))
+                                                    ->description(fn (): string => TicketVisibility::describeAccess(UserModel::current()))
                                                     ->columnSpanFull(),
                                                 TextInput::make('title')
                                                     ->label('Judul Permintaan')
@@ -113,10 +114,10 @@ class TicketForm
                                                     ->searchable()
                                                     ->preload()
                                                     ->required(fn (): bool => $canManageRouting())
-                                                    ->default(fn (): int => mustUser()->id)
+                                                    ->default(fn (): int => UserModel::id())
                                                     ->visible(fn (): bool => $canManageRouting()),
                                                 Hidden::make('reporter_id')
-                                                    ->default(fn (): int => mustUser()->id)
+                                                    ->default(fn (): int => UserModel::id())
                                                     ->dehydrated(fn (): bool => ! $canManageRouting())
                                                     ->visible(fn (): bool => ! $canManageRouting()),
                                                 Select::make('assignee_id')
@@ -185,7 +186,7 @@ class TicketForm
                                                     ->required()
                                                     ->columnSpanFull(),
                                                 Hidden::make('user_id')
-                                                    ->default(fn (): int => mustUser()->id),
+                                                    ->default(fn (): int => UserModel::id()),
                                             ]),
                                     ]),
                             ]),

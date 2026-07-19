@@ -6,6 +6,7 @@ namespace WireNinja\Accelerator\Support\ActivityLog;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
+use WireNinja\Accelerator\Support\UserModel;
 
 class RelationshipActivityLogger
 {
@@ -42,7 +43,7 @@ class RelationshipActivityLogger
 
         activity(AuditConfig::logName($model))
             ->performedOn($model)
-            ->causedBy(mustUser())
+            ->causedBy(UserModel::current())
             ->event('relationships_updated')
             ->withChanges([
                 'attributes' => $new,

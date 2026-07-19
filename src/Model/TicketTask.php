@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Override;
 use WireNinja\Accelerator\Enums\Ticket\TicketTaskStatusEnum;
+use WireNinja\Accelerator\Support\UserModel;
 
 /**
  * @property int $id
@@ -46,15 +47,15 @@ class TicketTask extends Model
         return $this->belongsTo(Ticket::class);
     }
 
-    /** @return BelongsTo<AcceleratedUser, $this> */
+    /** @return BelongsTo<Model, $this> */
     public function createdByUser(): BelongsTo
     {
-        return $this->belongsTo(AcceleratedUser::class, 'created_by');
+        return $this->belongsTo(UserModel::className(), 'created_by');
     }
 
-    /** @return BelongsTo<AcceleratedUser, $this> */
+    /** @return BelongsTo<Model, $this> */
     public function assigneeUser(): BelongsTo
     {
-        return $this->belongsTo(AcceleratedUser::class, 'assignee_id');
+        return $this->belongsTo(UserModel::className(), 'assignee_id');
     }
 }

@@ -7,7 +7,7 @@ namespace WireNinja\Accelerator\Providers;
 use Illuminate\Http\Middleware\TrustProxies;
 use Illuminate\Http\Request;
 use Illuminate\Support\ServiceProvider;
-use Livewire\Livewire;
+use Livewire\LivewireManager;
 use WireNinja\Accelerator\Concerns\InteractsWithApplication;
 use WireNinja\Accelerator\Console\Agent\DoctorCommand;
 use WireNinja\Accelerator\Console\Agent\ModelContextCommand;
@@ -37,7 +37,7 @@ final class CoreServiceProvider extends ServiceProvider
             $this->bootTelegramConfiguration();
         }
 
-        Livewire::propertySynthesizer(BigDecimalSynth::class);
+        $this->app->make(LivewireManager::class)->propertySynthesizer(BigDecimalSynth::class);
 
         if (! $this->app->runningInConsole()) {
             return;

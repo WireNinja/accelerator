@@ -11,8 +11,6 @@ return [
         'remember_token',
         'two_factor_secret',
         'two_factor_recovery_codes',
-        'google_token',
-        'google_refresh_token',
         'app_authentication_secret',
         'app_authentication_recovery_codes',
     ],

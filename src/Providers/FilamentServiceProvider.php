@@ -9,7 +9,7 @@ use Filament\Support\Assets\Js;
 use Filament\Support\Facades\FilamentAsset;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
-use Livewire\Livewire;
+use Livewire\LivewireManager;
 use Spatie\Activitylog\Models\Activity;
 use WireNinja\Accelerator\Concerns\InteractsWithApplication;
 use WireNinja\Accelerator\Console\Filament\VerifyResourceCommand;
@@ -54,7 +54,7 @@ final class FilamentServiceProvider extends ServiceProvider
 
     private function registerLivewireNamespace(): void
     {
-        Livewire::addNamespace(
+        $this->app->make(LivewireManager::class)->addNamespace(
             namespace: 'accelerator',
             viewPath: __DIR__.'/../../resources/views/livewire',
         );

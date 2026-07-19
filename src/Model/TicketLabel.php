@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use WireNinja\Accelerator\Support\UserModel;
 
 /**
  * @property int $id
@@ -21,10 +22,10 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  */
 class TicketLabel extends Model
 {
-    /** @return BelongsTo<AcceleratedUser, $this> */
+    /** @return BelongsTo<Model, $this> */
     public function createdByUser(): BelongsTo
     {
-        return $this->belongsTo(AcceleratedUser::class, 'created_by');
+        return $this->belongsTo(UserModel::className(), 'created_by');
     }
 
     /** @return HasMany<TicketLabelTicket, $this> */

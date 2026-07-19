@@ -11,6 +11,7 @@ use WireNinja\Accelerator\Enums\Ticket\TicketPriorityEnum;
 use WireNinja\Accelerator\Enums\Ticket\TicketStatusEnum;
 use WireNinja\Accelerator\Filament\Resources\Support\Tickets\TicketResource;
 use WireNinja\Accelerator\Support\Ticket\TicketVisibility;
+use WireNinja\Accelerator\Support\UserModel;
 
 class ListTickets extends ListRecords
 {
@@ -33,7 +34,7 @@ class ListTickets extends ListRecords
     #[Override]
     public function getTabs(): array
     {
-        $authUser = mustUser();
+        $authUser = UserModel::current();
         $isStaff = TicketVisibility::canManageRouting($authUser)
             || TicketVisibility::canViewAll($authUser);
 
@@ -72,11 +73,11 @@ class ListTickets extends ListRecords
 
             $tabs['my_assigned'] = Tab::make('Ditugaskan ke Saya')
                 ->icon('lucide-user-check')
-                ->modifyQueryUsing(fn (Builder $query) => $query->where('assignee_id', $authUser->id));
+                ->modifyQueryUsing(fn (Builder $query) => $query->where('assignee_id', UserModel::id($authUser)));
         } else {
             $tabs['my_tickets'] = Tab::make('Tiket Saya')
                 ->icon('lucide-user')
-                ->modifyQueryUsing(fn (Builder $query) => $query->where('reporter_id', $authUser->id));
+                ->modifyQueryUsing(fn (Builder $query) => $query->where('reporter_id', UserModel::id($authUser)));
         }
 
         return $tabs;

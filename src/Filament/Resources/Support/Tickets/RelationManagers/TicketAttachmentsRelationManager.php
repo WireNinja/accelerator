@@ -21,6 +21,7 @@ use Filament\Tables\Table;
 use Illuminate\Support\Facades\Storage;
 use Override;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+use WireNinja\Accelerator\Support\UserModel;
 
 class TicketAttachmentsRelationManager extends RelationManager
 {
@@ -68,7 +69,7 @@ class TicketAttachmentsRelationManager extends RelationManager
                     ->rows(3)
                     ->columnSpanFull(),
                 Hidden::make('uploaded_by')
-                    ->default(fn (): int => mustUser()->id),
+                    ->default(fn (): int => UserModel::id()),
                 Hidden::make('uploaded_at')
                     ->default(fn () => now()),
             ]);

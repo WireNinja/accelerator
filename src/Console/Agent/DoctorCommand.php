@@ -7,15 +7,15 @@ namespace WireNinja\Accelerator\Console\Agent;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Schema;
 use JsonException;
-use ReflectionClass;
 use Symfony\Component\Process\ExecutableFinder;
 use Throwable;
 use WireNinja\Accelerator\AcceleratorServiceProvider;
 use WireNinja\Accelerator\Console\Concerns\HasBanner;
-use WireNinja\Accelerator\Model\AcceleratedUser;
+use WireNinja\Accelerator\Contracts\AcceleratorUser;
 
 #[Signature('accelerator:doctor {--json : Output as JSON} {--compact : Compact JSON output}')]
 #[Description('Verify the Accelerator installation contract and report host warnings')]
@@ -127,6 +127,7 @@ final class DoctorCommand extends Command
             'app/Enums/System/ResourceEnum.php',
             'app/Enums/System/RoleEnum.php',
             'app/Models/User.php',
+            'app/Support/helpers.php',
             'bootstrap/app.php',
             'bootstrap/providers.php',
             'public/favicon.svg',
@@ -160,15 +161,17 @@ final class DoctorCommand extends Command
             message: 'Required generated files are missing: '.implode(', ', $missingFiles),
         );
 
-        $userClass = 'App\\Models\\User';
-        $acceleratedUser = class_exists($userClass)
-            && (new ReflectionClass($userClass))->isSubclassOf(AcceleratedUser::class);
+        $configuredUserClass = config('auth.providers.users.model');
+        $userClass = is_string($configuredUserClass) ? $configuredUserClass : '[not configured]';
+        $compatibleUser = class_exists($userClass)
+            && is_subclass_of($userClass, Model::class)
+            && is_subclass_of($userClass, AcceleratorUser::class);
         $this->assert(
             category: 'Install recipe',
             label: 'User model',
             value: $userClass,
-            passed: $acceleratedUser,
-            message: 'App\\Models\\User must extend '.AcceleratedUser::class.'.',
+            passed: $compatibleUser,
+            message: 'The configured auth user model must extend Eloquent Model and implement '.AcceleratorUser::class.'.',
         );
 
         $bootstrap = $this->contents('bootstrap/app.php');
@@ -283,12 +286,22 @@ final class DoctorCommand extends Command
 
         $oauthEnabled = (bool) config('accelerator.features.oauth', false);
         $oauthMode = (string) config('accelerator.oauth.mode', 'disabled');
+        $configuredOauthDomains = config('accelerator.oauth.allowed_domains', []);
+        $oauthDomains = is_array($configuredOauthDomains)
+            ? array_filter(
+                $configuredOauthDomains,
+                fn (mixed $domain): bool => is_string($domain) && (trim($domain) !== ''),
+            )
+            : [];
+        $oauthValid = (! $oauthEnabled)
+            || ($oauthMode === 'existing_only')
+            || (($oauthMode === 'allowed_domains') && ($oauthDomains !== []));
         $this->assert(
             category: 'Configuration',
             label: 'OAuth mode',
             value: $oauthMode,
-            passed: ! $oauthEnabled || in_array($oauthMode, ['existing_only', 'allowed_domains'], true),
-            message: 'Enabled OAuth requires mode existing_only or allowed_domains.',
+            passed: $oauthValid,
+            message: 'Enabled OAuth requires existing_only, or allowed_domains with ACCELERATOR_OAUTH_ALLOWED_DOMAINS.',
         );
 
         $uploadMegabytes = (int) config('accelerator.uploads.max_megabytes', 100);

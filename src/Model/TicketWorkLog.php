@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Override;
 use WireNinja\Accelerator\Observers\TicketWorkLogObserver;
+use WireNinja\Accelerator\Support\UserModel;
 
 /**
  * @property int $id
@@ -20,6 +21,7 @@ use WireNinja\Accelerator\Observers\TicketWorkLogObserver;
  * @property CarbonImmutable|null $logged_at
  * @property CarbonImmutable $created_at
  * @property CarbonImmutable $updated_at
+ * @property Model|null $user
  */
 #[ObservedBy([TicketWorkLogObserver::class])]
 class TicketWorkLog extends Model
@@ -42,9 +44,9 @@ class TicketWorkLog extends Model
         return $this->belongsTo(Ticket::class);
     }
 
-    /** @return BelongsTo<AcceleratedUser, $this> */
+    /** @return BelongsTo<Model, $this> */
     public function user(): BelongsTo
     {
-        return $this->belongsTo(AcceleratedUser::class);
+        return $this->belongsTo(UserModel::className());
     }
 }

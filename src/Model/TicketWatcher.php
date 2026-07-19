@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace WireNinja\Accelerator\Model;
 
 use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\Pivot;
+use WireNinja\Accelerator\Support\UserModel;
 
 /**
  * @property int $id
@@ -34,15 +36,15 @@ class TicketWatcher extends Pivot
         return $this->belongsTo(Ticket::class);
     }
 
-    /** @return BelongsTo<AcceleratedUser, $this> */
+    /** @return BelongsTo<Model, $this> */
     public function user(): BelongsTo
     {
-        return $this->belongsTo(AcceleratedUser::class, 'user_id');
+        return $this->belongsTo(UserModel::className(), 'user_id');
     }
 
-    /** @return BelongsTo<AcceleratedUser, $this> */
+    /** @return BelongsTo<Model, $this> */
     public function addedByUser(): BelongsTo
     {
-        return $this->belongsTo(AcceleratedUser::class, 'added_by');
+        return $this->belongsTo(UserModel::className(), 'added_by');
     }
 }

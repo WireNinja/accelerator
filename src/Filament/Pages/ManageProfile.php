@@ -20,6 +20,7 @@ use Override;
 use WireNinja\Accelerator\Actions\User\SendTelegramTestMessageAction;
 use WireNinja\Accelerator\Filament\Forms\Components\BooleanCard;
 use WireNinja\Accelerator\Filament\Schemas\Components\VerticalWizard;
+use WireNinja\Accelerator\Support\UserModel;
 
 class ManageProfile extends EditProfile
 {
@@ -170,7 +171,7 @@ class ManageProfile extends EditProfile
                                         ->disabled(fn (Get $get): bool => blank($get('telegram_chat_id')))
                                         ->action(function (Get $get): void {
                                             resolve(SendTelegramTestMessageAction::class)->handle(
-                                                mustUser(),
+                                                UserModel::current(),
                                                 (string) $get('telegram_chat_id'),
                                             );
 

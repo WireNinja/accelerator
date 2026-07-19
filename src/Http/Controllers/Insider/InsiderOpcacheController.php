@@ -6,6 +6,7 @@ namespace WireNinja\Accelerator\Http\Controllers\Insider;
 
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
+use WireNinja\Accelerator\Support\UserModel;
 
 class InsiderOpcacheController extends Controller
 {
@@ -144,7 +145,7 @@ class InsiderOpcacheController extends Controller
 
     private function authorizeAccess(): void
     {
-        $user = mustUser();
+        $user = UserModel::current();
 
         abort_unless($user->isSuperAdmin(), 403);
     }

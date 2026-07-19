@@ -5,12 +5,13 @@ declare(strict_types=1);
 namespace WireNinja\Accelerator\Actions\Ticket;
 
 use Illuminate\Support\Facades\DB;
-use WireNinja\Accelerator\Model\AcceleratedUser;
+use WireNinja\Accelerator\Contracts\AcceleratorUser;
 use WireNinja\Accelerator\Model\Ticket;
+use WireNinja\Accelerator\Support\UserModel;
 
 class ArchiveTicketAction
 {
-    public function handle(Ticket $ticket, AcceleratedUser $archivedBy): Ticket
+    public function handle(Ticket $ticket, AcceleratorUser $archivedBy): Ticket
     {
         return DB::transaction(function () use ($ticket, $archivedBy): Ticket {
             /**
@@ -27,7 +28,7 @@ class ArchiveTicketAction
 
             $ticket->forceFill([
                 'archived_at' => now(),
-                'archived_by' => $archivedBy->id,
+                'archived_by' => UserModel::id($archivedBy),
                 'last_activity_at' => now(),
             ])->save();
 
@@ -36,7 +37,7 @@ class ArchiveTicketAction
                 ->whereNull('archived_at')
                 ->update([
                     'archived_at' => now(),
-                    'archived_by' => $archivedBy->id,
+                    'archived_by' => UserModel::id($archivedBy),
                     'updated_at' => now(),
                 ]);
 

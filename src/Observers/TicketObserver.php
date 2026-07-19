@@ -7,6 +7,7 @@ namespace WireNinja\Accelerator\Observers;
 use Illuminate\Support\Str;
 use WireNinja\Accelerator\Actions\Ticket\GenerateTicketNumberAction;
 use WireNinja\Accelerator\Model\Ticket;
+use WireNinja\Accelerator\Support\UserModel;
 
 class TicketObserver
 {
@@ -23,7 +24,7 @@ class TicketObserver
         }
 
         if (blank($ticket->reporter_id)) {
-            $ticket->reporter_id = mustUser()->id;
+            $ticket->reporter_id = UserModel::id();
         }
     }
 }

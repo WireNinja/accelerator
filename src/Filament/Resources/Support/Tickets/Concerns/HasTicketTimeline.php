@@ -4,15 +4,18 @@ declare(strict_types=1);
 
 namespace WireNinja\Accelerator\Filament\Resources\Support\Tickets\Concerns;
 
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
 use Spatie\Activitylog\Models\Activity;
+use WireNinja\Accelerator\Contracts\AcceleratorUser;
 use WireNinja\Accelerator\Enums\Ticket\TicketPriorityEnum;
 use WireNinja\Accelerator\Enums\Ticket\TicketStatusEnum;
 use WireNinja\Accelerator\Enums\Ticket\TicketTypeEnum;
-use WireNinja\Accelerator\Model\AcceleratedUser;
 use WireNinja\Accelerator\Model\Ticket;
 use WireNinja\Accelerator\Model\TicketBoard;
 use WireNinja\Accelerator\Model\TicketBoardColumn;
+use WireNinja\Accelerator\Support\Cast;
+use WireNinja\Accelerator\Support\UserModel;
 
 /**
  * @method Ticket getRecord()
@@ -51,9 +54,16 @@ trait HasTicketTimeline
             ->unique()
             ->values();
 
-        $userNames = AcceleratedUser::query()
+        $userNames = UserModel::query()
             ->whereIn('id', $userIds)
-            ->pluck('name', 'id');
+            ->get(['id', 'name'])
+            ->mapWithKeys(function (Model $user): array {
+                if (! $user instanceof AcceleratorUser) {
+                    return [];
+                }
+
+                return [UserModel::id($user) => Cast::asString($user->getAttribute('name'))];
+            });
 
         $entries = [];
 
@@ -66,7 +76,7 @@ trait HasTicketTimeline
                 'type' => $comment->is_internal ? 'internal-note' : 'comment',
                 'title' => $comment->is_internal ? 'Catatan internal' : 'Komentar client',
                 'description' => $comment->body,
-                'author' => $comment->user->name,
+                'author' => Cast::asString($comment->user?->getAttribute('name'), '-'),
                 'author_badge' => $comment->is_internal ? 'Internal' : 'Client',
                 'author_badge_color' => $comment->is_internal ? 'gray' : 'info',
                 'occurred_at' => $comment->created_at,
@@ -79,7 +89,7 @@ trait HasTicketTimeline
                 'type' => 'work-log',
                 'title' => 'Log waktu '.$this->formatMinutes($workLog->minutes_spent),
                 'description' => $workLog->notes,
-                'author' => $workLog->user->name,
+                'author' => Cast::asString($workLog->user?->getAttribute('name'), '-'),
                 'author_badge' => 'Work log',
                 'author_badge_color' => 'success',
                 'occurred_at' => $workLog->logged_at ?? $workLog->created_at,

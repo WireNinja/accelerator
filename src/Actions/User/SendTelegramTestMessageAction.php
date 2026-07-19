@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace WireNinja\Accelerator\Actions\User;
 
+use Illuminate\Database\Eloquent\Model;
 use NotificationChannels\Telegram\Telegram;
 use Throwable;
+use WireNinja\Accelerator\Contracts\AcceleratorUser;
 use WireNinja\Accelerator\Exceptions\BusinessException;
-use WireNinja\Accelerator\Model\AcceleratedUser;
 use WireNinja\Accelerator\Settings\SystemSettings;
+use WireNinja\Accelerator\Support\Cast;
 use WireNinja\Accelerator\Support\Telegram\TelegramBotConfigurator;
 
 final class SendTelegramTestMessageAction
@@ -19,7 +21,7 @@ final class SendTelegramTestMessageAction
         private readonly TelegramBotConfigurator $telegramBotConfigurator,
     ) {}
 
-    public function handle(AcceleratedUser $user, string $telegramChatId): void
+    public function handle(Model&AcceleratorUser $user, string $telegramChatId): void
     {
         $telegramChatId = trim($telegramChatId);
 
@@ -48,16 +50,17 @@ final class SendTelegramTestMessageAction
         }
     }
 
-    private function buildMessage(AcceleratedUser $user): string
+    private function buildMessage(Model&AcceleratorUser $user): string
     {
-        $identifier = filled($user->username)
-            ? sprintf('Username: %s', $user->username)
-            : sprintf('Email: %s', $user->email);
+        $username = Cast::asString($user->getAttribute('username'));
+        $identifier = $username !== ''
+            ? sprintf('Username: %s', $username)
+            : sprintf('Email: %s', Cast::asString($user->getAttribute('email')));
 
         return implode("\n", [
             'Tes koneksi Telegram berhasil.',
             sprintf('Aplikasi: %s', $this->systemSettings->brand_name),
-            sprintf('Pengguna: %s', $user->name),
+            sprintf('Pengguna: %s', Cast::asString($user->getAttribute('name'))),
             $identifier,
             sprintf('Waktu: %s', now()->format('d M Y H:i:s')),
         ]);

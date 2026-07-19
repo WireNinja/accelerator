@@ -6,13 +6,14 @@ namespace WireNinja\Accelerator\Observers;
 
 use WireNinja\Accelerator\Model\Ticket;
 use WireNinja\Accelerator\Model\TicketRelation;
+use WireNinja\Accelerator\Support\UserModel;
 
 class TicketRelationObserver
 {
     public function creating(TicketRelation $relation): void
     {
         if (blank($relation->created_by)) {
-            $relation->created_by = mustUser()->id;
+            $relation->created_by = UserModel::id();
         }
     }
 

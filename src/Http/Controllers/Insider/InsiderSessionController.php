@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace WireNinja\Accelerator\Http\Controllers\Insider;
 
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
@@ -11,7 +12,9 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\ViewErrorBag;
 use Laravel\Octane\Facades\Octane;
 use Throwable;
-use WireNinja\Accelerator\Model\AcceleratedUser;
+use WireNinja\Accelerator\Contracts\AcceleratorUser;
+use WireNinja\Accelerator\Support\Cast;
+use WireNinja\Accelerator\Support\UserModel;
 
 class InsiderSessionController extends Controller
 {
@@ -27,9 +30,9 @@ class InsiderSessionController extends Controller
             '<h1>Insider Session & Identity</h1>',
             $feedback,
             $this->renderTable('Identity & Access', [
-                ['User ID', (string) $user->getKey()],
-                ['Name', $user->name],
-                ['Email', $user->email],
+                ['User ID', Cast::asString($user->getAuthIdentifier())],
+                ['Name', Cast::asString($user->getAttribute('name'))],
+                ['Email', Cast::asString($user->getAttribute('email'))],
                 ['Roles', $user->getRoleNames()->implode(', ') ?: '-'],
                 ['Super Admin', $user->isSuperAdmin() ? 'YES' : 'NO'],
                 ['Verified Email', $user->hasVerifiedEmail() ? 'YES' : 'NO'],
@@ -107,9 +110,9 @@ class InsiderSessionController extends Controller
         return redirect('/insider/sessions')->with('status', 'Session ID regenerated.');
     }
 
-    private function authorizeAccess(): AcceleratedUser
+    private function authorizeAccess(): Model&AcceleratorUser
     {
-        $user = mustUser();
+        $user = UserModel::current();
 
         abort_unless($user->isSuperAdmin(), 403);
 

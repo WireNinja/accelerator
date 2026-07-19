@@ -12,6 +12,7 @@ use WireNinja\Accelerator\Actions\Ticket\ArchiveTicketAction;
 use WireNinja\Accelerator\Filament\Resources\Support\Tickets\Concerns\HasTicketTimeline;
 use WireNinja\Accelerator\Filament\Resources\Support\Tickets\TicketResource;
 use WireNinja\Accelerator\Model\Ticket;
+use WireNinja\Accelerator\Support\UserModel;
 
 /**
  * @extends EditRecord<Ticket>
@@ -54,7 +55,7 @@ class EditTicket extends EditRecord
                 ->requiresConfirmation()
                 ->authorize('delete')
                 ->action(function (Ticket $record): void {
-                    app(ArchiveTicketAction::class)->handle($record, mustUser());
+                    app(ArchiveTicketAction::class)->handle($record, UserModel::current());
 
                     $this->redirect(TicketResource::getUrl('index'));
                 }),

@@ -16,6 +16,7 @@ use Filament\Tables\Table;
 use Override;
 use WireNinja\Accelerator\Model\TicketComment;
 use WireNinja\Accelerator\Support\Ticket\TicketVisibility;
+use WireNinja\Accelerator\Support\UserModel;
 
 class TicketCommentsRelationManager extends RelationManager
 {
@@ -25,7 +26,7 @@ class TicketCommentsRelationManager extends RelationManager
 
     public function form(Schema $schema): Schema
     {
-        $isStaff = TicketVisibility::canManageRouting(mustUser());
+        $isStaff = TicketVisibility::canManageRouting(UserModel::current());
 
         return $schema
             ->components([
@@ -70,14 +71,14 @@ class TicketCommentsRelationManager extends RelationManager
             ->headerActions([
                 CreateAction::make()
                     ->mutateDataUsing(function (array $data): array {
-                        $data['user_id'] = mustUser()->id;
+                        $data['user_id'] = UserModel::id();
 
                         return $data;
                     }),
             ])
             ->recordActions([
                 DeleteAction::make()
-                    ->authorize(fn (TicketComment $record): bool => $record->user_id === mustUser()->id || mustUser()->can('manage-tickets')),
+                    ->authorize(fn (TicketComment $record): bool => $record->user_id === UserModel::id() || UserModel::current()->can('manage-tickets')),
             ])
             ->emptyStateHeading('Belum ada percakapan')
             ->emptyStateDescription('Tambahkan pesan atau catatan internal terkait tiket ini.');

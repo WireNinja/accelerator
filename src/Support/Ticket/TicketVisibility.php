@@ -4,23 +4,23 @@ declare(strict_types=1);
 
 namespace WireNinja\Accelerator\Support\Ticket;
 
-use WireNinja\Accelerator\Model\AcceleratedUser;
+use WireNinja\Accelerator\Contracts\AcceleratorUser;
 
 class TicketVisibility
 {
-    public static function canViewAll(AcceleratedUser $user): bool
+    public static function canViewAll(AcceleratorUser $user): bool
     {
         return $user->can('ViewAll:Ticket') || $user->can('ViewAny:Ticket');
     }
 
-    public static function canManageRouting(AcceleratedUser $user): bool
+    public static function canManageRouting(AcceleratorUser $user): bool
     {
         return $user->can('Assign:Ticket')
             || $user->can('ChangeStatus:Ticket')
             || $user->can('Update:Ticket');
     }
 
-    public static function describeAccess(AcceleratedUser $user): string
+    public static function describeAccess(AcceleratorUser $user): string
     {
         if (static::canViewAll($user)) {
             return 'Anda dapat melihat seluruh tiket lintas board.';

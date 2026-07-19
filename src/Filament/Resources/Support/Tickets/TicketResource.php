@@ -23,6 +23,7 @@ use WireNinja\Accelerator\Filament\Resources\Support\Tickets\Tables\TicketsTable
 use WireNinja\Accelerator\Filament\Traits\AutoBadge;
 use WireNinja\Accelerator\Filament\Traits\BetterResource;
 use WireNinja\Accelerator\Model\Ticket;
+use WireNinja\Accelerator\Support\UserModel;
 
 /**
  * @extends resource<Ticket>
@@ -81,6 +82,6 @@ class TicketResource extends Resource
     {
         $query = parent::getEloquentQuery();
 
-        return $query->visibleTo(mustUser());
+        return $query->visibleTo(UserModel::current());
     }
 }

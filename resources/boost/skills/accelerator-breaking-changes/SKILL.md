@@ -33,6 +33,14 @@ The database-backed `registration_enabled` toggle and Filament registration rout
 
 `HasTypedColumnMethods` and its generated `getColumn*()` / `setColumn*()` API are removed. Read casted Eloquent attributes directly and write them with property assignment, `fill()`, or `update()`. `accelerator:model-doc` now generates property and relationship types only; it no longer turns PHPDoc into a runtime validation system or queries the schema from `Model::__call()`.
 
+### 🔴 BREAKING — The application owns its user model
+
+`AcceleratedUser` and `AcceleratedUserService` are removed. `App\Models\User` must extend Laravel's `Authenticatable`, implement `WireNinja\Accelerator\Contracts\AcceleratorUser`, and explicitly own its Filament MFA, role, avatar, suspension, notification, and impersonation behavior. Package relationships resolve the configured `auth.providers.users.model`; they no longer point to a package base model.
+
+### 🔴 BREAKING — OAuth no longer stores provider tokens
+
+Google OAuth is disabled unless its feature and mode are enabled. `existing_only` authenticates only a pre-provisioned matching email. `allowed_domains` is the explicit provisioning mode and requires a configured domain allowlist. Neither mode stores Google access or refresh tokens; the v2 baseline removes those columns.
+
 ## v1.1.79
 
 No deployment contract changes beyond v1.1.66.

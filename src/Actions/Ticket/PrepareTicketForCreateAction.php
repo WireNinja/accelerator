@@ -7,6 +7,7 @@ namespace WireNinja\Accelerator\Actions\Ticket;
 use WireNinja\Accelerator\Enums\Ticket\TicketStatusEnum;
 use WireNinja\Accelerator\Model\TicketBoard;
 use WireNinja\Accelerator\Model\TicketBoardColumn;
+use WireNinja\Accelerator\Support\UserModel;
 
 class PrepareTicketForCreateAction
 {
@@ -37,10 +38,10 @@ class PrepareTicketForCreateAction
             }
         }
 
-        $authUser = mustUser();
+        $authUser = UserModel::current();
 
         if (blank($data['reporter_id'] ?? null)) {
-            $data['reporter_id'] = $authUser->id;
+            $data['reporter_id'] = UserModel::id($authUser);
         }
 
         if (blank($data['status'] ?? null)) {

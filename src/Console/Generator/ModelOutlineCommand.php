@@ -18,7 +18,6 @@ use ReflectionNamedType;
 use Symfony\Component\Console\Output\BufferedOutput;
 use Throwable;
 use WireNinja\Accelerator\Console\Concerns\HasBanner;
-use WireNinja\Accelerator\Model\AcceleratedUser;
 
 use function Laravel\Prompts\search;
 
@@ -325,9 +324,7 @@ class ModelOutlineCommand extends Command
                 $method->getDeclaringClass()->getName(),
                 [
                     Model::class,
-                    Model::class,
                     User::class,
-                    AcceleratedUser::class,
                 ],
                 true
             )) {

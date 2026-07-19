@@ -23,8 +23,6 @@ return new class extends Migration
 
             // Google OAuth
             $table->string('google_id')->nullable()->unique();
-            $table->text('google_token')->nullable();
-            $table->text('google_refresh_token')->nullable();
 
             $table->timestamp('suspended_at')->nullable();
             $table->foreignId('suspended_by')->nullable()->constrained('users')->nullOnDelete();

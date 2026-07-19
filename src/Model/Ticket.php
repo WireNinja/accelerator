@@ -19,12 +19,14 @@ use Override;
 use Spatie\Activitylog\Models\Activity;
 use Spatie\Activitylog\Models\Concerns\LogsActivity;
 use Spatie\Activitylog\Support\LogOptions;
+use WireNinja\Accelerator\Contracts\AcceleratorUser;
 use WireNinja\Accelerator\Enums\Ticket\TicketPriorityEnum;
 use WireNinja\Accelerator\Enums\Ticket\TicketStatusEnum;
 use WireNinja\Accelerator\Enums\Ticket\TicketTypeEnum;
 use WireNinja\Accelerator\Model\Scopes\ExcludeArchivedScope;
 use WireNinja\Accelerator\Observers\TicketObserver;
 use WireNinja\Accelerator\Support\Ticket\TicketVisibility;
+use WireNinja\Accelerator\Support\UserModel;
 
 /**
  * @property int $id
@@ -58,10 +60,10 @@ use WireNinja\Accelerator\Support\Ticket\TicketVisibility;
  * @property CarbonImmutable $updated_at
  * @property TicketBoard|null $board
  * @property TicketBoardColumn|null $boardColumn
- * @property AcceleratedUser|null $reporterUser
- * @property AcceleratedUser|null $assigneeUser
- * @property AcceleratedUser|null $closedByUser
- * @property AcceleratedUser|null $archivedByUser
+ * @property Model|null $reporterUser
+ * @property Model|null $assigneeUser
+ * @property Model|null $closedByUser
+ * @property Model|null $archivedByUser
  * @property Collection|TicketComment[] $comments
  * @property Collection|TicketWorkLog[] $workLogs
  * @property Collection|DocumentAttachment[] $attachments
@@ -69,10 +71,10 @@ use WireNinja\Accelerator\Support\Ticket\TicketVisibility;
  * @property Collection|TicketRelation[] $incomingRelations
  * @property Collection|TicketTask[] $tasks
  * @property Collection|TicketLabel[] $labels
- * @property Collection|AcceleratedUser[] $watchers
+ * @property Collection|Model[] $watchers
  * @property Collection|Activity[] $activitiesAsSubject
  *
- * @method static Builder<static> visibleTo(AcceleratedUser $user)
+ * @method static Builder<static> visibleTo(AcceleratorUser $user)
  */
 #[ObservedBy([TicketObserver::class])]
 #[ScopedBy([ExcludeArchivedScope::class])]
@@ -143,7 +145,7 @@ class Ticket extends Model
     }
 
     /** @param Builder<Ticket> $query */
-    public function scopeVisibleTo(Builder $query, AcceleratedUser $user): void
+    public function scopeVisibleTo(Builder $query, AcceleratorUser $user): void
     {
         if (TicketVisibility::canViewAll($user)) {
             return;
@@ -154,14 +156,14 @@ class Ticket extends Model
 
         $query->where(function (Builder $q) use ($user, $canViewOwn, $canViewAssigned): void {
             if ($canViewOwn) {
-                $q->orWhere('reporter_id', $user->id);
+                $q->orWhere('reporter_id', UserModel::id($user));
             }
 
             if ($canViewAssigned) {
-                $q->orWhere('assignee_id', $user->id);
+                $q->orWhere('assignee_id', UserModel::id($user));
             }
 
-            $q->orWhereHas('watchers', fn (Builder $wq): Builder => $wq->where('user_id', $user->id));
+            $q->orWhereHas('watchers', fn (Builder $wq): Builder => $wq->where('user_id', UserModel::id($user)));
 
             $q->orWhere('is_public', true);
         });
@@ -179,28 +181,28 @@ class Ticket extends Model
         return $this->belongsTo(TicketBoardColumn::class, 'ticket_board_column_id');
     }
 
-    /** @return BelongsTo<AcceleratedUser, $this> */
+    /** @return BelongsTo<Model, $this> */
     public function reporterUser(): BelongsTo
     {
-        return $this->belongsTo(AcceleratedUser::class, 'reporter_id');
+        return $this->belongsTo(UserModel::className(), 'reporter_id');
     }
 
-    /** @return BelongsTo<AcceleratedUser, $this> */
+    /** @return BelongsTo<Model, $this> */
     public function assigneeUser(): BelongsTo
     {
-        return $this->belongsTo(AcceleratedUser::class, 'assignee_id');
+        return $this->belongsTo(UserModel::className(), 'assignee_id');
     }
 
-    /** @return BelongsTo<AcceleratedUser, $this> */
+    /** @return BelongsTo<Model, $this> */
     public function closedByUser(): BelongsTo
     {
-        return $this->belongsTo(AcceleratedUser::class, 'closed_by');
+        return $this->belongsTo(UserModel::className(), 'closed_by');
     }
 
-    /** @return BelongsTo<AcceleratedUser, $this> */
+    /** @return BelongsTo<Model, $this> */
     public function archivedByUser(): BelongsTo
     {
-        return $this->belongsTo(AcceleratedUser::class, 'archived_by');
+        return $this->belongsTo(UserModel::className(), 'archived_by');
     }
 
     /** @return HasMany<TicketComment, $this> */
@@ -248,10 +250,10 @@ class Ticket extends Model
             ->withTimestamps();
     }
 
-    /** @return BelongsToMany<AcceleratedUser, $this, TicketWatcher, 'pivot'> */
+    /** @return BelongsToMany<Model, $this, TicketWatcher, 'pivot'> */
     public function watchers(): BelongsToMany
     {
-        return $this->belongsToMany(AcceleratedUser::class, 'ticket_watchers', 'ticket_id', 'user_id')
+        return $this->belongsToMany(UserModel::className(), 'ticket_watchers', 'ticket_id', 'user_id')
             ->using(TicketWatcher::class)
             ->withPivot(['id', 'added_by'])
             ->withTimestamps();

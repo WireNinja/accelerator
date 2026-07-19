@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Override;
 use WireNinja\Accelerator\Enums\Ticket\TicketRelationTypeEnum;
 use WireNinja\Accelerator\Observers\TicketRelationObserver;
+use WireNinja\Accelerator\Support\UserModel;
 
 /**
  * @property int $id
@@ -22,7 +23,7 @@ use WireNinja\Accelerator\Observers\TicketRelationObserver;
  * @property CarbonImmutable $updated_at
  * @property Ticket|null $ticket
  * @property Ticket|null $relatedTicket
- * @property AcceleratedUser|null $createdByUser
+ * @property Model|null $createdByUser
  */
 #[ObservedBy([TicketRelationObserver::class])]
 class TicketRelation extends Model
@@ -50,9 +51,9 @@ class TicketRelation extends Model
         return $this->belongsTo(Ticket::class, 'related_ticket_id');
     }
 
-    /** @return BelongsTo<AcceleratedUser, $this> */
+    /** @return BelongsTo<Model, $this> */
     public function createdByUser(): BelongsTo
     {
-        return $this->belongsTo(AcceleratedUser::class, 'created_by');
+        return $this->belongsTo(UserModel::className(), 'created_by');
     }
 }

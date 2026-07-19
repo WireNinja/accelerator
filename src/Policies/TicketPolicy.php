@@ -5,9 +5,10 @@ declare(strict_types=1);
 namespace WireNinja\Accelerator\Policies;
 
 use Illuminate\Auth\Access\HandlesAuthorization;
+use WireNinja\Accelerator\Contracts\AcceleratorUser;
 use WireNinja\Accelerator\Enums\Ticket\TicketStatusEnum;
-use WireNinja\Accelerator\Model\AcceleratedUser;
 use WireNinja\Accelerator\Model\Ticket;
+use WireNinja\Accelerator\Support\UserModel;
 
 class TicketPolicy
 {
@@ -15,7 +16,7 @@ class TicketPolicy
 
     // ─── List / Existence ────────────────────────────────────────────────────
 
-    public function viewAny(AcceleratedUser $user): bool
+    public function viewAny(AcceleratorUser $user): bool
     {
         return $user->can('ViewAny:Ticket')
             || $user->can('ViewAll:Ticket')
@@ -25,7 +26,7 @@ class TicketPolicy
 
     // ─── Single Record ────────────────────────────────────────────────────────
 
-    public function view(AcceleratedUser $user, Ticket $ticket): bool
+    public function view(AcceleratorUser $user, Ticket $ticket): bool
     {
         if ($user->can('View:Ticket') || $user->can('ViewAll:Ticket')) {
             return true;
@@ -48,12 +49,12 @@ class TicketPolicy
 
     // ─── Mutations ────────────────────────────────────────────────────────────
 
-    public function create(AcceleratedUser $user): bool
+    public function create(AcceleratorUser $user): bool
     {
         return $user->can('Create:Ticket');
     }
 
-    public function update(AcceleratedUser $user, Ticket $ticket): bool
+    public function update(AcceleratorUser $user, Ticket $ticket): bool
     {
         if ($user->can('Update:Ticket')) {
             return true;
@@ -71,7 +72,7 @@ class TicketPolicy
             && ! $this->isClosed($ticket);
     }
 
-    public function delete(AcceleratedUser $user, Ticket $ticket): bool
+    public function delete(AcceleratorUser $user, Ticket $ticket): bool
     {
         if ($user->can('Delete:Ticket')) {
             return true;
@@ -83,45 +84,45 @@ class TicketPolicy
             && $this->isUnrouted($ticket);
     }
 
-    public function deleteAny(AcceleratedUser $user): bool
+    public function deleteAny(AcceleratorUser $user): bool
     {
         return $user->can('DeleteAny:Ticket');
     }
 
     // ─── Scoped Visibility Helpers ────────────────────────────────────────────
 
-    public function viewAll(AcceleratedUser $user, Ticket $ticket): bool
+    public function viewAll(AcceleratorUser $user, Ticket $ticket): bool
     {
         return $user->can('ViewAll:Ticket');
     }
 
-    public function viewOwn(AcceleratedUser $user, Ticket $ticket): bool
+    public function viewOwn(AcceleratorUser $user, Ticket $ticket): bool
     {
         return $user->can('ViewOwn:Ticket') && $this->isReporter($user, $ticket);
     }
 
-    public function viewAssigned(AcceleratedUser $user, Ticket $ticket): bool
+    public function viewAssigned(AcceleratorUser $user, Ticket $ticket): bool
     {
         return $user->can('ViewAssigned:Ticket') && $this->isAssignee($user, $ticket);
     }
 
     // ─── Scoped Mutation Helpers ──────────────────────────────────────────────
 
-    public function updateOwn(AcceleratedUser $user, Ticket $ticket): bool
+    public function updateOwn(AcceleratorUser $user, Ticket $ticket): bool
     {
         return $user->can('UpdateOwn:Ticket')
             && $this->isReporter($user, $ticket)
             && $this->isUnrouted($ticket);
     }
 
-    public function updateAssigned(AcceleratedUser $user, Ticket $ticket): bool
+    public function updateAssigned(AcceleratorUser $user, Ticket $ticket): bool
     {
         return $user->can('UpdateAssigned:Ticket')
             && $this->isAssignee($user, $ticket)
             && ! $this->isClosed($ticket);
     }
 
-    public function deleteOwn(AcceleratedUser $user, Ticket $ticket): bool
+    public function deleteOwn(AcceleratorUser $user, Ticket $ticket): bool
     {
         return $user->can('DeleteOwn:Ticket')
             && $this->isReporter($user, $ticket)
@@ -133,7 +134,7 @@ class TicketPolicy
     /**
      * Assign a ticket to someone. Requires Assign:Ticket or Update:Ticket.
      */
-    public function assign(AcceleratedUser $user, Ticket $ticket): bool
+    public function assign(AcceleratorUser $user, Ticket $ticket): bool
     {
         return $user->can('Assign:Ticket') || $user->can('Update:Ticket');
     }
@@ -141,7 +142,7 @@ class TicketPolicy
     /**
      * Change ticket status. Assignees can transition their own active tickets.
      */
-    public function changeStatus(AcceleratedUser $user, Ticket $ticket): bool
+    public function changeStatus(AcceleratorUser $user, Ticket $ticket): bool
     {
         if ($user->can('ChangeStatus:Ticket') || $user->can('Update:Ticket')) {
             return true;
@@ -156,7 +157,7 @@ class TicketPolicy
      * Archive a ticket. Only agents with Update:Ticket or Assign:Ticket may archive.
      * Reporters cannot archive their tickets once routed.
      */
-    public function archive(AcceleratedUser $user, Ticket $ticket): bool
+    public function archive(AcceleratorUser $user, Ticket $ticket): bool
     {
         if ($user->can('Update:Ticket')) {
             return true;
@@ -171,27 +172,27 @@ class TicketPolicy
     /**
      * Restore an archived ticket. Requires Update:Ticket.
      */
-    public function restore(AcceleratedUser $user, Ticket $ticket): bool
+    public function restore(AcceleratorUser $user, Ticket $ticket): bool
     {
         return $user->can('Update:Ticket');
     }
 
     // ─── Private Helpers ──────────────────────────────────────────────────────
 
-    private function isReporter(AcceleratedUser $user, Ticket $ticket): bool
+    private function isReporter(AcceleratorUser $user, Ticket $ticket): bool
     {
-        return (int) $ticket->reporter_id === (int) $user->id;
+        return $ticket->reporter_id === UserModel::id($user);
     }
 
-    private function isAssignee(AcceleratedUser $user, Ticket $ticket): bool
+    private function isAssignee(AcceleratorUser $user, Ticket $ticket): bool
     {
         return $ticket->assignee_id !== null
-            && (int) $ticket->assignee_id === (int) $user->id;
+            && $ticket->assignee_id === UserModel::id($user);
     }
 
-    private function isWatcher(AcceleratedUser $user, Ticket $ticket): bool
+    private function isWatcher(AcceleratorUser $user, Ticket $ticket): bool
     {
-        return $ticket->watchers()->where('user_id', $user->id)->exists();
+        return $ticket->watchers()->where('user_id', UserModel::id($user))->exists();
     }
 
     /**

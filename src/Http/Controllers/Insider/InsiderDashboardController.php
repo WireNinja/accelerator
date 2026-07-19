@@ -6,7 +6,8 @@ namespace WireNinja\Accelerator\Http\Controllers\Insider;
 
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
-use WireNinja\Accelerator\Model\AcceleratedUser;
+use WireNinja\Accelerator\Contracts\AcceleratorUser;
+use WireNinja\Accelerator\Support\UserModel;
 
 class InsiderDashboardController extends Controller
 {
@@ -54,9 +55,9 @@ class InsiderDashboardController extends Controller
         return $this->renderPage('Insider Diagnostics Dashboard', $content.$runtimeTable);
     }
 
-    private function authorizeAccess(): AcceleratedUser
+    private function authorizeAccess(): AcceleratorUser
     {
-        $user = mustUser();
+        $user = UserModel::current();
 
         abort_unless($user->isSuperAdmin(), 403);
 

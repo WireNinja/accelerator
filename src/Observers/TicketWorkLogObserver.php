@@ -6,13 +6,14 @@ namespace WireNinja\Accelerator\Observers;
 
 use WireNinja\Accelerator\Model\Ticket;
 use WireNinja\Accelerator\Model\TicketWorkLog;
+use WireNinja\Accelerator\Support\UserModel;
 
 class TicketWorkLogObserver
 {
     public function creating(TicketWorkLog $workLog): void
     {
         if (blank($workLog->user_id)) {
-            $workLog->user_id = mustUser()->id;
+            $workLog->user_id = UserModel::id();
         }
 
         if (blank($workLog->logged_at)) {

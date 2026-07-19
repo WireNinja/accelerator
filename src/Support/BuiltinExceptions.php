@@ -6,6 +6,7 @@ use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 use Illuminate\Support\ViewErrorBag;
 use Illuminate\Validation\ValidationException;
@@ -35,7 +36,7 @@ final class BuiltinExceptions
 
     public static function make(Exceptions $exceptions): void
     {
-        // @DONOT-REMOVE dontReportWhen user() === null
+        // @DONOT-REMOVE dontReportWhen Auth::guest()
         //
         // WHY THIS EXISTS:
         // Unauthenticated traffic (crawlers, vulnerability scanners, path snipers, SEO bots,
@@ -76,7 +77,7 @@ final class BuiltinExceptions
                 return false;
             }
 
-            return user() === null;
+            return Auth::guest();
         });
 
         // Telemetry: capture every exception into the Swoole Table buffer.

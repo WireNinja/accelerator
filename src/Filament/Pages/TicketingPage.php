@@ -16,6 +16,7 @@ use WireNinja\Accelerator\Filament\Resources\Support\Tickets\TicketResource;
 use WireNinja\Accelerator\Model\Ticket;
 use WireNinja\Accelerator\Model\TicketBoard;
 use WireNinja\Accelerator\Support\Ticket\TicketVisibility;
+use WireNinja\Accelerator\Support\UserModel;
 
 class TicketingPage extends Page
 {
@@ -86,7 +87,7 @@ class TicketingPage extends Page
 
     public function mount(): void
     {
-        $authUser = mustUser();
+        $authUser = UserModel::current();
 
         $this->isPetugas = TicketVisibility::canManageRouting($authUser)
             || TicketVisibility::canViewAll($authUser);
@@ -133,7 +134,7 @@ class TicketingPage extends Page
 
     private function loadBoard(): void
     {
-        $authUser = mustUser();
+        $authUser = UserModel::current();
         $search = trim($this->search);
 
         $filterType = $this->filterType;
