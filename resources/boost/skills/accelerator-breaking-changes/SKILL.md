@@ -89,6 +89,10 @@ Fresh installs no longer create `LauncherEnum`. It is optional, application-owne
 
 `TimestampSummaryColumn` is also removed. Its only application consumer had two columns in one table, while native `TextColumn::since()` plus `description()` preserves the same relative and exact timestamp UX without a package class or Blade view.
 
+### 🟡 AWARENESS — Render hooks are registered by their feature owners
+
+`PanelPreset` no longer registers empty OAuth, PWA, or settings hook closures on every panel. `OAuthServiceProvider` owns the Google login hook and only exposes it when both client ID and secret are configured. `PwaServiceProvider` owns the PWA head hook. `FilamentServiceProvider` owns the shared topbar/error hooks and conditionally owns settings notice/support hooks. Disabled features now register no corresponding hook.
+
 ## v1.1.79
 
 No deployment contract changes beyond v1.1.66.

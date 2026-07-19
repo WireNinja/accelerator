@@ -22,9 +22,12 @@ use Filament\Support\Assets\Css;
 use Filament\Support\Assets\Js;
 use Filament\Support\Facades\FilamentAsset;
 use Filament\Support\Facades\FilamentTimezone;
+use Filament\Support\Facades\FilamentView;
 use Filament\Tables\Enums\FiltersLayout;
 use Filament\Tables\Enums\PaginationMode;
 use Filament\Tables\Table;
+use Filament\View\PanelsRenderHook;
+use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 use Livewire\LivewireManager;
@@ -32,6 +35,7 @@ use Spatie\Activitylog\Models\Activity;
 use WireNinja\Accelerator\Console\Filament\VerifyResourceCommand;
 use WireNinja\Accelerator\Console\Shield\SafeRegenerateCommand;
 use WireNinja\Accelerator\Policies\ActivityPolicy;
+use WireNinja\Accelerator\Support\BuiltinExceptions;
 
 final class FilamentServiceProvider extends ServiceProvider
 {
@@ -39,6 +43,7 @@ final class FilamentServiceProvider extends ServiceProvider
     {
         $this->registerActivityPolicy();
         $this->registerAssets();
+        $this->registerRenderHooks();
         $this->registerLivewireNamespace();
         $this->protectShieldCommands();
         $this->configureFilament();
@@ -72,6 +77,34 @@ final class FilamentServiceProvider extends ServiceProvider
         $this->app->make(LivewireManager::class)->addNamespace(
             namespace: 'accelerator',
             viewPath: __DIR__.'/../../resources/views/livewire',
+        );
+    }
+
+    private function registerRenderHooks(): void
+    {
+        FilamentView::registerRenderHook(
+            PanelsRenderHook::PAGE_START,
+            static fn (): View => view('accelerator::filament.sidebar.topbar'),
+        );
+        FilamentView::registerRenderHook(
+            PanelsRenderHook::BODY_END,
+            static fn (): View => view(
+                'accelerator::filament.business-exception-handler',
+                BuiltinExceptions::getFilamentBusinessExceptionViewData(),
+            ),
+        );
+
+        if (! config('accelerator.features.settings')) {
+            return;
+        }
+
+        FilamentView::registerRenderHook(
+            PanelsRenderHook::SIDEBAR_NAV_START,
+            static fn (): View => view('accelerator::filament.sidebar.notice'),
+        );
+        FilamentView::registerRenderHook(
+            'accelerator::sidebar.support',
+            static fn (): View => view('accelerator::filament.sidebar.support'),
         );
     }
 

@@ -15,7 +15,6 @@ use Filament\Pages\Dashboard;
 use Filament\Panel;
 use Filament\Support\Colors\Color;
 use Filament\Support\Enums\Width;
-use Filament\View\PanelsRenderHook;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
@@ -33,8 +32,6 @@ use WireNinja\Accelerator\Support\BuiltinExceptions;
 
 final class PanelPreset
 {
-    private const SIDEBAR_SUPPORT_RENDER_HOOK = 'accelerator::sidebar.support';
-
     public static function configure(Panel $panel, string $id = 'admin'): Panel
     {
         $panelSegment = $id === 'admin' ? null : Str::studly($id);
@@ -120,38 +117,6 @@ final class PanelPreset
             ->errorNotifications()
             ->hiddenErrorNotification(BuiltinExceptions::getFilamentBusinessExceptionStatusCode())
             ->lazyLoadedDatabaseNotifications()
-            ->renderHook(
-                PanelsRenderHook::AUTH_LOGIN_FORM_AFTER,
-                static fn () => config('accelerator.features.oauth') && config('services.google.client_id')
-                    ? view('accelerator::filament.auth.google-login')
-                    : ''
-            )
-            ->renderHook(
-                PanelsRenderHook::SIDEBAR_NAV_START,
-                static fn () => config('accelerator.features.settings')
-                    ? view('accelerator::filament.sidebar.notice')
-                    : ''
-            )
-            ->renderHook(
-                self::SIDEBAR_SUPPORT_RENDER_HOOK,
-                static fn () => config('accelerator.features.settings')
-                    ? view('accelerator::filament.sidebar.support')
-                    : ''
-            )
-            ->renderHook(
-                PanelsRenderHook::PAGE_START,
-                static fn () => view('accelerator::filament.sidebar.topbar')
-            )
-            ->renderHook(
-                PanelsRenderHook::HEAD_END,
-                static fn () => config('accelerator.features.pwa')
-                    ? view('accelerator::partials.pwa.head')
-                    : ''
-            )
-            ->renderHook(
-                PanelsRenderHook::BODY_END,
-                static fn () => view('accelerator::filament.business-exception-handler', BuiltinExceptions::getFilamentBusinessExceptionViewData())
-            )
             ->bootUsing(static function (Panel $panel): void {
                 if (! config('accelerator.features.settings')) {
                     return;
