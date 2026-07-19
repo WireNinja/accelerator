@@ -26,7 +26,7 @@ use Throwable;
 use WireNinja\Accelerator\Console\Concerns\HasBanner;
 use WireNinja\Accelerator\Database\Casts\BigDecimalCast;
 use WireNinja\Accelerator\Model\Concerns\HasTypedColumnMethods;
-use WireNinja\Accelerator\Support\TypeCaster;
+use WireNinja\Accelerator\Support\Cast;
 
 use function Laravel\Prompts\search;
 
@@ -136,7 +136,7 @@ class ModelDocCommand extends Command
         $usesTypedColumnMethods = $this->usesTypedColumnMethods($reflection);
 
         foreach ($this->getSchemaColumns($model->getTable()) as $column) {
-            $columnName = TypeCaster::strictString($column['name'] ?? null);
+            $columnName = Cast::strictString($column['name'] ?? null);
             $phpType = $this->resolveColumnPhpType($model, $columnName, $column);
 
             $properties[] = "@property {$phpType} \${$columnName}";
@@ -216,7 +216,7 @@ class ModelDocCommand extends Command
     {
         $schemaType = $this->resolveSchemaPhpType($schemaColumn);
         $castType = $this->resolveCastPhpType($model, $column);
-        $nullable = TypeCaster::safeBool($schemaColumn['nullable'] ?? false);
+        $nullable = Cast::asBool($schemaColumn['nullable'] ?? false);
 
         return $this->applyNullability($castType ?? $schemaType, $nullable);
     }
@@ -226,7 +226,7 @@ class ModelDocCommand extends Command
      */
     protected function resolveSchemaPhpType(array $schemaColumn): string
     {
-        $databaseType = strtolower(TypeCaster::safeString($schemaColumn['type_name'] ?? $schemaColumn['type'] ?? 'mixed', 'mixed'));
+        $databaseType = strtolower(Cast::asString($schemaColumn['type_name'] ?? $schemaColumn['type'] ?? 'mixed', 'mixed'));
 
         return match ($databaseType) {
             'bigint', 'integer', 'int', 'mediumint', 'smallint', 'tinyint' => 'int',
@@ -246,7 +246,7 @@ class ModelDocCommand extends Command
             return null;
         }
 
-        $castDefinition = TypeCaster::safeString($casts[$column] ?? null);
+        $castDefinition = Cast::asString($casts[$column] ?? null);
 
         if ($castDefinition === '') {
             return null;

@@ -185,9 +185,5 @@ trait InteractsWithApplication
         DeleteAction::configureUsing(static function (DeleteAction $action) {
             $action->icon('lucide-shredder');
         });
-
-        //  BetterActionGroup::configureUsing(static function (BetterActionGroup $actionGroup) {
-        //     $actionGroup->icon('lucide-dots-vertical');
-        //  });
     }
 }

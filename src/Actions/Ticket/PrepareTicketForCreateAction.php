@@ -4,12 +4,11 @@ declare(strict_types=1);
 
 namespace WireNinja\Accelerator\Actions\Ticket;
 
-use WireNinja\Accelerator\Contracts\HasHandle;
 use WireNinja\Accelerator\Enums\Ticket\TicketStatusEnum;
 use WireNinja\Accelerator\Model\TicketBoard;
 use WireNinja\Accelerator\Model\TicketBoardColumn;
 
-class PrepareTicketForCreateAction implements HasHandle
+class PrepareTicketForCreateAction
 {
     /**
      * @param  array<string, mixed>  $data

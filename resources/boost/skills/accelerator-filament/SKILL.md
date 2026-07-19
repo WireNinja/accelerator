@@ -200,7 +200,7 @@ Default answer for a new action class is **NO**.
 - Do NOT introduce boilerplate helpers (`getActor()`, `getXRecord()`, `reloadRecordAndForm()`) just to placate static analysis. Fix typing or model PHPDoc instead.
 - Do NOT use `Location|int` union types when the contract really only needs the ID.
 - Do NOT add `getRawOriginal()` or repeated manual casts to compensate for bad typing. Run `php artisan accelerator:model-doc {Model} --write`.
-- Do NOT use `strval()`, `intval()`, `(string)`, `(int)` etc for application data flows. Use `WireNinja\Accelerator\Support\Cast` / `TypeCaster` so type evaluation stays consistent and we don't pollute global namespace.
+- Do NOT use `strval()`, `intval()`, `(string)`, `(int)` etc for application data flows. Use `WireNinja\Accelerator\Support\Cast` where boundary conversion is genuinely required.
 - Do NOT call `CarbonImmutable::now(config('app.timezone'))` for normal flows — `app.timezone` is global. `CarbonImmutable::now()` is enough unless a non-default timezone is explicitly required.
 
 ### Business exception & typed column access

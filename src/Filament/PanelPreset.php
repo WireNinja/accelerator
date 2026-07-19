@@ -8,7 +8,6 @@ use Filament\Auth\MultiFactor\Email\EmailAuthentication;
 use Filament\Auth\Pages\EmailVerification\EmailVerificationPrompt;
 use Filament\Auth\Pages\PasswordReset\RequestPasswordReset;
 use Filament\Auth\Pages\PasswordReset\ResetPassword;
-use Filament\Auth\Pages\Register;
 use Filament\Enums\ThemeMode;
 use Filament\FontProviders\GoogleFontProvider;
 use Filament\Http\Middleware\Authenticate;
@@ -19,22 +18,15 @@ use Filament\Pages\Dashboard;
 use Filament\Panel;
 use Filament\Support\Colors\Color;
 use Filament\Support\Enums\Width;
-use Filament\Tables\View\TablesRenderHook;
 use Filament\View\PanelsRenderHook;
-use Filament\Widgets\AccountWidget;
-use Filament\Widgets\FilamentInfoWidget;
-use Filament\Widgets\View\WidgetsRenderHook;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
-use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
-use ReflectionClass;
-use WireNinja\Accelerator\Constant\Profile;
 use WireNinja\Accelerator\Filament\AvatarProviders\DiceBearAvatarProvider;
 use WireNinja\Accelerator\Filament\Pages\Auth\Login;
 use WireNinja\Accelerator\Filament\Pages\ManageProfile;
@@ -46,18 +38,12 @@ final class PanelPreset
 {
     public static function configure(Panel $panel, string $id = 'admin'): Panel
     {
-        // self::setRenderHook($panel);
-
         return $panel
             ->id($id)
             ->path($id)
             ->defaultAvatarProvider(DiceBearAvatarProvider::class)
-            ->viteTheme([
-                self::viteTheme($id),
-                'vendor/wireninja/accelerator/resources/css/accelerator.css',
-            ])
+            ->viteTheme(self::viteTheme($id))
             ->login(Login::class)
-            ->registration()
             ->passwordReset()
             ->multiFactorAuthentication([
                 AppAuthentication::make()
@@ -96,11 +82,6 @@ final class PanelPreset
                 Dashboard::class,
             ])
             ->discoverWidgets(in: self::discoverWidgetsIn($id), for: self::discoverWidgetsFor($id))
-            ->widgets([
-                // AccountWidget::class,
-                // FilamentInfoWidget::class,
-                // SystemInfoWidget::class,
-            ])
             ->middleware([
                 EncryptCookies::class,
                 AddQueuedCookiesToResponse::class,
@@ -171,95 +152,41 @@ final class PanelPreset
                     return $panel;
                 }
 
-                rescue(function () use ($panel) {
-                    $settings = resolve(SystemSettings::class);
+                $settings = resolve(SystemSettings::class);
+                $whatsapp = preg_replace('/\D+/', '', (string) config('accelerator.support.whatsapp'));
+                $telegram = ltrim((string) config('accelerator.support.telegram'), '@');
 
-                    $panel
-                        ->font($settings->google_font->value, provider: GoogleFontProvider::class)
-                        ->registration($settings->registration_enabled ? Register::class : null)
-                        ->passwordReset(
-                            $settings->password_reset_enabled ? RequestPasswordReset::class : null,
-                            $settings->password_reset_enabled ? ResetPassword::class : null,
-                        )
-                        ->brandName($settings->brand_name)
-                        ->brandLogo(self::resolveAssetUrl($settings->brand_logo))
-                        ->favicon(self::resolveAssetUrl($settings->brand_favicon))
-                        ->emailVerification(
-                            $settings->email_verification_enabled ? EmailVerificationPrompt::class : null,
-                            $settings->email_verification_enabled,
-                        )
-                        ->emailChangeVerification($settings->email_verification_enabled ? true : false)
-                        ->userMenuItems([
-                            Action::make('whatsapp_support')
-                                ->label('Whatsapp Support')
-                                ->url(fn () => sprintf('https://wa.me/%s', Profile::DEVELOPER_WHATSAPP))
-                                ->openUrlInNewTab()
-                                ->visible(fn () => ! blank(Profile::DEVELOPER_WHATSAPP) && $settings->support_enabled)
-                                ->icon('lucide-phone-outgoing'),
-                            Action::make('telegram_support')
-                                ->label('Telegram Support')
-                                ->url(fn () => sprintf('https://t.me/%s', Profile::DEVELOPER_TELEGRAM))
-                                ->openUrlInNewTab()
-                                ->visible(fn () => ! blank(Profile::DEVELOPER_TELEGRAM) && $settings->support_enabled)
-                                ->icon('lucide-send'),
-                        ]);
-                });
+                $panel
+                    ->font($settings->google_font->value, provider: GoogleFontProvider::class)
+                    ->passwordReset(
+                        $settings->password_reset_enabled ? RequestPasswordReset::class : null,
+                        $settings->password_reset_enabled ? ResetPassword::class : null,
+                    )
+                    ->brandName($settings->brand_name)
+                    ->brandLogo(self::resolveAssetUrl($settings->brand_logo))
+                    ->favicon(self::resolveAssetUrl($settings->brand_favicon))
+                    ->emailVerification(
+                        $settings->email_verification_enabled ? EmailVerificationPrompt::class : null,
+                        $settings->email_verification_enabled,
+                    )
+                    ->emailChangeVerification($settings->email_verification_enabled)
+                    ->userMenuItems([
+                        Action::make('whatsapp_support')
+                            ->label('Whatsapp Support')
+                            ->url("https://wa.me/{$whatsapp}")
+                            ->openUrlInNewTab()
+                            ->visible($settings->support_enabled && filled($whatsapp))
+                            ->icon('lucide-phone-outgoing'),
+                        Action::make('telegram_support')
+                            ->label('Telegram Support')
+                            ->url("https://t.me/{$telegram}")
+                            ->openUrlInNewTab()
+                            ->visible($settings->support_enabled && filled($telegram))
+                            ->icon('lucide-send'),
+                    ]);
 
                 return $panel;
             });
-    }
-
-    /**
-     * @DONOT-REMOVE setRenderHook helper
-     *
-     * Internal development tool: when called from `configure()` (uncomment the
-     * `// self::setRenderHook($panel);` line), this method overlays every Filament
-     * render hook (panel, table, widget) with a red-bordered box showing the hook name.
-     * Useful when designing custom views/extensions to identify hook positions.
-     *
-     * Intentionally NOT called in production. Do not remove, do not make public.
-     * If a future agent deletes this as "dead code", the developer loses a fast way
-     * to map render hooks without reading Filament documentation.
-     *
-     * Usage:
-     *   - Uncomment `self::setRenderHook($panel);` at the start of `configure()`.
-     *   - Open the admin panel in a browser.
-     *   - See red-bordered hook labels at every render point.
-     *   - When done, comment the line back.
-     */
-    private static function setRenderHook(Panel $panel)
-    {
-        $panelHooks = new ReflectionClass(PanelsRenderHook::class);
-        // Table Hooks
-        $tableHooks = new ReflectionClass(TablesRenderHook::class);
-        // Widget Hooks
-        $widgetHooks = new ReflectionClass(WidgetsRenderHook::class);
-
-        $panelHooks = $panelHooks->getConstants();
-        $tableHooks = $tableHooks->getConstants();
-        $widgetHooks = $widgetHooks->getConstants();
-
-        foreach ($panelHooks as $hook) {
-            $panel->renderHook($hook, function () use ($hook) {
-                return Blade::render('<div style="border: solid red 1px; padding: 2px;">{{ $name }}</div>', [
-                    'name' => Str::of($hook)->remove('tables::'),
-                ]);
-            });
-        }
-        foreach ($tableHooks as $hook) {
-            $panel->renderHook($hook, function () use ($hook) {
-                return Blade::render('<div style="border: solid red 1px; padding: 2px;">{{ $name }}</div>', [
-                    'name' => Str::of($hook)->remove('tables::'),
-                ]);
-            });
-        }
-        foreach ($widgetHooks as $hook) {
-            $panel->renderHook($hook, function () use ($hook) {
-                return Blade::render('<div style="border: solid red 1px; padding: 2px;">{{ $name }}</div>', [
-                    'name' => Str::of($hook)->remove('tables::'),
-                ]);
-            });
-        }
     }
 
     private static function viteTheme(string $path): string

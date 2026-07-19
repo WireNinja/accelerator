@@ -16,8 +16,6 @@ final class SystemSettings extends Settings
 
     public ?string $brand_favicon;
 
-    public bool $registration_enabled;
-
     public bool $password_reset_enabled;
 
     public bool $email_verification_enabled;

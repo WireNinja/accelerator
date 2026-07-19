@@ -8,7 +8,6 @@ use Filament\Support\Contracts\HasColor;
 use Filament\Support\Contracts\HasIcon;
 use Filament\Support\Contracts\HasLabel;
 use WireNinja\Accelerator\Concerns\BetterEnum;
-use WireNinja\Accelerator\Constant\PanelColor;
 
 enum PanelEnum: string implements HasColor, HasIcon, HasLabel
 {
@@ -51,13 +50,13 @@ enum PanelEnum: string implements HasColor, HasIcon, HasLabel
     public function getColor(): string
     {
         return match ($this) {
-            self::Admin => PanelColor::Danger,
-            self::Production => PanelColor::Primary,
-            self::Sales => PanelColor::Warning,
-            self::Accounting => PanelColor::Success,
-            self::App => PanelColor::Primary,
-            self::Support => PanelColor::Info,
-            self::System => PanelColor::Gray,
+            self::Admin => 'danger',
+            self::Production => 'primary',
+            self::Sales => 'warning',
+            self::Accounting => 'success',
+            self::App => 'primary',
+            self::Support => 'info',
+            self::System => 'gray',
         };
     }
 

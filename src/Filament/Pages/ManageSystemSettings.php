@@ -64,7 +64,6 @@ class ManageSystemSettings extends Page implements HasForms
             'brand_name' => $this->settings->brand_name,
             'brand_logo' => blank($this->settings->brand_logo) ? null : $this->settings->brand_logo,
             'brand_favicon' => blank($this->settings->brand_favicon) ? null : $this->settings->brand_favicon,
-            'registration_enabled' => $this->settings->registration_enabled,
             'password_reset_enabled' => $this->settings->password_reset_enabled,
             'email_verification_enabled' => $this->settings->email_verification_enabled,
             'support_enabled' => $this->settings->support_enabled,
@@ -130,12 +129,9 @@ class ManageSystemSettings extends Page implements HasForms
                         ->icon('lucide-shield-check')
                         ->schema([
                             Section::make('Kebijakan Akses')
-                                ->description('Konfigurasi pendaftaran, kebijakan kata sandi, dan keamanan.')
-                                ->columns(3)
+                                ->description('Konfigurasi pemulihan akun dan keamanan email.')
+                                ->columns(2)
                                 ->schema([
-                                    Toggle::make('registration_enabled')
-                                        ->label('Izinkan Pendaftaran')
-                                        ->helperText('Izinkan pengguna untuk membuat akun baru.'),
                                     Toggle::make('password_reset_enabled')
                                         ->label('Izinkan Reset Kata Sandi')
                                         ->helperText('Izinkan pengguna mereset kata sandi mereka yang terlupa.'),
@@ -244,7 +240,6 @@ class ManageSystemSettings extends Page implements HasForms
         $this->settings->brand_name = $state['brand_name'];
         $this->settings->brand_logo = $state['brand_logo'];
         $this->settings->brand_favicon = $state['brand_favicon'];
-        $this->settings->registration_enabled = $state['registration_enabled'];
         $this->settings->password_reset_enabled = $state['password_reset_enabled'];
         $this->settings->email_verification_enabled = $state['email_verification_enabled'];
         $this->settings->support_enabled = $state['support_enabled'];

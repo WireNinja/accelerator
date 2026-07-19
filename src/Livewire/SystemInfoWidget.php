@@ -4,13 +4,10 @@ namespace WireNinja\Accelerator\Livewire;
 
 use Filament\Widgets\Widget;
 use Livewire\Attributes\Computed;
-use WireNinja\Accelerator\Filament\Traits\WidgetMustBeLazy;
 use WireNinja\Accelerator\Settings\SystemSettings;
 
 class SystemInfoWidget extends Widget
 {
-    use WidgetMustBeLazy;
-
     protected int|string|array $columnSpan = 2;
 
     protected static ?int $sort = -5;

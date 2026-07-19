@@ -6,13 +6,12 @@ namespace WireNinja\Accelerator\Actions\User;
 
 use NotificationChannels\Telegram\Telegram;
 use Throwable;
-use WireNinja\Accelerator\Contracts\HasHandle;
 use WireNinja\Accelerator\Exceptions\BusinessException;
 use WireNinja\Accelerator\Model\AcceleratedUser;
 use WireNinja\Accelerator\Settings\SystemSettings;
 use WireNinja\Accelerator\Support\Telegram\TelegramBotConfigurator;
 
-final class SendTelegramTestMessageAction implements HasHandle
+final class SendTelegramTestMessageAction
 {
     public function __construct(
         private readonly Telegram $telegram,

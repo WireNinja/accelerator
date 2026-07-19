@@ -4,25 +4,60 @@ declare(strict_types=1);
 
 namespace WireNinja\Accelerator\Support;
 
+use InvalidArgumentException;
+use Stringable;
+
 final class Cast
 {
     public static function asString(mixed $value, string $default = ''): string
     {
-        return TypeCaster::safeString($value, $default);
+        if ($value === null) {
+            return $default;
+        }
+
+        if (is_scalar($value) || $value instanceof Stringable) {
+            return (string) $value;
+        }
+
+        return $default;
     }
 
     public static function strictString(mixed $value): string
     {
-        return TypeCaster::strictString($value);
+        if (is_scalar($value) || $value instanceof Stringable) {
+            return (string) $value;
+        }
+
+        throw new InvalidArgumentException('Value cannot be cast to string.');
     }
 
     public static function asInt(mixed $value, int $default = 0): int
     {
-        return TypeCaster::safeInt($value, $default);
+        if (is_int($value)) {
+            return $value;
+        }
+
+        if (is_bool($value)) {
+            return $value ? 1 : 0;
+        }
+
+        return is_numeric($value) ? (int) $value : $default;
     }
 
     public static function asBool(mixed $value, bool $default = false): bool
     {
-        return TypeCaster::safeBool($value, $default);
+        if (is_bool($value)) {
+            return $value;
+        }
+
+        if (is_int($value)) {
+            return $value !== 0;
+        }
+
+        if (! is_string($value)) {
+            return $default;
+        }
+
+        return filter_var($value, FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE) ?? $default;
     }
 }

@@ -5,10 +5,9 @@ declare(strict_types=1);
 namespace WireNinja\Accelerator\Actions\Ticket;
 
 use Illuminate\Support\Str;
-use WireNinja\Accelerator\Contracts\HasHandle;
 use WireNinja\Accelerator\Model\Ticket;
 
-class GenerateTicketNumberAction implements HasHandle
+class GenerateTicketNumberAction
 {
     public function handle(): string
     {

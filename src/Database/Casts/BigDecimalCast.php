@@ -169,7 +169,7 @@ class BigDecimalCast implements CastsAttributes
      *
      * Boundary cast from external sources (DB driver string|int|float|object) to string.
      * This is one of the places where manual casting is valid because it IS a boundary,
-     * NOT domain flow. For domain flow use TypeCaster.
+     * NOT domain flow. For domain flow use Cast.
      */
     private static function stringify(mixed $value): string
     {

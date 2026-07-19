@@ -1,6 +1,6 @@
 <div
     x-data="{}"
-    x-load-js="[{{js_iconify()}}]"
+    x-load-js="[{{ Illuminate\Support\Js::from(Filament\Support\Facades\FilamentAsset::getScriptSrc('iconify', 'wireninja/accelerator')) }}]"
     class="flex flex-col items-center justify-center space-y-4 pt-4">
     <div class="relative flex w-full items-center py-2">
         <div class="flex-grow border-t border-gray-200 dark:border-gray-700"></div>

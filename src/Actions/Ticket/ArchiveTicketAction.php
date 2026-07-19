@@ -5,11 +5,10 @@ declare(strict_types=1);
 namespace WireNinja\Accelerator\Actions\Ticket;
 
 use Illuminate\Support\Facades\DB;
-use WireNinja\Accelerator\Contracts\HasHandle;
 use WireNinja\Accelerator\Model\AcceleratedUser;
 use WireNinja\Accelerator\Model\Ticket;
 
-class ArchiveTicketAction implements HasHandle
+class ArchiveTicketAction
 {
     public function handle(Ticket $ticket, AcceleratedUser $archivedBy): Ticket
     {

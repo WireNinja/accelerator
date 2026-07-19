@@ -8,8 +8,7 @@
             "WireNinja\\Accelerator\\": "src/"
         },
         "files": [
-            "src/Support/helpers.php",
-            "src/Helper/iconify.php"
+            "src/Support/helpers.php"
         ]
     },
     "require": {

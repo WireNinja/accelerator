@@ -7,7 +7,6 @@ namespace WireNinja\Accelerator\Concerns;
 use BackedEnum;
 use Illuminate\Support\Collection;
 use InvalidArgumentException;
-use WireNinja\Accelerator\Constant\PanelColor;
 
 trait BetterEnum
 {
@@ -130,7 +129,7 @@ trait BetterEnum
 
     protected static function defaultColor(): string
     {
-        return PanelColor::Gray;
+        return 'gray';
     }
 
     /**

@@ -11,6 +11,24 @@ Format per entry:
 
 ---
 
+## v2.0.0
+
+### 🔴 BREAKING — Fake contracts and thin Filament wrappers removed
+
+`HasHandle`, `PanelColor`, `Profile`, `TypeCaster`, `BetterActionGroup`, widget lazy/polling traits, and the created/updated/deleted timestamp aliases no longer exist. Use concrete action classes, literal Filament color names, env-backed support config, `Cast`, native `ActionGroup`, native widget properties, and `TimestampSummaryColumn` directly.
+
+### 🔴 BREAKING — Support identity is application configuration
+
+Set `ACCELERATOR_SUPPORT_WHATSAPP` and `ACCELERATOR_SUPPORT_TELEGRAM` when bundled support actions should be visible. Accelerator no longer ships a developer's personal contact constants.
+
+### 🔴 BREAKING — Self-registration removed
+
+The database-backed `registration_enabled` toggle and Filament registration route are removed. Accelerator v2 targets internal provisioned-user applications; a project that genuinely needs public signup must configure that application-owned flow explicitly.
+
+### 🟡 AWARENESS — Filament uses one Vite theme input
+
+`PanelPreset` now requests only the resolved application theme. Accelerator CSS is imported by that theme and is no longer requested as an impossible second vendor manifest entry.
+
 ## v1.1.79
 
 No deployment contract changes beyond v1.1.66.

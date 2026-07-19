@@ -58,6 +58,11 @@ return [
         'max_megabytes' => env('ACCELERATOR_UPLOAD_MAX_MB', 100),
     ],
 
+    'support' => [
+        'whatsapp' => env('ACCELERATOR_SUPPORT_WHATSAPP'),
+        'telegram' => env('ACCELERATOR_SUPPORT_TELEGRAM'),
+    ],
+
     'dicebear' => [
         'url' => env('ACCELERATOR_DICEBEAR_URL', 'https://dicebear.ohmyserver.com'),
         'version' => env('ACCELERATOR_DICEBEAR_VERSION', '9.x'),
