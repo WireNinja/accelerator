@@ -17,7 +17,7 @@ Install the package with `vite-plugin-pwa`:
 bun add -d @wireninja/vite-plugin-laravel-pwa vite-plugin-pwa
 ```
 
-Do not use npm in WireNinja projects unless the project explicitly standardizes on npm.
+Accelerator v2 standardizes on Bun. Do not add npm, pnpm, Yarn, or package-manager branching.
 
 ## Required Source Icon
 

@@ -120,7 +120,7 @@ Required replacements:
 - give each release an immutable `{root}/shared/env/{release}.env` and switch the shared env alias during deploy/rollback;
 - point Nginx to `{root}/current/public` and let it enforce the shared maintenance marker;
 - let the renderer own the scoped Nginx vhost and Supervisor group file;
-- keep at least one Octane request worker; leave Swoole task workers at `0` unless application code uses task dispatch;
+- keep at least one Octane request worker and one Swoole task worker; increase either count only for measured capacity or concurrency needs;
 - enable either Horizon or the plain queue worker, never both.
 
 Normal deploy now rejects infrastructure drift, unsafe roots/config, dirty/unpushed Git, mixed lockfiles, runtime/deploy env leakage, destructive migrations without an explicit flag, and failed health checks.

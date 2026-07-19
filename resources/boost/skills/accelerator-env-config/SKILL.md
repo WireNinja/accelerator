@@ -77,7 +77,7 @@ Per-stage keys define:
 
 Prefer the PHP-version-derived FPM socket/service. Fill explicit overrides only for a nonstandard VPS. `DNS_DIRECT=false` is valid only when a deliberate proxy/CDN fronts the origin.
 
-`OCTANE_TASK_WORKERS=0` is a valid explicit default. Increase it only when application code actually uses Swoole task dispatch; Accelerator telemetry v2 does not require a task worker.
+`OCTANE_TASK_WORKERS` must be at least `1`. Accelerator telemetry v2 does not require task dispatch, but Laravel Octane's default Swoole server tick does; zero task workers causes recurring runtime warnings. Increase the count beyond one only when application concurrency needs it.
 
 ## Laravel Configuration
 

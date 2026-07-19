@@ -42,7 +42,7 @@ Accelerator is an intentionally batteries-included foundation for internal Larav
 - Every release has an immutable env under `{root}/shared/env`; both code and env move together on deploy/rollback.
 - Nginx checks the shared Laravel maintenance marker before PHP/Octane/static/websocket handling, except `/up` and ACME.
 - Nginx and Supervisor files are rendered, scoped, archived before replacement, validated, and drift-checked.
-- Never enable Horizon and the plain queue worker together. Swoole always has at least one request worker; task workers are explicit and may be `0` when the application does not use task dispatch.
+- Never enable Horizon and the plain queue worker together. Swoole always has at least one request worker and one task worker because Octane's default tick dispatch uses the task worker pool.
 - FPM is not globally reloaded; immutable release realpaths avoid stale OPcache keys and cross-project restarts. Supervisor-managed stage processes are restarted by scoped group.
 - Build and migration failures before maintenance do not interrupt traffic. Failures after maintenance leave it active for rollback/repair.
 - Mutating stories use a persistent per-root deploy lock. After a failed run, confirm no deploy is active and use `envoy unlock`; unlocking never clears maintenance.
