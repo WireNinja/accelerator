@@ -27,7 +27,7 @@ server {
     access_log /var/log/nginx/{{ domain }}.access.log;
     error_log /var/log/nginx/{{ domain }}.error.log;
 
-    client_max_body_size 100m;
+    client_max_body_size 110m;
     server_tokens off;
 
 {{ reverb_location }}

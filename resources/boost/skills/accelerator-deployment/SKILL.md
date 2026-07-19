@@ -545,7 +545,7 @@ Key properties:
 - Reverb websocket at `location ~ ^/(app|apps|pusher)/` only when Reverb is enabled
 - Static asset caching with `expires 365d` + `Cache-Control: public, immutable`
 - Domain-specific access/error logs
-- `client_max_body_size 100m`
+- `client_max_body_size 110m`, leaving multipart overhead above the 100 MB application file limit
 
 Do NOT:
 - Use `upstream` block + `proxy_pass` directly in `location /` (old pattern)

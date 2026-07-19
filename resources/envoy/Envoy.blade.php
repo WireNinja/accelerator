@@ -444,7 +444,7 @@ NGINX, ['dynamic_fallback' => $dynamicFallback]);
     if ($httpRuntime === 'octane') {
         $addSupervisorProgram("{$group}_octane", $replaceVars(<<<'CONF'
 [program:%%group%%_octane]
-command=%%php_bin%% %%root%%/current/artisan %%octane_server_command%% --host=127.0.0.1 --port=%%octane_port%% --workers=%%octane_workers%% %%octane_task_workers_option%%
+command=%%php_bin%% -d upload_max_filesize=100M -d post_max_size=110M %%root%%/current/artisan %%octane_server_command%% --host=127.0.0.1 --port=%%octane_port%% --workers=%%octane_workers%% %%octane_task_workers_option%%
 directory=%%root%%/current
 user=%%run_user%%
 autostart=true
@@ -835,7 +835,6 @@ CONF, [
 @task('build-release', ['on' => 'vps'])
     set -euo pipefail
     cd {{ $releasePath }}
-    mkdir -p resources/svg
     test -s composer.lock || { echo "[build-release] composer.lock is required; refusing dependency resolution during deployment."; exit 1; }
     composer validate --no-check-all --strict --ansi
     composer install --no-dev --no-scripts --optimize-autoloader --classmap-authoritative --no-interaction --no-progress --quiet --ansi
@@ -854,7 +853,6 @@ CONF, [
 @task('build-release-with-dev', ['on' => 'vps'])
     set -euo pipefail
     cd {{ $releasePath }}
-    mkdir -p resources/svg
     test -s composer.lock || { echo "[build-release-with-dev] composer.lock is required; refusing dependency resolution during deployment."; exit 1; }
     composer validate --no-check-all --strict --ansi
     composer install --no-scripts --no-interaction --no-progress --quiet --ansi

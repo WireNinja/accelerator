@@ -129,12 +129,14 @@ final class DoctorCommand extends Command
             'app/Support/helpers.php',
             'bootstrap/app.php',
             'bootstrap/providers.php',
+            'public/.user.ini',
             'public/favicon.svg',
             'phpstan.neon',
             'rector.php',
             'resources/css/app.css',
             'resources/css/filament/theme.css',
             'resources/js/app.ts',
+            'resources/svg/.gitkeep',
             'resources/views/app.blade.php',
             'routes/channels.php',
             'routes/console.php',
@@ -355,15 +357,19 @@ final class DoctorCommand extends Command
         }
 
         $requiredMegabytes = (int) config('accelerator.uploads.max_megabytes', 100);
+        $requiredPostMegabytes = max($requiredMegabytes + 10, intdiv(($requiredMegabytes * 11) + 9, 10));
 
-        foreach (['upload_max_filesize', 'post_max_size'] as $setting) {
+        foreach ([
+            'upload_max_filesize' => $requiredMegabytes,
+            'post_max_size' => $requiredPostMegabytes,
+        ] as $setting => $minimumMegabytes) {
             $value = (string) ini_get($setting);
             $this->assert(
                 category: 'Host readiness',
                 label: $setting,
                 value: $value,
-                passed: $this->bytes($value) >= ($requiredMegabytes * 1024 * 1024),
-                message: "PHP {$setting} is {$value}; configure the web runtime for at least {$requiredMegabytes} MB.",
+                passed: $this->bytes($value) >= ($minimumMegabytes * 1024 * 1024),
+                message: "PHP {$setting} is {$value}; configure the web runtime for at least {$minimumMegabytes} MB.",
                 failureStatus: 'warning',
             );
         }

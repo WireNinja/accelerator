@@ -64,7 +64,7 @@ The saved plan is authoritative during resume. Do not expect different CLI flags
 
 - Authentication is internal-facing; public registration is absent.
 - OAuth is disabled unless selected; selected OAuth starts in `existing_only` mode.
-- Upload policy is 100 MB, but the web runtime's `upload_max_filesize` and `post_max_size` must also be at least 100 MB.
+- File upload policy is 100 MB. The recipe sets FPM `upload_max_filesize=100M`, PHP/Nginx request envelopes to 110 MB, and the Octane Supervisor command to the same PHP limits.
 - Themes are discovered from `resources/css/filament/**/theme.css`.
 - `resources/svg` and the public favicon are created before icon-dependent commands run.
 - Accelerator is added to `boost.json`; missing Accelerator skills fail installation instead of reporting false success.
