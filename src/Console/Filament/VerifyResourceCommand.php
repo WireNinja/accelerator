@@ -45,12 +45,23 @@ class VerifyResourceCommand extends Command
         $resourceClass = (string) ($resource['class'] ?? '');
         $findings = [];
 
-        // 1. Discovery attribute
+        // 1. ResourceEnum registration
+        if (empty($resource['registered_in_resource_enum'])) {
+            $findings[] = ['critical', 'registry', 'Resource is not registered in ResourceEnum.'];
+        }
+
+        // External vendor resources are registered intentionally but cannot use
+        // application-owned metadata traits or attributes.
+        if (($resource['managed'] ?? true) === false) {
+            return $this->emit($findings === [] ? 'PASS' : 'FAIL', $key, $resourceClass, $findings);
+        }
+
+        // 2. Discovery attribute
         if (empty($resource['discovery']['annotated_as_resource'])) {
             $findings[] = ['critical', 'discovery', 'Missing #[DiscoverAsResource] attribute.'];
         }
 
-        // 2. BetterResource trait
+        // 3. BetterResource trait
         if (
             $resourceClass !== '' && class_exists($resourceClass)
             && ! in_array('WireNinja\\Accelerator\\Filament\\Traits\\BetterResource', class_uses_recursive($resourceClass), true)
@@ -58,16 +69,15 @@ class VerifyResourceCommand extends Command
             $findings[] = ['critical', 'trait', 'Resource class does not use BetterResource trait.'];
         }
 
-        // 3. Bulk actions ban — scanner already surfaces this in table.violations.
+        // 4. Forbidden table action APIs.
         foreach ($resource['table']['violations'] ?? [] as $violation) {
-            $vKey = is_array($violation) ? ($violation['key'] ?? '') : (string) $violation;
-            if (is_string($vKey) && str_contains(strtolower($vKey), 'bulk')) {
-                $findings[] = ['critical', 'bulk-actions', 'Bulk action API leak (scanner: '.$vKey.'). FILAMENT.md forbids bulk semantics.'];
-                break;
-            }
+            $violationKey = is_array($violation) ? (string) ($violation['key'] ?? 'table_action') : (string) $violation;
+            $findings[] = ['critical', 'table-actions', 'Forbidden table action API (scanner: '.$violationKey.').'];
+
+            break;
         }
 
-        // 4. Policy registered
+        // 5. Policy registered
         if (empty($resource['authorization']['policy']['class'] ?? null)) {
             $findings[] = ['critical', 'policy', 'No policy class registered. Run shield:safe-regenerate.'];
         }

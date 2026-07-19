@@ -2,9 +2,8 @@
 
 declare(strict_types=1);
 
-use WireNinja\Accelerator\Support\BuiltinSystemSchedule;
+use Illuminate\Support\Facades\Schedule;
 
-BuiltinSystemSchedule::dbBackup();
-BuiltinSystemSchedule::filesBackup();
-// BuiltinSystemSchedule::ticketNotifyOverdue();
-BuiltinSystemSchedule::snapshotHorizon();
+Schedule::command('backup:run --only-db')->dailyAt('01:00')->withoutOverlapping();
+Schedule::command('backup:run --only-files')->dailyAt('02:00')->withoutOverlapping();
+// {{ optional_schedules }}

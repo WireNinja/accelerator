@@ -12,9 +12,10 @@ use Throwable;
 use WireNinja\Accelerator\Support\Filament\ResourceContextScanner;
 
 #[Signature('agent:resource-context
-    {resource? : Optional resource key/class or linked page, form, table, or relation manager class}
-    {--list : List discovered resource registry only}
+    {resource? : Optional registered resource key/class or linked page, form, table, or relation manager class}
+    {--list : List the configured ResourceEnum registry only}
     {--registry : Include registry data together with the resource payload}
+    {--expand : Include component trees, relation forms, tabs, and source locations}
     {--write= : Write the JSON payload to the given path instead of stdout}
     {--compact : Output compact JSON instead of pretty JSON}')]
 #[Description('Scan one Filament resource into a single AI-friendly JSON payload')]
@@ -26,6 +27,7 @@ class ResourceContextCommand extends Command
             $payload = $scanner->scan(
                 resource: $this->option('list') ? null : $this->argument('resource'),
                 includeRegistry: (bool) $this->option('registry') || (bool) $this->option('list'),
+                expand: (bool) $this->option('expand'),
             );
         } catch (Throwable $throwable) {
             $this->components->error($throwable->getMessage());

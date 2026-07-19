@@ -1,93 +1,79 @@
 <?php
 
+declare(strict_types=1);
+
 namespace WireNinja\Accelerator\Support\Filament;
 
 use BackedEnum;
 use Closure;
-use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Resources\Pages\CreateRecord;
 use Filament\Resources\Pages\EditRecord;
 use Filament\Resources\Pages\ListRecords;
 use Filament\Resources\Pages\ManageRelatedRecords;
-use Filament\Resources\Pages\PageRegistration;
 use Filament\Resources\Pages\ViewRecord;
 use Filament\Resources\RelationManagers\RelationGroup;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Resources\RelationManagers\RelationManagerConfiguration;
 use Filament\Resources\Resource;
-use Filament\Schemas\Components\Component;
+use Filament\Schemas\Contracts\HasSchemas;
 use Filament\Schemas\Schema;
-use Filament\Tables\Columns\Column;
-use Filament\Tables\Filters\BaseFilter;
+use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Table;
-use Filament\Widgets\StatsOverviewWidget;
-use Filament\Widgets\StatsOverviewWidget\Stat;
-use Filament\Widgets\Widget;
 use Filament\Widgets\WidgetConfiguration;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
-use ReflectionAttribute;
+use Livewire\Component;
 use ReflectionClass;
 use ReflectionMethod;
 use RuntimeException;
-use Spatie\StructureDiscoverer\Discover;
 use Throwable;
+use UnitEnum;
 use WireNinja\Accelerator\Attributes\DiscoverAsResource;
+use WireNinja\Accelerator\Enums\Concerns\MustBeResourceEnum;
+use WireNinja\Accelerator\Filament\Traits\BetterResource;
 
-class ResourceContextScanner
+final class ResourceContextScanner
 {
-    /**
-     * @var ?array{
-     *     resources: array<string, array<string, mixed>>,
-     *     forms: array<string, array<string, mixed>>,
-     *     tables: array<string, array<string, mixed>>,
-     *     relation_managers: array<string, array<string, mixed>>,
-     *     pages: array<string, array<string, mixed>>,
-     *     widgets: array<string, array<string, mixed>>,
-     *     resource_lookup: array<string, string>,
-     *     diagnostics: list<array<string, mixed>>
-     * }
-     */
-    protected ?array $catalog = null;
+    /** @var array<string, mixed>|null */
+    private ?array $catalog = null;
 
     public function __construct(
-        protected Application $app,
+        private readonly Application $app,
     ) {}
 
     /**
      * @return array<string, mixed>
      */
-    public function scan(?string $resource = null, bool $includeRegistry = false): array
-    {
+    public function scan(
+        ?string $resource = null,
+        bool $includeRegistry = false,
+        bool $expand = false,
+    ): array {
         $catalog = $this->catalog();
         $payload = [
             'generated_at' => now()->toIso8601String(),
-            'summary' => [
-                'resources_discovered' => count($catalog['resources']),
-                'forms_discovered' => count($catalog['forms']),
-                'tables_discovered' => count($catalog['tables']),
-                'widgets_discovered' => count($catalog['widgets']),
-                'registry_diagnostics' => count($catalog['diagnostics']),
-            ],
+            'summary' => $this->catalogSummary($catalog),
         ];
 
-        if ($resource === null || $resource === '') {
+        if (blank($resource)) {
             $payload['registry'] = $this->describeRegistry($catalog);
 
             return $payload;
         }
 
-        $resourceClass = $this->resolveResourceClass($resource, $catalog);
-        $resourcePayload = $this->describeResource($resourceClass, $catalog, false);
-
-        $payload['resource'] = $resourcePayload;
+        $resourceClass = $this->resolveResourceClass((string) $resource, $catalog);
+        $payload['resource'] = $this->describeResource(
+            $resourceClass,
+            $catalog['resources'][$resourceClass],
+            $catalog,
+            $expand,
+        );
         $payload['summary']['requested_resource'] = $resource;
         $payload['summary']['resolved_resource'] = $resourceClass;
-        $payload['summary']['complexity_score'] = $resourcePayload['complexity']['score'];
 
         if ($includeRegistry) {
             $payload['registry'] = $this->describeRegistry($catalog);
@@ -97,283 +83,635 @@ class ResourceContextScanner
     }
 
     /**
-     * @return array{
-     *     resources: array<string, array<string, mixed>>,
-     *     forms: array<string, array<string, mixed>>,
-     *     tables: array<string, array<string, mixed>>,
-     *     relation_managers: array<string, array<string, mixed>>,
-     *     pages: array<string, array<string, mixed>>,
-     *     widgets: array<string, array<string, mixed>>,
-     *     resource_lookup: array<string, string>,
-     *     diagnostics: list<array<string, mixed>>
-     * }
+     * @return array<string, mixed>
      */
-    protected function catalog(): array
+    private function catalog(): array
     {
         if ($this->catalog !== null) {
             return $this->catalog;
         }
 
+        $enumClass = config('accelerator.enums.resource');
+
+        if (! is_string($enumClass) || ! enum_exists($enumClass) || ! is_subclass_of($enumClass, MustBeResourceEnum::class)) {
+            throw new RuntimeException('Configure accelerator.enums.resource with an enum that implements MustBeResourceEnum.');
+        }
+
+        /** @var class-string<UnitEnum&MustBeResourceEnum> $enumClass */
         $resources = [];
-        $forms = [];
-        $tables = [];
-        $relationManagers = [];
-        $pages = [];
-        $widgets = [];
+        $lookup = [];
+        $ambiguousAliases = [];
         $diagnostics = [];
 
-        foreach ($this->discoverAnnotatedClasses(DiscoverAsResource::class) as $resourceClass) {
-            /** @var ?DiscoverAsResource $attribute */
-            $attribute = $this->getAttributeInstance($resourceClass, DiscoverAsResource::class);
+        foreach ($enumClass::cases() as $case) {
+            $resourceClass = $case->getResource();
 
-            $resources[$resourceClass] = [
-                'class' => $resourceClass,
-                'key' => $attribute->key ?? $this->defaultResourceKey($resourceClass),
-                'form' => $attribute->form,
-                'table' => $attribute->table,
-                'model' => $this->callPublicMethod($resourceClass, 'getModel', true),
-                'source' => $this->describeClassSource($resourceClass),
-            ];
-        }
-
-        $resourceLookup = [];
-
-        foreach ($resources as $resourceClass => $resourceInfo) {
-            foreach ($this->resourceAliases($resourceInfo) as $alias) {
-                if (isset($resourceLookup[$alias]) && $resourceLookup[$alias] !== $resourceClass) {
-                    $diagnostics[] = [
-                        'type' => 'duplicate_resource_alias',
-                        'alias' => $alias,
-                        'resources' => [$resourceLookup[$alias], $resourceClass],
-                    ];
-
-                    continue;
-                }
-
-                $resourceLookup[$alias] = $resourceClass;
-            }
-
-            foreach (['form', 'table'] as $linkedClassKey) {
-                if (! is_string($resourceInfo[$linkedClassKey] ?? null)) {
-                    continue;
-                }
-
-                foreach ($this->linkedClassAliases($resourceInfo[$linkedClassKey]) as $alias) {
-                    $resourceLookup[$alias] = $resourceClass;
-                }
-            }
-        }
-
-        ksort($resources);
-        ksort($forms);
-        ksort($tables);
-        ksort($relationManagers);
-        ksort($pages);
-        ksort($widgets);
-        ksort($resourceLookup);
-
-        return $this->catalog = [
-            'resources' => $resources,
-            'forms' => $forms,
-            'tables' => $tables,
-            'relation_managers' => $relationManagers,
-            'pages' => $pages,
-            'widgets' => $widgets,
-            'resource_lookup' => $resourceLookup,
-            'diagnostics' => $diagnostics,
-        ];
-    }
-
-    /**
-     * @param  array<string, array<int|string, array<string, mixed>|string>>  $catalog
-     * @return array<string, mixed>
-     */
-    protected function describeRegistry(array $catalog): array
-    {
-        $resources = [];
-
-        foreach (array_keys($catalog['resources']) as $resourceClass) {
-            $resource = $this->describeResource($resourceClass, $catalog, true);
-            $resources[] = [
-                'key' => $resource['key'],
-                'class' => $resource['class'],
-                'model' => $resource['model']['class'],
-                'model_table' => $resource['model']['table'],
-                'policy_class' => $resource['authorization']['policy']['class'] ?? null,
-                'action_abilities' => $resource['authorization']['action_abilities'] ?? [],
-                'form_class' => $resource['form']['definition_class']['class'] ?? null,
-                'table_class' => $resource['table']['definition_class']['class'] ?? null,
-                'relation_manager_count' => count($resource['relation_managers']),
-                'complexity_score' => $resource['complexity']['score'],
-                'inputs' => $this->resourceAliases($catalog['resources'][$resourceClass]),
-                'source' => $resource['source'],
-            ];
-        }
-
-        usort($resources, fn (array $left, array $right): int => [$right['complexity_score'], $left['key']] <=> [$left['complexity_score'], $right['key']]);
-
-        return [
-            'summary' => [
-                'resources' => count($catalog['resources']),
-                'forms' => count($catalog['forms']),
-                'tables' => count($catalog['tables']),
-                'relation_managers' => count($catalog['relation_managers']),
-                'pages' => count($catalog['pages']),
-                'widgets' => count($catalog['widgets']),
-            ],
-            'resources' => $resources,
-            'forms' => array_values(array_map(fn (array $form): array => [
-                'class' => $form['class'],
-                'resource' => $form['resource'],
-                'source' => $form['source'],
-            ], $catalog['forms'])),
-            'tables' => array_values(array_map(fn (array $table): array => [
-                'class' => $table['class'],
-                'resource' => $table['resource'],
-                'source' => $table['source'],
-            ], $catalog['tables'])),
-            'relation_managers' => array_values(array_map(fn (array $relationManager): array => [
-                'class' => $relationManager['class'],
-                'resource' => $relationManager['resource'],
-                'relationship' => $relationManager['relationship'],
-                'source' => $relationManager['source'],
-            ], $catalog['relation_managers'])),
-            'pages' => array_values(array_map(fn (array $page): array => [
-                'class' => $page['class'],
-                'resource' => $page['resource'],
-                'key' => $page['key'],
-                'source' => $page['source'],
-            ], $catalog['pages'])),
-            'widgets' => array_values(array_map(fn (array $widget): array => [
-                'class' => $widget['class'],
-                'resource' => $widget['resource'],
-                'key' => $widget['key'],
-                'source' => $widget['source'],
-            ], $catalog['widgets'])),
-            'diagnostics' => $catalog['diagnostics'],
-        ];
-    }
-
-    /**
-     * @param  array<string, array<int|string, array<string, mixed>|string>>  $catalog
-     * @return array<string, mixed>
-     */
-    protected function describeResource(string $resourceClass, array $catalog, bool $summaryOnly): array
-    {
-        $catalogEntry = $catalog['resources'][$resourceClass] ?? [
-            'class' => $resourceClass,
-            'key' => $this->defaultResourceKey($resourceClass),
-            'form' => null,
-            'table' => null,
-            'model' => $this->callPublicMethod($resourceClass, 'getModel', true),
-            'source' => $this->describeClassSource($resourceClass),
-        ];
-
-        $modelClass = is_string($catalogEntry['model']) ? $catalogEntry['model'] : null;
-        $model = $modelClass ? $this->makeModel($modelClass) : null;
-        $formClass = is_string($catalogEntry['form']) ? $catalogEntry['form'] : null;
-        $tableClass = is_string($catalogEntry['table']) ? $catalogEntry['table'] : null;
-        $policyPayload = $this->describeResourcePolicy($modelClass);
-
-        $pages = $this->describePages($resourceClass, $catalog, $policyPayload['class'] ?? null);
-        $widgets = $this->describeWidgets($resourceClass, $pages, $catalog);
-        $relationPageClass = $this->resolveRelationPageClass($pages);
-        $resourceHookSources = [
-            'form' => $this->describeMethodSource($resourceClass, 'form'),
-            'table' => $this->describeMethodSource($resourceClass, 'table'),
-            'get_relations' => $this->describeMethodSource($resourceClass, 'getRelations'),
-            'get_pages' => $this->describeMethodSource($resourceClass, 'getPages'),
-        ];
-
-        $formSchema = $this->buildResourceFormSchema($resourceClass);
-        $table = $this->buildResourceTable($resourceClass, $modelClass);
-
-        $relationManagers = $this->describeRelationEntries(
-            $this->normalizeRelationEntries($this->callPublicMethod($resourceClass, 'getRelations', true) ?? []),
-            $modelClass,
-            $relationPageClass,
-            $summaryOnly,
-        );
-
-        $formPayload = $this->describeSchemaPayload(
-            $formSchema,
-            $formClass,
-            $summaryOnly,
-            'configure',
-            $resourceHookSources['form'],
-        );
-
-        $tablePayload = $this->describeTablePayload(
-            $table,
-            $tableClass,
-            $summaryOnly,
-            'configure',
-            $resourceHookSources['table'],
-            $policyPayload['class'] ?? null,
-        );
-
-        return [
-            'class' => $resourceClass,
-            'key' => $catalogEntry['key'],
-            'source' => $catalogEntry['source'],
-            'discovery' => $this->describeDiscoveryMetadata($resourceClass),
-            'model' => [
-                'class' => $modelClass,
-                'table' => $model?->getTable(),
-                'source' => $modelClass ? $this->describeClassSource($modelClass) : null,
-            ],
-            'navigation' => [
-                'slug' => $this->callPublicMethod($resourceClass, 'getSlug', true),
-                'model_label' => $this->normalizeValue($this->callPublicMethod($resourceClass, 'getModelLabel', true)),
-                'plural_model_label' => $this->normalizeValue($this->callPublicMethod($resourceClass, 'getPluralModelLabel', true)),
-                'navigation_label' => $this->normalizeValue($this->callPublicMethod($resourceClass, 'getNavigationLabel', true)),
-                'navigation_group' => $this->normalizeValue($this->callPublicMethod($resourceClass, 'getNavigationGroup', true)),
-                'navigation_icon' => $this->normalizeValue($this->callPublicMethod($resourceClass, 'getNavigationIcon', true)),
-                'active_navigation_icon' => $this->normalizeValue($this->callPublicMethod($resourceClass, 'getActiveNavigationIcon', true)),
-                'record_title_attribute' => $this->callPublicMethod($resourceClass, 'getRecordTitleAttribute', true),
-                'cluster' => $this->callPublicMethod($resourceClass, 'getCluster', true),
-            ],
-            'authorization' => $this->filterNullValues([
-                'policy' => $policyPayload,
-                'action_abilities' => $this->collectResourceActionAbilities($pages, $tablePayload),
-            ]),
-            'pages' => $pages,
-            'widgets' => $widgets,
-            'hooks' => $resourceHookSources,
-            'form' => $formPayload,
-            'table' => $tablePayload,
-            'relation_managers' => $relationManagers,
-            'complexity' => $this->scoreComplexity($formPayload, $tablePayload, $relationManagers),
-            'diagnostics' => $this->buildResourceDiagnostics($resourceClass, $catalogEntry, $catalog),
-        ];
-    }
-
-    /**
-     * @return list<array<string, mixed>>
-     */
-    protected function describeRelationEntries(array $entries, ?string $ownerModelClass, ?string $pageClass, bool $summaryOnly): array
-    {
-        $payload = [];
-
-        foreach ($entries as $entry) {
-            if ($entry['kind'] === 'group') {
-                $payload[] = [
-                    'kind' => 'group',
-                    'label' => $entry['label'],
-                    'managers' => $this->describeRelationEntries($entry['managers'], $ownerModelClass, $pageClass, $summaryOnly),
+            if (! class_exists($resourceClass) || ! is_subclass_of($resourceClass, Resource::class)) {
+                $diagnostics[] = [
+                    'type' => 'invalid_registered_resource',
+                    'enum_case' => $case->name,
+                    'class' => $resourceClass,
                 ];
 
                 continue;
             }
 
-            if ($entry['kind'] !== 'manager') {
-                $payload[] = $entry;
+            /** @var class-string<resource> $resourceClass */
+            $attribute = $this->resourceAttribute($resourceClass);
+            $pages = $this->pageClasses($resourceClass);
+            $relations = $this->relationManagerClasses($resourceClass);
+            $entry = [
+                'class' => $resourceClass,
+                'enum_case' => $case->name,
+                'key' => $attribute?->key ?: $this->defaultResourceKey($resourceClass),
+                'managed' => $attribute !== null,
+                'form' => $attribute?->form,
+                'table' => $attribute?->table,
+                'policy' => $attribute?->policy,
+                'model' => $resourceClass::getModel(),
+                'panel' => $case->getPanelGroup(),
+                'pages' => $pages,
+                'relations' => $relations,
+            ];
+            $resources[$resourceClass] = $entry;
+
+            foreach ($this->resourceAliases($entry) as $alias) {
+                if (isset($ambiguousAliases[$alias])) {
+                    continue;
+                }
+
+                if (isset($lookup[$alias]) && $lookup[$alias] !== $resourceClass) {
+                    if (in_array($alias, $this->requiredUniqueAliases($entry), true)) {
+                        $diagnostics[] = [
+                            'type' => 'duplicate_resource_alias',
+                            'alias' => $alias,
+                            'resources' => [$lookup[$alias], $resourceClass],
+                        ];
+                    } else {
+                        unset($lookup[$alias]);
+                        $ambiguousAliases[$alias] = true;
+                    }
+
+                    continue;
+                }
+
+                $lookup[$alias] = $resourceClass;
+            }
+        }
+
+        ksort($resources);
+        ksort($lookup);
+
+        return $this->catalog = [
+            'enum' => $enumClass,
+            'resources' => $resources,
+            'lookup' => $lookup,
+            'permissions' => $enumClass::getResourcesPermissions(),
+            'diagnostics' => $diagnostics,
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $catalog
+     * @return array<string, int>
+     */
+    private function catalogSummary(array $catalog): array
+    {
+        $resources = $catalog['resources'];
+
+        return [
+            'resources_registered' => count($resources),
+            'resources_managed' => count(array_filter($resources, static fn (array $entry): bool => $entry['managed'])),
+            'external_resources' => count(array_filter($resources, static fn (array $entry): bool => ! $entry['managed'])),
+            'forms_linked' => count(array_filter($resources, static fn (array $entry): bool => filled($entry['form']))),
+            'tables_linked' => count(array_filter($resources, static fn (array $entry): bool => filled($entry['table']))),
+            'pages_registered' => array_sum(array_map(static fn (array $entry): int => count($entry['pages']), $resources)),
+            'relation_managers_registered' => array_sum(array_map(static fn (array $entry): int => count($entry['relations']), $resources)),
+            'registry_diagnostics' => count($catalog['diagnostics']),
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $catalog
+     * @return array<string, mixed>
+     */
+    private function describeRegistry(array $catalog): array
+    {
+        $resources = [];
+
+        foreach ($catalog['resources'] as $entry) {
+            $policy = $this->resolvePolicyClass($entry['model'], $entry['policy']);
+            $resources[] = $this->withoutEmpty([
+                'key' => $entry['key'],
+                'class' => $entry['class'],
+                'enum_case' => $entry['enum_case'],
+                'panel' => $entry['panel'],
+                'managed' => $entry['managed'],
+                'model' => $entry['model'],
+                'form' => $entry['form'],
+                'table' => $entry['table'],
+                'policy' => $policy,
+                'pages' => $entry['pages'],
+                'relation_managers' => $entry['relations'],
+            ]);
+        }
+
+        usort($resources, static fn (array $left, array $right): int => [$left['panel'], $left['key']] <=> [$right['panel'], $right['key']]);
+
+        return [
+            'enum' => $catalog['enum'],
+            'resources' => $resources,
+            'diagnostics' => $catalog['diagnostics'],
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $entry
+     * @param  array<string, mixed>  $catalog
+     * @return array<string, mixed>
+     */
+    private function describeResource(
+        string $resourceClass,
+        array $entry,
+        array $catalog,
+        bool $expand,
+    ): array {
+        $modelClass = $entry['model'];
+        $model = $this->makeModel($modelClass);
+        $policyClass = $this->resolvePolicyClass($modelClass, $entry['policy']);
+        $pages = $this->describePages($entry['pages'], $policyClass, $expand);
+        $host = $this->resourceHost($entry['pages']);
+        $form = $this->describeResourceForm($resourceClass, $entry['form'], $host, $expand);
+        $table = $this->describeResourceTable($resourceClass, $entry['table'], $host, $policyClass);
+        $relations = $this->describeRelations(
+            $resourceClass::getRelations(),
+            $modelClass,
+            $this->firstPageClass($entry['pages']),
+            $policyClass,
+            $expand,
+        );
+        $surfacedAbilities = array_values(array_unique([
+            ...$this->abilitiesFromPages($pages),
+            ...$this->abilitiesFromActions($table['header_actions'] ?? []),
+            ...$this->abilitiesFromActions($table['record_actions'] ?? []),
+            ...$this->abilitiesFromActions($table['empty_state_actions'] ?? []),
+        ]));
+        sort($surfacedAbilities);
+
+        $payload = [
+            'class' => $resourceClass,
+            'key' => $entry['key'],
+            'enum_case' => $entry['enum_case'],
+            'panel' => $entry['panel'],
+            'managed' => $entry['managed'],
+            'registered_in_resource_enum' => true,
+            'discovery' => [
+                'annotated_as_resource' => $this->attributePayload($this->resourceAttribute($resourceClass)),
+            ],
+            'model' => [
+                'class' => $modelClass,
+                'table' => $model?->getTable(),
+            ],
+            'navigation' => $this->navigation($resourceClass),
+            'authorization' => $this->withoutEmpty([
+                'policy' => $policyClass ? [
+                    'class' => $policyClass,
+                    'abilities' => $this->policyAbilities($policyClass),
+                ] : null,
+                'registered_abilities' => $catalog['permissions'][$resourceClass] ?? [],
+                'surfaced_action_abilities' => $surfacedAbilities,
+            ]),
+            'pages' => $pages,
+            'widgets' => $this->widgetsFromPages($pages),
+            'form' => $form,
+            'table' => $table,
+            'relation_managers' => $relations,
+            'diagnostics' => $this->resourceDiagnostics($resourceClass, $entry, $table),
+        ];
+
+        if ($expand) {
+            $payload['source'] = $this->classSource($resourceClass);
+            $payload['model']['source'] = $this->classSource($modelClass);
+        }
+
+        return $payload;
+    }
+
+    /**
+     * @param  array<string, class-string>  $pages
+     */
+    private function resourceHost(array $pages): Component&HasSchemas&HasTable
+    {
+        $pageClass = $this->firstListPageClass($pages) ?? $this->firstPageClass($pages);
+
+        if ($pageClass === null) {
+            throw new RuntimeException('The resource has no registered page that can host schema/table introspection.');
+        }
+
+        $host = $this->app->make($pageClass);
+
+        if (! $host instanceof Component || ! $host instanceof HasSchemas || ! $host instanceof HasTable) {
+            throw new RuntimeException("Resource page [{$pageClass}] does not implement HasSchemas and HasTable.");
+        }
+
+        return $host;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function describeResourceForm(
+        string $resourceClass,
+        ?string $definitionClass,
+        Component&HasSchemas $host,
+        bool $expand,
+    ): array {
+        try {
+            return $this->describeSchema(
+                $resourceClass::form(Schema::make($host)),
+                $definitionClass,
+                $expand,
+            );
+        } catch (Throwable $throwable) {
+            return [
+                'definition_class' => $definitionClass,
+                'introspection_error' => $throwable->getMessage(),
+            ];
+        }
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function describeResourceTable(
+        string $resourceClass,
+        ?string $definitionClass,
+        Component&HasTable $host,
+        ?string $policyClass,
+    ): array {
+        try {
+            return $this->describeTable(
+                $resourceClass::table(Table::make($host)),
+                $definitionClass,
+                $policyClass,
+            );
+        } catch (Throwable $throwable) {
+            return [
+                'definition_class' => $definitionClass,
+                'introspection_error' => $throwable->getMessage(),
+                'violations' => $this->sourceTableViolations($definitionClass),
+            ];
+        }
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function describeSchema(Schema $schema, ?string $definitionClass, bool $expand): array
+    {
+        $components = $schema->getFlatComponents(true);
+        $fields = [];
+
+        foreach ($components as $component) {
+            $name = $this->normalize($this->callPublic($component, 'getName'));
+
+            if (! is_string($name) || $name === '') {
+                continue;
+            }
+
+            $fields[] = $this->withoutEmpty([
+                'name' => $name,
+                'type' => class_basename($component),
+                'relationship' => $this->normalize($this->callPublic($component, 'getRelationshipName')),
+            ]);
+        }
+
+        $payload = [
+            'definition_class' => $definitionClass,
+            'summary' => [
+                'components' => count($components),
+                'types' => $this->typeCounts($components),
+                'named_fields' => count($fields),
+            ],
+            'fields' => $fields,
+        ];
+
+        if ($expand) {
+            $payload['tree'] = array_map(
+                fn (object $component): array => $this->schemaComponent($component),
+                $schema->getComponents(true),
+            );
+            $payload['source'] = $definitionClass ? $this->classSource($definitionClass) : null;
+        }
+
+        return $this->withoutEmpty($payload);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function schemaComponent(object $component): array
+    {
+        $payload = $this->withoutEmpty([
+            'type' => class_basename($component),
+            'name' => $this->normalize($this->callPublic($component, 'getName')),
+            'relationship' => $this->normalize($this->callPublic($component, 'getRelationshipName')),
+        ]);
+        $children = [];
+
+        foreach ($this->callPublic($component, 'getChildSchemas') ?? [] as $childSchema) {
+            if (! $childSchema instanceof Schema) {
+                continue;
+            }
+
+            foreach ($childSchema->getComponents(true) as $child) {
+                $children[] = $this->schemaComponent($child);
+            }
+        }
+
+        if ($children !== []) {
+            $payload['children'] = $children;
+        }
+
+        return $payload;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function describeTable(Table $table, ?string $definitionClass, ?string $policyClass): array
+    {
+        $columns = array_values($table->getColumns());
+        $filters = array_values($table->getFilters());
+        $headerActions = array_values($table->getHeaderActions());
+        $recordActions = array_values($table->getRecordActions());
+        $toolbarActions = array_values($table->getToolbarActions());
+        $emptyStateActions = $this->callPublic($table, 'getEmptyStateActions');
+        $emptyStateActions = is_array($emptyStateActions) ? array_values($emptyStateActions) : [];
+        $violations = $this->sourceTableViolations($definitionClass);
+
+        if ($toolbarActions !== []) {
+            $violations[] = [
+                'key' => 'toolbar_actions_runtime',
+                'message' => 'Toolbar actions are forbidden by the Accelerator Filament contract.',
+            ];
+        }
+
+        foreach ([...$headerActions, ...$recordActions, ...$toolbarActions] as $action) {
+            if (Str::contains(class_basename($action), 'BulkAction')) {
+                $violations[] = [
+                    'key' => 'bulk_action_runtime',
+                    'message' => 'A bulk action object is registered on the table.',
+                ];
+            }
+        }
+
+        return $this->withoutEmpty([
+            'definition_class' => $definitionClass,
+            'summary' => [
+                'columns' => count($columns),
+                'filters' => count($filters),
+                'header_actions' => count($headerActions),
+                'record_actions' => count($recordActions),
+            ],
+            'columns' => array_map($this->namedObject(...), $columns),
+            'filters' => array_map($this->namedObject(...), $filters),
+            'header_actions' => array_map(
+                fn (object $action): array => $this->action($action, $policyClass),
+                $headerActions,
+            ),
+            'record_actions' => array_map(
+                fn (object $action): array => $this->action($action, $policyClass),
+                $recordActions,
+            ),
+            'empty_state_actions' => array_map(
+                fn (object $action): array => $this->action($action, $policyClass),
+                $emptyStateActions,
+            ),
+            'violations' => $this->uniqueViolations($violations),
+        ]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function namedObject(object $object): array
+    {
+        return $this->withoutEmpty([
+            'name' => $this->normalize($this->callPublic($object, 'getName')),
+            'type' => class_basename($object),
+        ]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function action(object $action, ?string $policyClass): array
+    {
+        $payload = $this->withoutEmpty([
+            'name' => $this->normalize($this->callPublic($action, 'getName')),
+            'type' => class_basename($action),
+            'abilities' => $this->actionAbilities($action),
+        ]);
+
+        if ($action instanceof ActionGroup) {
+            $payload['actions'] = array_map(
+                fn (object $child): array => $this->action($child, $policyClass),
+                $action->getActions(),
+            );
+        }
+
+        if ($policyClass !== null && ($payload['abilities'] ?? []) !== []) {
+            $payload['policy'] = $policyClass;
+        }
+
+        return $payload;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function actionAbilities(object $action): array
+    {
+        $authorization = $this->protectedProperty($action, 'authorization');
+        $abilities = [];
+
+        if (is_array($authorization)) {
+            foreach ($authorization['abilities'] ?? [] as $ability) {
+                $ability = $this->normalize($ability);
+
+                if (is_string($ability) && $ability !== '') {
+                    $abilities[] = $ability;
+                }
+            }
+        }
+
+        if ($abilities === []) {
+            $defaultAbility = match (class_basename($action)) {
+                'CreateAction' => 'create',
+                'EditAction' => 'update',
+                'DeleteAction' => 'delete',
+                'ViewAction' => 'view',
+                'ReplicateAction' => 'replicate',
+                'RestoreAction' => 'restore',
+                'ForceDeleteAction' => 'forceDelete',
+                'AttachAction' => 'attach',
+                'DetachAction' => 'detach',
+                'AssociateAction' => 'associate',
+                'DissociateAction' => 'dissociate',
+                default => null,
+            };
+
+            if ($defaultAbility !== null) {
+                $abilities[] = $defaultAbility;
+            }
+        }
+
+        sort($abilities);
+
+        return array_values(array_unique($abilities));
+    }
+
+    /**
+     * @param  array<string, class-string>  $pages
+     * @return list<array<string, mixed>>
+     */
+    private function describePages(array $pages, ?string $policyClass, bool $expand): array
+    {
+        $payload = [];
+
+        foreach ($pages as $key => $pageClass) {
+            $page = [
+                'key' => $key,
+                'class' => $pageClass,
+                'kind' => $this->pageKind($pageClass),
+                'header_actions' => [],
+                'widgets' => [],
+            ];
+
+            try {
+                $instance = $this->app->make($pageClass);
+                $actions = $this->callAnyVisibility($instance, 'getHeaderActions');
+                $page['header_actions'] = is_array($actions)
+                    ? array_map(fn (object $action): array => $this->action($action, $policyClass), array_values($actions))
+                    : [];
+                $page['widgets'] = [
+                    ...$this->widgetReferences($this->callAnyVisibility($instance, 'getHeaderWidgets'), 'header'),
+                    ...$this->widgetReferences($this->callAnyVisibility($instance, 'getFooterWidgets'), 'footer'),
+                ];
+
+                if ($expand) {
+                    $tabs = $this->callPublic($instance, 'getTabs');
+                    $page['tabs'] = is_array($tabs) ? array_keys($tabs) : [];
+                }
+            } catch (Throwable $throwable) {
+                $page['introspection_error'] = $throwable->getMessage();
+            }
+
+            if ($expand) {
+                $page['source'] = $this->classSource($pageClass);
+            }
+
+            $payload[] = $this->withoutEmpty($page);
+        }
+
+        return $payload;
+    }
+
+    /**
+     * @return list<array{class: string, placement: string}>
+     */
+    private function widgetReferences(mixed $widgets, string $placement): array
+    {
+        if (! is_array($widgets)) {
+            return [];
+        }
+
+        $payload = [];
+
+        foreach ($widgets as $widget) {
+            if (is_string($widget)) {
+                $payload[] = ['class' => $widget, 'placement' => $placement];
+            } elseif ($widget instanceof WidgetConfiguration) {
+                $payload[] = ['class' => $widget->widget, 'placement' => $placement];
+            }
+        }
+
+        return $payload;
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $pages
+     * @return list<array<string, mixed>>
+     */
+    private function widgetsFromPages(array $pages): array
+    {
+        $widgets = [];
+
+        foreach ($pages as $page) {
+            foreach ($page['widgets'] ?? [] as $widget) {
+                $key = $widget['class'].'@'.$widget['placement'];
+                $widgets[$key] = $widget + ['page' => $page['class']];
+            }
+        }
+
+        return array_values($widgets);
+    }
+
+    /**
+     * @param  array<int, mixed>  $relations
+     * @return list<array<string, mixed>>
+     */
+    private function describeRelations(
+        array $relations,
+        string $ownerModelClass,
+        ?string $pageClass,
+        ?string $policyClass,
+        bool $expand,
+    ): array {
+        $payload = [];
+
+        foreach ($relations as $relation) {
+            if ($relation instanceof RelationGroup) {
+                $payload[] = [
+                    'kind' => 'group',
+                    'label' => $this->normalize($this->callPublic($relation, 'getLabel')),
+                    'managers' => $this->describeRelations(
+                        $relation->getManagers(),
+                        $ownerModelClass,
+                        $pageClass,
+                        $policyClass,
+                        $expand,
+                    ),
+                ];
 
                 continue;
             }
 
-            $managerClass = $entry['manager_class'];
-            $payload[] = $this->describeRelationManager($managerClass, $entry['properties'], $ownerModelClass, $pageClass, $summaryOnly);
+            $managerClass = null;
+            $properties = [];
+
+            if ($relation instanceof RelationManagerConfiguration) {
+                $managerClass = $relation->relationManager;
+                $properties = $relation->getProperties();
+            } elseif (is_string($relation)) {
+                $managerClass = $relation;
+            }
+
+            if (! is_string($managerClass) || ! is_subclass_of($managerClass, RelationManager::class)) {
+                $payload[] = ['kind' => 'unknown', 'type' => get_debug_type($relation)];
+
+                continue;
+            }
+
+            $payload[] = $this->describeRelationManager(
+                $managerClass,
+                $properties,
+                $ownerModelClass,
+                $pageClass,
+                $policyClass,
+                $expand,
+            );
         }
 
         return $payload;
@@ -383,1025 +721,101 @@ class ResourceContextScanner
      * @param  array<string, mixed>  $properties
      * @return array<string, mixed>
      */
-    protected function describeRelationManager(string $managerClass, array $properties, ?string $ownerModelClass, ?string $pageClass, bool $shouldMinify): array
-    {
+    private function describeRelationManager(
+        string $managerClass,
+        array $properties,
+        string $ownerModelClass,
+        ?string $pageClass,
+        ?string $policyClass,
+        bool $expand,
+    ): array {
         $payload = [
             'kind' => 'manager',
             'class' => $managerClass,
-            'source' => $this->describeClassSource($managerClass),
-            'discovery' => $this->describeDiscoveryMetadata($managerClass),
-            'configuration_properties' => $properties,
-            'relationship' => $this->callPublicMethod($managerClass, 'getRelationshipName', true),
-            'relationship_title' => $this->normalizeValue($this->callPublicMethod($managerClass, 'getRelationshipTitle', true)),
-            'related_resource' => $this->callPublicMethod($managerClass, 'getRelatedResource', true),
+            'relationship' => $this->callStatic($managerClass, 'getRelationshipName'),
+            'properties' => $properties,
         ];
 
         try {
             /** @var RelationManager $instance */
             $instance = $this->app->make($managerClass);
-
-            if ($ownerModelClass !== null) {
-                $instance->ownerRecord = $this->makeModel($ownerModelClass) ?? new $ownerModelClass;
-            }
-
+            $instance->ownerRecord = $this->makeModel($ownerModelClass) ?? new $ownerModelClass;
             $instance->pageClass = $pageClass;
-
-            $payload['form'] = $this->describeSchemaPayload(
-                $instance->form(Schema::make($instance)),
-                $managerClass,
-                $shouldMinify,
-                'form',
-                $this->describeMethodSource($managerClass, 'form'),
-            );
-            $payload['table'] = $this->describeTablePayload(
+            $payload['table'] = $this->describeTable(
                 $instance->table(Table::make($instance)),
                 $managerClass,
-                $shouldMinify,
-                'table',
-                $this->describeMethodSource($managerClass, 'table'),
+                $policyClass,
             );
+
+            if ($expand) {
+                $payload['form'] = $this->describeSchema(
+                    $instance->form(Schema::make($instance)),
+                    $managerClass,
+                    true,
+                );
+                $payload['source'] = $this->classSource($managerClass);
+            }
         } catch (Throwable $throwable) {
-            $payload['error'] = $throwable->getMessage();
+            $payload['introspection_error'] = $throwable->getMessage();
         }
 
-        return $payload;
+        return $this->withoutEmpty($payload);
     }
 
     /**
-     * @return array<string, mixed>
-     */
-    protected function describeSchemaPayload(Schema $schema, ?string $definitionClass, bool $shouldMinify, string $definitionMethod, ?array $resourceHook): array
-    {
-        $topLevelComponents = $schema->getComponents(true);
-        $flatComponents = [];
-        $namedComponents = [];
-        $relationshipComponents = [];
-        $warnings = [];
-
-        try {
-            $flatComponents = $schema->getFlatComponents(true);
-        } catch (Throwable $throwable) {
-            $flatComponents = $topLevelComponents;
-            $warnings[] = [
-                'type' => 'schema_introspection_incomplete',
-                'message' => 'Schema flattening failed, so the summary falls back to top-level components only.',
-                'error' => $this->normalizeValue($throwable->getMessage()),
-            ];
-        }
-
-        foreach ($flatComponents as $component) {
-            $name = $this->normalizeValue($this->callPublicMethod($component, 'getName'));
-
-            if (is_string($name) && $name !== '') {
-                $namedComponents[] = $name;
-            }
-
-            $relationshipName = $this->normalizeValue($this->callPublicMethod($component, 'getRelationshipName'));
-
-            if (is_string($relationshipName) && $relationshipName !== '') {
-                $relationshipComponents[] = [
-                    'component' => is_string($name) && $name !== '' ? $name : class_basename($component),
-                    'relationship' => $relationshipName,
-                ];
-            }
-        }
-
-        $tree = null;
-
-        if (! $shouldMinify) {
-            try {
-                $tree = array_values(array_map($this->summarizeSchemaComponent(...), $topLevelComponents));
-            } catch (Throwable $throwable) {
-                $warnings[] = [
-                    'type' => 'schema_tree_incomplete',
-                    'message' => 'Schema tree summarization failed, so the tree payload was omitted.',
-                    'error' => $this->normalizeValue($throwable->getMessage()),
-                ];
-            }
-        }
-
-        return [
-            'definition_class' => $this->describeLinkedClass($definitionClass, $definitionMethod),
-            'resource_hook' => $resourceHook,
-            'minified' => $shouldMinify,
-            'summary' => [
-                'top_level_components' => count($topLevelComponents),
-                'total_components' => count($flatComponents),
-                'component_types' => $this->countTypes($flatComponents),
-                'named_components' => array_values(array_unique($namedComponents)),
-                'relationship_components' => $relationshipComponents,
-            ],
-            'warnings' => $warnings,
-            'tree' => $tree,
-        ];
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    protected function describeTablePayload(Table $table, ?string $definitionClass, bool $shouldMinify, string $definitionMethod, ?array $resourceHook, ?string $policyClass = null): array
-    {
-        $columns = array_values($table->getColumns());
-        $filters = array_values($table->getFilters());
-        $headerActions = array_values($table->getHeaderActions());
-        $recordActions = array_values($table->getRecordActions());
-        $bulkActions = array_values($table->getToolbarActions());
-        $emptyStateActions = array_values($this->callPublicMethod($table, 'getEmptyStateActions') ?? []);
-        $violations = $bulkActions === []
-            ? []
-            : [[
-                'type' => 'bulk_actions_forbidden',
-                'message' => 'Bulk actions are forbidden by project rules and should be removed from the table definition.',
-                'count' => count($bulkActions),
-                'classes' => array_map(static fn (Action|ActionGroup $action): string => $action::class, $bulkActions),
-            ]];
-
-        return [
-            'definition_class' => $this->describeLinkedClass($definitionClass, $definitionMethod),
-            'resource_hook' => $resourceHook,
-            'minified' => $shouldMinify,
-            'summary' => [
-                'columns' => count($columns),
-                'filters' => count($filters),
-                'header_actions' => count($headerActions),
-                'record_actions' => count($recordActions),
-                'violations' => count($violations),
-                'column_types' => $this->countTypes($columns),
-                'filter_types' => $this->countTypes($filters),
-            ],
-            'empty_state' => [
-                'icon' => $this->normalizeValue($this->callPublicMethod($table, 'getEmptyStateIcon')),
-                'heading' => $this->normalizeValue($this->callPublicMethod($table, 'getEmptyStateHeading')),
-                'description' => $this->normalizeValue($this->callPublicMethod($table, 'getEmptyStateDescription')),
-                'actions' => array_map(fn (object $action): array => $this->summarizeAction($action, $policyClass), $emptyStateActions),
-            ],
-            'columns' => array_map($this->summarizeTableColumn(...), $columns),
-            'filters' => array_map($this->summarizeTableFilter(...), $filters),
-            'header_actions' => array_map(fn (object $action): array => $this->summarizeAction($action, $policyClass), $headerActions),
-            'record_actions' => array_map(fn (object $action): array => $this->summarizeAction($action, $policyClass), $recordActions),
-            'violations' => $violations,
-        ];
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    protected function summarizeSchemaComponent(object $component): array
-    {
-        $summary = $this->filterNullValues([
-            'type' => class_basename($component),
-            'name' => $this->normalizeValue($this->callPublicMethod($component, 'getName')),
-        ]);
-
-        $childSchemas = $this->callPublicMethod($component, 'getChildSchemas');
-
-        if (is_array($childSchemas) && $childSchemas !== []) {
-            $summary['children'] = [];
-
-            foreach ($childSchemas as $childSchema) {
-                if (! $childSchema instanceof Schema) {
-                    continue;
-                }
-
-                foreach ($childSchema->getComponents(true) as $childComponent) {
-                    $summary['children'][] = $this->summarizeSchemaComponent($childComponent);
-                }
-            }
-        }
-
-        $headerActions = $this->callPublicMethod($component, 'getHeaderActions');
-
-        if (is_array($headerActions) && $headerActions !== []) {
-            $summary['header_actions'] = array_values(array_map($this->summarizeAction(...), $headerActions));
-        }
-
-        return $summary;
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    protected function summarizeTableColumn(object $column): array
-    {
-        return $this->filterNullValues([
-            'type' => class_basename($column),
-            'name' => $this->normalizeValue($this->callPublicMethod($column, 'getName')),
-        ]);
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    protected function summarizeTableFilter(object $filter): array
-    {
-        return $this->filterNullValues([
-            'type' => class_basename($filter),
-            'name' => $this->normalizeValue($this->callPublicMethod($filter, 'getName')),
-        ]);
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    protected function summarizeAction(object $action, ?string $policyClass = null): array
-    {
-        if ($action instanceof ActionGroup) {
-            return $this->filterNullValues([
-                'class' => $action::class,
-                'type' => class_basename($action),
-                'label' => $this->normalizeValue($this->callPublicMethod($action, 'getLabel')),
-                'icon' => $this->normalizeValue($this->callPublicMethod($action, 'getIcon')),
-                'authorization' => $this->summarizeActionAuthorization($action, $policyClass),
-                'abilities' => $this->summarizeActionAuthorization($action, $policyClass)['policy_abilities'] ?? [],
-                'actions' => array_values(array_map(fn (object $childAction): array => $this->summarizeAction($childAction, $policyClass), $action->getActions())),
-            ]);
-        }
-
-        return $this->filterNullValues([
-            'class' => $action::class,
-            'type' => class_basename($action),
-            'name' => $this->normalizeValue($this->callPublicMethod($action, 'getName')),
-            'label' => $this->normalizeValue($this->callPublicMethod($action, 'getLabel')),
-            'icon' => $this->normalizeValue($this->callPublicMethod($action, 'getIcon')),
-            'color' => $this->normalizeValue($this->callPublicMethod($action, 'getColor')),
-            'abilities' => $this->summarizeActionAuthorization($action, $policyClass)['policy_abilities'] ?? [],
-            'authorization' => $this->summarizeActionAuthorization($action, $policyClass),
-        ]);
-    }
-
-    /**
-     * @param  array<string, mixed>  $form
+     * @param  array<string, mixed>  $entry
      * @param  array<string, mixed>  $table
-     * @param  array<int, array<string, mixed>>  $relationManagers
-     * @return array<string, mixed>
-     */
-    protected function scoreComplexity(array $form, array $table, array $relationManagers): array
-    {
-        $relationManagerScore = 0;
-
-        foreach ($relationManagers as $relationManager) {
-            if (($relationManager['kind'] ?? null) === 'group') {
-                foreach ($relationManager['managers'] as $groupedManager) {
-                    $relationManagerScore += $this->relationManagerScore($groupedManager);
-                }
-
-                continue;
-            }
-
-            $relationManagerScore += $this->relationManagerScore($relationManager);
-        }
-
-        $score = ($form['summary']['total_components'] ?? 0)
-            + (($table['summary']['columns'] ?? 0) * 2)
-            + (($table['summary']['filters'] ?? 0) * 3)
-            + (($table['summary']['record_actions'] ?? 0) * 2)
-            + (($table['summary']['header_actions'] ?? 0) * 2)
-            + $relationManagerScore;
-
-        return [
-            'score' => $score,
-            'signals' => [
-                'form_components' => $form['summary']['total_components'] ?? 0,
-                'table_columns' => $table['summary']['columns'] ?? 0,
-                'table_filters' => $table['summary']['filters'] ?? 0,
-                'table_record_actions' => $table['summary']['record_actions'] ?? 0,
-                'relation_managers' => count($relationManagers),
-            ],
-        ];
-    }
-
-    /**
-     * @param  array<string, mixed>  $relationManager
-     */
-    protected function relationManagerScore(array $relationManager): int
-    {
-        return ($relationManager['form']['summary']['total_components'] ?? 0)
-            + (($relationManager['table']['summary']['columns'] ?? 0) * 2)
-            + (($relationManager['table']['summary']['filters'] ?? 0) * 3)
-            + 6;
-    }
-
-    /**
-     * @param  array<string, mixed>  $catalogEntry
-     * @param  array<string, mixed>  $catalog
      * @return list<array<string, mixed>>
      */
-    protected function buildResourceDiagnostics(string $resourceClass, array $catalogEntry, array $catalog): array
+    private function resourceDiagnostics(string $resourceClass, array $entry, array $table): array
     {
+        if (! $entry['managed']) {
+            return [[
+                'type' => 'external_resource',
+                'message' => 'External resources are registered but are not subject to Accelerator metadata rules.',
+            ]];
+        }
+
         $diagnostics = [];
 
-        if ($catalogEntry['form'] === null) {
-            $diagnostics[] = [
-                'type' => 'missing_form_link',
-                'resource' => $resourceClass,
-            ];
+        if (! in_array(BetterResource::class, class_uses_recursive($resourceClass), true)) {
+            $diagnostics[] = ['type' => 'missing_better_resource_trait'];
         }
 
-        if ($catalogEntry['table'] === null) {
-            $diagnostics[] = [
-                'type' => 'missing_table_link',
-                'resource' => $resourceClass,
-            ];
-        }
-
-        if (is_string($catalogEntry['form']) && isset($catalog['forms'][$catalogEntry['form']])) {
-            $linkedResource = $catalog['forms'][$catalogEntry['form']]['resource'];
-
-            if ($linkedResource !== null && $linkedResource !== $resourceClass) {
+        foreach (['form', 'table'] as $key) {
+            if (! is_string($entry[$key]) || ! class_exists($entry[$key])) {
                 $diagnostics[] = [
-                    'type' => 'form_resource_mismatch',
-                    'resource' => $resourceClass,
-                    'form' => $catalogEntry['form'],
-                    'linked_resource' => $linkedResource,
+                    'type' => "invalid_{$key}_link",
+                    'class' => $entry[$key],
                 ];
             }
         }
 
-        if (is_string($catalogEntry['table']) && isset($catalog['tables'][$catalogEntry['table']])) {
-            $linkedResource = $catalog['tables'][$catalogEntry['table']]['resource'];
-
-            if ($linkedResource !== null && $linkedResource !== $resourceClass) {
-                $diagnostics[] = [
-                    'type' => 'table_resource_mismatch',
-                    'resource' => $resourceClass,
-                    'table' => $catalogEntry['table'],
-                    'linked_resource' => $linkedResource,
-                ];
-            }
+        foreach ($table['violations'] ?? [] as $violation) {
+            $diagnostics[] = ['type' => 'table_contract_violation'] + $violation;
         }
 
         return $diagnostics;
     }
 
     /**
-     * @param  array<string, array<int|string, array<string, mixed>|string>>  $catalog
-     */
-    protected function resolveResourceClass(string $resource, array $catalog): string
-    {
-        $trimmed = trim($resource);
-
-        if ($trimmed === '') {
-            throw new RuntimeException('Resource identifier can not be empty.');
-        }
-
-        if (class_exists($trimmed) && is_subclass_of($trimmed, Resource::class)) {
-            return $trimmed;
-        }
-
-        $lookupKey = Str::lower($trimmed);
-
-        if (isset($catalog['resource_lookup'][$lookupKey])) {
-            return $catalog['resource_lookup'][$lookupKey];
-        }
-
-        throw new RuntimeException(sprintf(
-            'Unable to resolve resource [%s]. Available keys: %s',
-            $resource,
-            implode(', ', array_values(array_unique(array_map(fn (array $entry): string => $entry['key'], $catalog['resources']))))
-        ));
-    }
-
-    /**
-     * @param  array<string, mixed>  $resourceInfo
-     * @return list<string>
-     */
-    protected function resourceAliases(array $resourceInfo): array
-    {
-        $aliases = [
-            Str::lower($resourceInfo['class']),
-            Str::lower(class_basename($resourceInfo['class'])),
-            Str::lower((string) Str::of(class_basename($resourceInfo['class']))->beforeLast('Resource')),
-            Str::lower((string) $resourceInfo['key']),
-        ];
-
-        if (is_string($resourceInfo['model']) && $resourceInfo['model'] !== '') {
-            $aliases[] = Str::lower($resourceInfo['model']);
-            $aliases[] = Str::lower(class_basename($resourceInfo['model']));
-        }
-
-        return array_values(array_unique(array_filter($aliases)));
-    }
-
-    /**
-     * @return list<string>
-     */
-    protected function linkedClassAliases(string $class): array
-    {
-        return array_values(array_unique(array_filter([
-            Str::lower($class),
-            Str::lower(class_basename($class)),
-            Str::lower((string) Str::of(class_basename($class))->beforeLast('Page')->beforeLast('RelationManager')->snake()),
-        ])));
-    }
-
-    /**
-     * @param  array<string, mixed>  $relationManagerInfo
-     * @return list<string>
-     */
-    protected function relationManagerAliases(array $relationManagerInfo): array
-    {
-        $aliases = $this->linkedClassAliases($relationManagerInfo['class']);
-
-        if (is_string($relationManagerInfo['resource']) && $relationManagerInfo['resource'] !== '') {
-            $resourceKey = $this->defaultResourceKey($relationManagerInfo['resource']);
-            $aliases[] = Str::lower($resourceKey.'.'.class_basename($relationManagerInfo['class']));
-
-            if (is_string($relationManagerInfo['relationship']) && $relationManagerInfo['relationship'] !== '') {
-                $aliases[] = Str::lower($resourceKey.'.'.$relationManagerInfo['relationship']);
-            }
-        }
-
-        return array_values(array_unique(array_filter($aliases)));
-    }
-
-    /**
-     * @param  array<string, mixed>  $pageInfo
-     * @return list<string>
-     */
-    protected function pageAliases(array $pageInfo): array
-    {
-        $aliases = $this->linkedClassAliases($pageInfo['class']);
-
-        if (is_string($pageInfo['resource']) && $pageInfo['resource'] !== '' && is_string($pageInfo['key']) && $pageInfo['key'] !== '') {
-            $aliases[] = Str::lower($this->defaultResourceKey($pageInfo['resource']).'.'.$pageInfo['key']);
-        }
-
-        return array_values(array_unique(array_filter($aliases)));
-    }
-
-    /**
-     * @param  array<string, mixed>  $widgetInfo
-     * @return list<string>
-     */
-    protected function widgetAliases(array $widgetInfo): array
-    {
-        $aliases = $this->linkedClassAliases($widgetInfo['class']);
-
-        if (is_string($widgetInfo['resource']) && $widgetInfo['resource'] !== '' && is_string($widgetInfo['key']) && $widgetInfo['key'] !== '') {
-            $aliases[] = Str::lower($this->defaultResourceKey($widgetInfo['resource']).'.'.$widgetInfo['key']);
-        }
-
-        return array_values(array_unique(array_filter($aliases)));
-    }
-
-    protected function defaultResourceKey(string $resourceClass): string
-    {
-        return (string) Str::of(class_basename($resourceClass))
-            ->beforeLast('Resource')
-            ->snake();
-    }
-
-    protected function buildResourceFormSchema(string $resourceClass): Schema
-    {
-        return $resourceClass::form(Schema::make(new ResourceContextSchemaHost));
-    }
-
-    protected function buildResourceTable(string $resourceClass, ?string $modelClass): Table
-    {
-        $resolvedModelClass = is_string($modelClass) && $modelClass !== '' ? $modelClass : Model::class;
-        $host = new ResourceContextTableHost($resolvedModelClass);
-        $table = $resourceClass::table(Table::make($host));
-        $host->setTable($table);
-
-        return $table;
-    }
-
-    /**
-     * @param  array<string, array<int|string, array<string, mixed>|string>>  $catalog
-     * @return list<array<string, mixed>>
-     */
-    protected function describePages(string $resourceClass, array $catalog, ?string $policyClass = null): array
-    {
-        $pages = [];
-
-        foreach ($this->callPublicMethod($resourceClass, 'getPages', true) ?? [] as $key => $registration) {
-            if (! $registration instanceof PageRegistration) {
-                $pages[] = [
-                    'key' => $key,
-                    'registration_type' => get_debug_type($registration),
-                ];
-
-                continue;
-            }
-
-            $pageClass = $registration->getPage();
-
-            $page = [
-                'key' => $key,
-                'class' => $pageClass,
-                'kind' => $this->detectPageKind($pageClass),
-                'source' => $this->describeClassSource($pageClass),
-                'discovery' => $this->describeDiscoveryMetadata($pageClass),
-            ];
-
-            try {
-                $instance = $this->app->make($pageClass);
-
-                $headerActions = $this->callMethodAnyVisibility($instance, 'getHeaderActions');
-                $headerWidgets = $this->callMethodAnyVisibility($instance, 'getHeaderWidgets');
-                $footerWidgets = $this->callMethodAnyVisibility($instance, 'getFooterWidgets');
-                $tabs = $this->callPublicMethod($instance, 'getTabs');
-
-                $page['header_actions'] = is_array($headerActions)
-                    ? array_values(array_map(fn (object $action): array => $this->summarizeAction($action, $policyClass), $headerActions))
-                    : [];
-                $page['header_widgets'] = is_array($headerWidgets)
-                    ? array_values(array_map(fn (mixed $widget): array => $this->describePageWidget($widget, $resourceClass, $pageClass, 'header', $catalog), $headerWidgets))
-                    : [];
-                $page['footer_widgets'] = is_array($footerWidgets)
-                    ? array_values(array_map(fn (mixed $widget): array => $this->describePageWidget($widget, $resourceClass, $pageClass, 'footer', $catalog), $footerWidgets))
-                    : [];
-                $page['tabs'] = is_array($tabs)
-                    ? array_map(fn (string $tabKey, mixed $tab): array => $this->summarizePageTab($tabKey, $tab), array_keys($tabs), array_values($tabs))
-                    : [];
-            } catch (Throwable $throwable) {
-                $page['introspection_error'] = $throwable->getMessage();
-            }
-
-            $pages[] = $page;
-        }
-
-        return $pages;
-    }
-
-    /**
-     * @param  array<int, array<string, mixed>>  $pages
-     */
-    protected function resolveRelationPageClass(array $pages): ?string
-    {
-        foreach (['edit', 'view', 'index', 'create'] as $preferredKey) {
-            foreach ($pages as $page) {
-                if (($page['key'] ?? null) === $preferredKey && is_string($page['class'] ?? null)) {
-                    return $page['class'];
-                }
-            }
-        }
-
-        foreach ($pages as $page) {
-            if (is_string($page['class'] ?? null)) {
-                return $page['class'];
-            }
-        }
-
-        return null;
-    }
-
-    protected function detectPageKind(string $pageClass): string
-    {
-        return match (true) {
-            is_subclass_of($pageClass, ListRecords::class) => 'list',
-            is_subclass_of($pageClass, CreateRecord::class) => 'create',
-            is_subclass_of($pageClass, EditRecord::class) => 'edit',
-            is_subclass_of($pageClass, ViewRecord::class) => 'view',
-            is_subclass_of($pageClass, ManageRelatedRecords::class) => 'manage_related_records',
-            default => class_basename($pageClass),
-        };
-    }
-
-    /**
-     * @return list<array<string, mixed>>
-     */
-    protected function normalizeRelationEntries(array $relations): array
-    {
-        $entries = [];
-
-        foreach ($relations as $relation) {
-            if ($relation instanceof RelationGroup) {
-                $entries[] = [
-                    'kind' => 'group',
-                    'label' => $this->normalizeValue($this->callPublicMethod($relation, 'getLabel')),
-                    'managers' => $this->normalizeRelationEntries($relation->getManagers()),
-                ];
-
-                continue;
-            }
-
-            $properties = [];
-            $managerClass = null;
-
-            if ($relation instanceof RelationManagerConfiguration) {
-                $properties = $relation->getProperties();
-                $managerClass = $relation->relationManager;
-            }
-
-            if (is_string($relation)) {
-                $managerClass = $relation;
-            }
-
-            if (is_string($managerClass) && is_subclass_of($managerClass, RelationManager::class)) {
-                $entries[] = [
-                    'kind' => 'manager',
-                    'manager_class' => $managerClass,
-                    'properties' => $properties,
-                ];
-
-                continue;
-            }
-
-            $entries[] = [
-                'kind' => 'unknown',
-                'type' => get_debug_type($relation),
-            ];
-        }
-
-        return $entries;
-    }
-
-    /**
      * @return array<string, mixed>
      */
-    protected function describeLinkedClass(?string $class, string $method): ?array
+    private function navigation(string $resourceClass): array
     {
-        if ($class === null || $class === '') {
-            return null;
-        }
-
-        $data = [
-            'class' => $class,
-            'exists' => class_exists($class),
-        ];
-
-        if (! $data['exists']) {
-            return $data;
-        }
-
-        $data['source'] = $this->describeClassSource($class);
-        $data['method_source'] = $this->describeMethodSource($class, $method);
-        $data['discovery'] = $this->describeDiscoveryMetadata($class);
-
-        return $data;
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    protected function describeDiscoveryMetadata(string $class): array
-    {
-        /** @var ?DiscoverAsResource $resourceAttribute */
-        $resourceAttribute = $this->getAttributeInstance($class, DiscoverAsResource::class);
-
-        return $this->filterNullValues([
-            'attributes' => $this->getAttributeClassNames($class),
-            'annotated_as_resource' => $resourceAttribute ? [
-                'key' => $resourceAttribute->key,
-                'form' => $resourceAttribute->form,
-                'table' => $resourceAttribute->table,
-            ] : null,
+        return $this->withoutEmpty([
+            'slug' => $this->callStatic($resourceClass, 'getSlug'),
+            'label' => $this->normalize($this->callStatic($resourceClass, 'getModelLabel')),
+            'plural_label' => $this->normalize($this->callStatic($resourceClass, 'getPluralModelLabel')),
+            'group' => $this->normalize($this->callStatic($resourceClass, 'getNavigationGroup')),
+            'icon' => $this->normalize($this->callStatic($resourceClass, 'getNavigationIcon')),
         ]);
     }
 
-    /**
-     * @return array<string, mixed>
-     */
-    protected function summarizePageTab(string $key, mixed $tab): array
+    private function resolvePolicyClass(string $modelClass, ?string $configuredPolicy): ?string
     {
-        return $this->filterNullValues([
-            'key' => $key,
-            'type' => is_object($tab) ? class_basename($tab) : get_debug_type($tab),
-            'label' => is_object($tab) ? $this->normalizeValue($this->callPublicMethod($tab, 'getLabel')) : $this->normalizeValue($tab),
-            'icon' => is_object($tab) ? $this->normalizeValue($this->callPublicMethod($tab, 'getIcon')) : null,
-        ]);
-    }
-
-    /**
-     * @param  array<int, array<string, mixed>>  $pages
-     * @param  array<string, array<int|string, array<string, mixed>|string>>  $catalog
-     * @return list<array<string, mixed>>
-     */
-    protected function describeWidgets(string $resourceClass, array $pages, array $catalog): array
-    {
-        $widgets = [];
-
-        foreach ($pages as $page) {
-            foreach (['header_widgets', 'footer_widgets'] as $placementKey) {
-                foreach ($page[$placementKey] ?? [] as $widget) {
-                    if (! is_array($widget) || ! is_string($widget['class'] ?? null)) {
-                        continue;
-                    }
-
-                    $widgets[$widget['class']] = isset($widgets[$widget['class']])
-                        ? $this->mergeWidgetPayload($widgets[$widget['class']], $widget)
-                        : $widget;
-                }
-            }
-        }
-
-        ksort($widgets);
-
-        return array_values($widgets);
-    }
-
-    /**
-     * @param  array<string, array<int|string, array<string, mixed>|string>>  $catalog
-     * @return array<string, mixed>
-     */
-    protected function describePageWidget(mixed $widget, string $resourceClass, string $pageClass, string $placement, array $catalog): array
-    {
-        $normalized = $this->normalizeWidgetReference($widget);
-
-        if ($normalized === null) {
-            return [
-                'type' => get_debug_type($widget),
-                'placement' => $placement,
-            ];
-        }
-
-        $described = $this->describeWidgetClass($normalized['class'], $resourceClass, $catalog, $normalized['properties']);
-        $described['placement'] = $placement;
-        $described['page_class'] = $pageClass;
-
-        return $described;
-    }
-
-    /**
-     * @param  array<string, array<int|string, array<string, mixed>|string>>  $catalog
-     * @param  array<string, mixed>  $properties
-     * @return array<string, mixed>
-     */
-    protected function describeWidgetClass(string $widgetClass, string $resourceClass, array $catalog, array $properties = []): array
-    {
-        $payload = [
-            'class' => $widgetClass,
-            'type' => class_basename($widgetClass),
-            'kind' => $this->detectWidgetKind($widgetClass),
-            'source' => $this->describeClassSource($widgetClass),
-            'discovery' => $this->describeDiscoveryMetadata($widgetClass),
-            'resource' => $resourceClass,
-            'properties' => $properties,
-        ];
-
-        if (! class_exists($widgetClass) || ! is_subclass_of($widgetClass, Widget::class)) {
-            return $payload;
-        }
-
-        $payload['can_view'] = $this->callPublicMethod($widgetClass, 'canView', true);
-        $payload['sort'] = $this->callPublicMethod($widgetClass, 'getSort', true);
-        $payload['default_properties'] = $this->normalizeValue($this->callPublicMethod($widgetClass, 'getDefaultProperties', true));
-
-        try {
-            /** @var Widget $instance */
-            $instance = $this->app->make($widgetClass);
-
-            $payload['column_span'] = $this->normalizeValue($this->callPublicMethod($instance, 'getColumnSpan'));
-            $payload['column_start'] = $this->normalizeValue($this->callPublicMethod($instance, 'getColumnStart'));
-
-            if (is_subclass_of($widgetClass, StatsOverviewWidget::class)) {
-                $payload['heading'] = $this->normalizeValue($this->callMethodAnyVisibility($instance, 'getHeading'));
-                $payload['description'] = $this->normalizeValue($this->callMethodAnyVisibility($instance, 'getDescription'));
-
-                $stats = $this->callMethodAnyVisibility($instance, 'getStats');
-
-                $payload['stats'] = is_array($stats)
-                    ? array_values(array_map(fn (mixed $stat): array => $stat instanceof Stat ? $this->summarizeWidgetStat($stat) : ['type' => get_debug_type($stat)], $stats))
-                    : [];
-            }
-        } catch (Throwable $throwable) {
-            $payload['introspection_error'] = $throwable->getMessage();
-        }
-
-        return $this->filterNullValues($payload);
-    }
-
-    /**
-     * @param  array<string, mixed>  $primary
-     * @param  array<string, mixed>  $secondary
-     * @return array<string, mixed>
-     */
-    protected function mergeWidgetPayload(array $primary, array $secondary): array
-    {
-        $placements = array_merge($primary['placements'] ?? [], isset($primary['placement']) ? [$primary['placement']] : []);
-        $placements = array_merge($placements, $secondary['placements'] ?? [], isset($secondary['placement']) ? [$secondary['placement']] : []);
-        $pages = array_merge($primary['pages'] ?? [], isset($primary['page_class']) ? [$primary['page_class']] : []);
-        $pages = array_merge($pages, $secondary['pages'] ?? [], isset($secondary['page_class']) ? [$secondary['page_class']] : []);
-
-        $merged = array_merge($secondary, $primary);
-        $merged['placements'] = array_values(array_unique(array_filter($placements)));
-        $merged['pages'] = array_values(array_unique(array_filter($pages)));
-
-        unset($merged['placement'], $merged['page_class']);
-
-        return $merged;
-    }
-
-    /**
-     * @return array{class: string, properties: array<string, mixed>}|null
-     */
-    protected function normalizeWidgetReference(mixed $widget): ?array
-    {
-        if (is_string($widget)) {
-            return [
-                'class' => $widget,
-                'properties' => [],
-            ];
-        }
-
-        if ($widget instanceof WidgetConfiguration) {
-            return [
-                'class' => $widget->widget,
-                'properties' => $widget->getProperties(),
-            ];
-        }
-
-        return null;
-    }
-
-    protected function detectWidgetKind(string $widgetClass): string
-    {
-        return match (true) {
-            is_subclass_of($widgetClass, StatsOverviewWidget::class) => 'stats_overview',
-            default => 'widget',
-        };
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    protected function summarizeWidgetStat(Stat $stat): array
-    {
-        return $this->filterNullValues([
-            'label' => $this->normalizeValue($stat->getLabel()),
-            'value' => $this->normalizeValue($stat->getValue()),
-            'description' => $this->normalizeValue($stat->getDescription()),
-            'description_icon' => $this->normalizeValue($stat->getDescriptionIcon()),
-            'color' => $this->normalizeValue($stat->getColor()),
-            'chart_points' => count($stat->getChart() ?? []),
-        ]);
-    }
-
-    /**
-     * @return array<string, mixed>|null
-     */
-    protected function summarizeActionAuthorization(object $action, ?string $policyClass = null): ?array
-    {
-        $authorization = $this->getProtectedProperty($action, 'authorization');
-        $authorizationMessage = $this->normalizeValue($this->getProtectedProperty($action, 'authorizationMessage'));
-        $authorizationTooltip = $this->getProtectedProperty($action, 'hasAuthorizationTooltip');
-        $authorizationNotification = $this->getProtectedProperty($action, 'hasAuthorizationNotification');
-        $authorizeIndividualRecords = $this->getProtectedProperty($action, 'authorizeIndividualRecords');
-        $policyAbilities = $this->resolvePolicyAbilities($authorization, $action);
-
-        if ($authorization === null && $authorizeIndividualRecords === null && $authorizationMessage === null) {
-            return $this->inferDefaultAuthorizationHint($action, $policyClass);
-        }
-
-        return $this->filterNullValues([
-            'mode' => is_array($authorization) ? ($authorization['type'] ?? 'configured') : ($authorization === null ? 'default' : get_debug_type($authorization)),
-            'abilities' => is_array($authorization) ? array_values($authorization['abilities'] ?? []) : null,
-            'policy_class' => $policyClass,
-            'policy_abilities' => $policyAbilities,
-            'arguments' => is_array($authorization)
-                ? $this->normalizeValue($this->normalizeAuthorizationArguments($authorization['arguments'] ?? []))
-                : ($authorization !== null && ! is_bool($authorization) ? $this->normalizeValue($this->describeAuthorizationValue($authorization)) : null),
-            'message' => $authorizationMessage,
-            'tooltip' => $this->describeAuthorizationFlag($authorizationTooltip),
-            'notification' => $this->describeAuthorizationFlag($authorizationNotification),
-            'individual_records' => $this->describeIndividualRecordAuthorization($authorizeIndividualRecords),
-            'default_hint' => $authorization === null ? $this->inferDefaultAuthorizationHint($action, $policyClass) : null,
-        ]);
-    }
-
-    /**
-     * @return list<string>
-     */
-    protected function resolvePolicyAbilities(mixed $authorization, object $action): array
-    {
-        $abilities = [];
-
-        if (is_array($authorization)) {
-            foreach ($authorization['abilities'] ?? [] as $ability) {
-                $normalizedAbility = $this->normalizeValue($ability);
-
-                if (is_string($normalizedAbility) && $normalizedAbility !== '') {
-                    $abilities[] = $normalizedAbility;
-                }
-            }
-        }
-
-        if ($abilities === [] && $authorization === null) {
-            $defaultAbility = $this->inferDefaultActionAbility($action);
-
-            if (is_string($defaultAbility) && $defaultAbility !== '') {
-                $abilities[] = $defaultAbility;
-            }
-        }
-
-        return array_values(array_unique($abilities));
-    }
-
-    protected function describeAuthorizationFlag(mixed $flag): mixed
-    {
-        return match (true) {
-            is_bool($flag) => $flag,
-            $flag === null => null,
-            default => get_debug_type($flag),
-        };
-    }
-
-    /**
-     * @return array<string, mixed>|null
-     */
-    protected function describeIndividualRecordAuthorization(mixed $authorization): ?array
-    {
-        if ($authorization === null || $authorization === false) {
-            return null;
-        }
-
-        return match (true) {
-            is_string($authorization), $authorization instanceof BackedEnum => [
-                'mode' => 'ability',
-                'value' => $this->normalizeValue($authorization),
-            ],
-            is_bool($authorization) => [
-                'mode' => 'default_resolver',
-                'value' => $authorization,
-            ],
-            default => [
-                'mode' => get_debug_type($authorization),
-            ],
-        };
-    }
-
-    /**
-     * @param  array<int, mixed>  $arguments
-     * @return array<int, mixed>
-     */
-    protected function normalizeAuthorizationArguments(array $arguments): array
-    {
-        return array_values(array_map(fn (mixed $argument): mixed => match (true) {
-            $argument instanceof Model => $argument::class,
-            is_object($argument) => $argument::class,
-            default => $argument,
-        }, $arguments));
-    }
-
-    protected function describeAuthorizationValue(mixed $authorization): mixed
-    {
-        return match (true) {
-            is_bool($authorization), is_int($authorization), is_float($authorization), is_string($authorization) => $authorization,
-            $authorization instanceof BackedEnum => $authorization->value,
-            default => get_debug_type($authorization),
-        };
-    }
-
-    /**
-     * @return array<string, mixed>|null
-     */
-    protected function inferDefaultAuthorizationHint(object $action, ?string $policyClass = null): ?array
-    {
-        $ability = $this->inferDefaultActionAbility($action);
-
-        if ($ability === null) {
-            return null;
-        }
-
-        return [
-            'mode' => 'default',
-            'policy_class' => $policyClass,
-            'policy_ability' => $ability,
-            'policy_abilities' => [$ability],
-        ];
-    }
-
-    protected function inferDefaultActionAbility(object $action): ?string
-    {
-        return match (class_basename($action)) {
-            'CreateAction' => 'create',
-            'EditAction' => 'update',
-            'DeleteAction' => 'delete',
-            'ViewAction' => 'view',
-            'ReplicateAction' => 'replicate',
-            'RestoreAction' => 'restore',
-            'ForceDeleteAction' => 'forceDelete',
-            'AttachAction' => 'attach',
-            'DetachAction' => 'detach',
-            'AssociateAction' => 'associate',
-            'DissociateAction' => 'dissociate',
-            default => null,
-        };
-    }
-
-    /**
-     * @return array{class: string, source: array<string, mixed>|null, abilities: list<string>}|null
-     */
-    protected function describeResourcePolicy(?string $modelClass): ?array
-    {
-        $policyClass = $this->resolvePolicyClass($modelClass);
-
-        if ($policyClass === null) {
-            return null;
-        }
-
-        return [
-            'class' => $policyClass,
-            'source' => $this->describeClassSource($policyClass),
-            'abilities' => $this->listPolicyAbilities($policyClass),
-        ];
-    }
-
-    protected function resolvePolicyClass(?string $modelClass): ?string
-    {
-        if (! is_string($modelClass) || $modelClass === '') {
-            return null;
+        if (is_string($configuredPolicy) && class_exists($configuredPolicy)) {
+            return $configuredPolicy;
         }
 
         try {
@@ -1411,44 +825,34 @@ class ResourceContextScanner
                 return $policy::class;
             }
 
-            if (is_string($policy) && $policy !== '') {
+            if (is_string($policy) && class_exists($policy)) {
                 return $policy;
             }
         } catch (Throwable) {
-            // Fall back to Laravel's conventional policy class name if the gate can not resolve it.
+            //
         }
 
-        $guessedPolicyClass = 'App\\Policies\\'.class_basename($modelClass).'Policy';
+        $conventional = 'App\\Policies\\'.class_basename($modelClass).'Policy';
 
-        return class_exists($guessedPolicyClass) ? $guessedPolicyClass : null;
+        return class_exists($conventional) ? $conventional : null;
     }
 
     /**
      * @return list<string>
      */
-    protected function listPolicyAbilities(string $policyClass): array
+    private function policyAbilities(string $policyClass): array
     {
-        if (! class_exists($policyClass)) {
-            return [];
-        }
-
-        $reflection = new ReflectionClass($policyClass);
         $abilities = [];
 
-        foreach ($reflection->getMethods(ReflectionMethod::IS_PUBLIC) as $method) {
-            if ($method->getDeclaringClass()->getName() !== $policyClass) {
-                continue;
-            }
-
-            if ($method->isConstructor() || $method->isDestructor() || $method->isStatic()) {
-                continue;
-            }
-
-            if (Str::startsWith($method->getName(), '__')) {
-                continue;
-            }
-
-            if (in_array($method->getName(), ['allow', 'before', 'deny', 'denyAsNotFound', 'denyWithStatus'], true)) {
+        foreach ((new ReflectionClass($policyClass))->getMethods(ReflectionMethod::IS_PUBLIC) as $method) {
+            if (
+                $method->getDeclaringClass()->getName() !== $policyClass
+                || $method->isConstructor()
+                || $method->isDestructor()
+                || $method->isStatic()
+                || Str::startsWith($method->getName(), '__')
+                || in_array($method->getName(), ['allow', 'before', 'deny', 'denyAsNotFound', 'denyWithStatus'], true)
+            ) {
                 continue;
             }
 
@@ -1462,29 +866,15 @@ class ResourceContextScanner
 
     /**
      * @param  list<array<string, mixed>>  $pages
-     * @param  array<string, mixed>  $table
      * @return list<string>
      */
-    protected function collectResourceActionAbilities(array $pages, array $table): array
+    private function abilitiesFromPages(array $pages): array
     {
         $abilities = [];
 
         foreach ($pages as $page) {
-            $abilities = [
-                ...$abilities,
-                ...$this->collectActionAbilities($page['header_actions'] ?? []),
-            ];
+            $abilities = [...$abilities, ...$this->abilitiesFromActions($page['header_actions'] ?? [])];
         }
-
-        $abilities = [
-            ...$abilities,
-            ...$this->collectActionAbilities($table['empty_state']['actions'] ?? []),
-            ...$this->collectActionAbilities($table['header_actions'] ?? []),
-            ...$this->collectActionAbilities($table['record_actions'] ?? []),
-        ];
-
-        $abilities = array_values(array_unique(array_filter($abilities, static fn (string $ability): bool => $ability !== '')));
-        sort($abilities);
 
         return $abilities;
     }
@@ -1493,48 +883,329 @@ class ResourceContextScanner
      * @param  list<array<string, mixed>>  $actions
      * @return list<string>
      */
-    protected function collectActionAbilities(array $actions): array
+    private function abilitiesFromActions(array $actions): array
     {
         $abilities = [];
 
         foreach ($actions as $action) {
-            $authorization = $action['authorization'] ?? null;
-
-            if (is_array($authorization)) {
-                foreach ($authorization['policy_abilities'] ?? [] as $ability) {
-                    if (is_string($ability) && $ability !== '') {
-                        $abilities[] = $ability;
-                    }
-                }
-
-                $defaultHint = $authorization['default_hint'] ?? null;
-
-                if (is_array($defaultHint)) {
-                    $defaultAbility = $defaultHint['policy_ability'] ?? null;
-
-                    if (is_string($defaultAbility) && $defaultAbility !== '') {
-                        $abilities[] = $defaultAbility;
-                    }
-                }
-            }
+            $abilities = [...$abilities, ...($action['abilities'] ?? [])];
 
             if (is_array($action['actions'] ?? null)) {
-                $abilities = [
-                    ...$abilities,
-                    ...$this->collectActionAbilities($action['actions']),
-                ];
+                $abilities = [...$abilities, ...$this->abilitiesFromActions($action['actions'])];
             }
         }
 
         return $abilities;
     }
 
-    protected function getProtectedProperty(object $object, string $property): mixed
+    /**
+     * @return list<array{key: string, message: string}>
+     */
+    private function sourceTableViolations(?string $definitionClass): array
+    {
+        if (! is_string($definitionClass) || ! class_exists($definitionClass)) {
+            return [];
+        }
+
+        $file = (new ReflectionClass($definitionClass))->getFileName();
+        $source = is_string($file) ? file_get_contents($file) : false;
+
+        if (! is_string($source)) {
+            return [];
+        }
+
+        $patterns = [
+            'bulk_actions_api' => '/->\s*(?:bulkActions|pushBulkActions|groupedBulkActions|getBulkActions)\s*\(/',
+            'bulk_action_class' => '/\b(?:BulkAction|BulkActionGroup|DeleteBulkAction)::make\s*\(/',
+            'toolbar_actions_api' => '/->\s*toolbarActions\s*\(/',
+        ];
+        $violations = [];
+
+        foreach ($patterns as $key => $pattern) {
+            if (preg_match($pattern, $source) === 1) {
+                $violations[] = [
+                    'key' => $key,
+                    'message' => 'Forbidden table action API found in '.class_basename($definitionClass).'.',
+                ];
+            }
+        }
+
+        return $violations;
+    }
+
+    /**
+     * @param  list<array{key: string, message: string}>  $violations
+     * @return list<array{key: string, message: string}>
+     */
+    private function uniqueViolations(array $violations): array
+    {
+        $unique = [];
+
+        foreach ($violations as $violation) {
+            $unique[$violation['key']] = $violation;
+        }
+
+        return array_values($unique);
+    }
+
+    /**
+     * @return array<string, class-string>
+     */
+    private function pageClasses(string $resourceClass): array
+    {
+        $pages = [];
+
+        foreach ($resourceClass::getPages() as $key => $registration) {
+            if (is_object($registration) && method_exists($registration, 'getPage')) {
+                $pageClass = $registration->getPage();
+
+                if (is_string($pageClass) && class_exists($pageClass)) {
+                    $pages[(string) $key] = $pageClass;
+                }
+            }
+        }
+
+        return $pages;
+    }
+
+    /**
+     * @return list<class-string<RelationManager>>
+     */
+    private function relationManagerClasses(string $resourceClass): array
+    {
+        $classes = [];
+        $collect = function (array $relations) use (&$classes, &$collect): void {
+            foreach ($relations as $relation) {
+                if ($relation instanceof RelationGroup) {
+                    $collect($relation->getManagers());
+                } elseif ($relation instanceof RelationManagerConfiguration) {
+                    $classes[] = $relation->relationManager;
+                } elseif (is_string($relation) && is_subclass_of($relation, RelationManager::class)) {
+                    $classes[] = $relation;
+                }
+            }
+        };
+        $collect($resourceClass::getRelations());
+
+        sort($classes);
+
+        return array_values(array_unique($classes));
+    }
+
+    /**
+     * @param  array<string, mixed>  $entry
+     * @return list<string>
+     */
+    private function resourceAliases(array $entry): array
+    {
+        $linkedClasses = array_values(array_filter([
+            $entry['form'],
+            $entry['table'],
+            ...array_values($entry['pages']),
+            ...$entry['relations'],
+        ], 'is_string'));
+        $aliases = [
+            $entry['class'],
+            class_basename($entry['class']),
+            Str::beforeLast(class_basename($entry['class']), 'Resource'),
+            $entry['enum_case'],
+            $entry['key'],
+            $entry['model'],
+            class_basename($entry['model']),
+            ...$linkedClasses,
+            ...array_map(class_basename(...), $linkedClasses),
+        ];
+
+        return array_values(array_unique(array_map(
+            static fn (string $alias): string => Str::lower($alias),
+            array_filter($aliases, 'is_string'),
+        )));
+    }
+
+    /**
+     * @param  array<string, mixed>  $entry
+     * @return list<string>
+     */
+    private function requiredUniqueAliases(array $entry): array
+    {
+        return array_map(Str::lower(...), [
+            $entry['class'],
+            $entry['enum_case'],
+            $entry['key'],
+        ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $catalog
+     */
+    private function resolveResourceClass(string $resource, array $catalog): string
+    {
+        $lookup = Str::lower(trim($resource));
+
+        if (isset($catalog['lookup'][$lookup])) {
+            return $catalog['lookup'][$lookup];
+        }
+
+        $keys = array_map(
+            static fn (array $entry): string => $entry['key'],
+            $catalog['resources'],
+        );
+        sort($keys);
+
+        throw new RuntimeException(sprintf(
+            'Unable to resolve registered resource [%s]. Available keys: %s',
+            $resource,
+            implode(', ', $keys),
+        ));
+    }
+
+    private function resourceAttribute(string $resourceClass): ?DiscoverAsResource
+    {
+        $attributes = (new ReflectionClass($resourceClass))->getAttributes(DiscoverAsResource::class);
+
+        return $attributes === [] ? null : $attributes[0]->newInstance();
+    }
+
+    /**
+     * @return array<string, string|null>|null
+     */
+    private function attributePayload(?DiscoverAsResource $attribute): ?array
+    {
+        if ($attribute === null) {
+            return null;
+        }
+
+        return [
+            'key' => $attribute->key,
+            'form' => $attribute->form,
+            'table' => $attribute->table,
+            'policy' => $attribute->policy,
+        ];
+    }
+
+    private function defaultResourceKey(string $resourceClass): string
+    {
+        return (string) Str::of(class_basename($resourceClass))
+            ->beforeLast('Resource')
+            ->snake();
+    }
+
+    /**
+     * @param  array<string, class-string>  $pages
+     */
+    private function firstListPageClass(array $pages): ?string
+    {
+        foreach ($pages as $pageClass) {
+            if (is_subclass_of($pageClass, ListRecords::class)) {
+                return $pageClass;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  array<string, class-string>  $pages
+     */
+    private function firstPageClass(array $pages): ?string
+    {
+        $pageClass = reset($pages);
+
+        return is_string($pageClass) ? $pageClass : null;
+    }
+
+    private function pageKind(string $pageClass): string
+    {
+        return match (true) {
+            is_subclass_of($pageClass, ListRecords::class) => 'list',
+            is_subclass_of($pageClass, CreateRecord::class) => 'create',
+            is_subclass_of($pageClass, EditRecord::class) => 'edit',
+            is_subclass_of($pageClass, ViewRecord::class) => 'view',
+            is_subclass_of($pageClass, ManageRelatedRecords::class) => 'manage_related_records',
+            default => class_basename($pageClass),
+        };
+    }
+
+    private function makeModel(string $modelClass): ?Model
+    {
+        try {
+            $model = $this->app->make($modelClass);
+
+            return $model instanceof Model ? $model : null;
+        } catch (Throwable) {
+            return null;
+        }
+    }
+
+    private function callStatic(string $class, string $method): mixed
+    {
+        try {
+            if (! class_exists($class) || ! method_exists($class, $method)) {
+                return null;
+            }
+
+            $reflection = new ReflectionMethod($class, $method);
+
+            if (! $reflection->isPublic() || ! $reflection->isStatic() || $reflection->getNumberOfRequiredParameters() > 0) {
+                return null;
+            }
+
+            return $class::$method();
+        } catch (Throwable) {
+            return null;
+        }
+    }
+
+    private function callPublic(object $object, string $method): mixed
+    {
+        try {
+            if (! method_exists($object, $method)) {
+                return null;
+            }
+
+            $reflection = new ReflectionMethod($object, $method);
+
+            if (! $reflection->isPublic() || $reflection->getNumberOfRequiredParameters() > 0) {
+                return null;
+            }
+
+            return $object->{$method}();
+        } catch (Throwable) {
+            return null;
+        }
+    }
+
+    private function callAnyVisibility(object $object, string $method): mixed
+    {
+        if (! method_exists($object, $method)) {
+            return null;
+        }
+
+        try {
+            $reflection = new ReflectionMethod($object, $method);
+
+            if ($reflection->getNumberOfRequiredParameters() > 0) {
+                return null;
+            }
+
+            if ($reflection->isPublic()) {
+                return $object->{$method}();
+            }
+
+            $invoker = Closure::bind(fn (): mixed => $this->{$method}(), $object, $object::class);
+
+            return $invoker();
+        } catch (Throwable) {
+            return null;
+        }
+    }
+
+    private function protectedProperty(object $object, string $property): mixed
     {
         try {
             $reflection = new ReflectionClass($object);
 
-            while ($reflection) {
+            while ($reflection !== false) {
                 if ($reflection->hasProperty($property)) {
                     return $reflection->getProperty($property)->getValue($object);
                 }
@@ -1549,80 +1220,27 @@ class ResourceContextScanner
     }
 
     /**
-     * @param  Action[]|ActionGroup[]|Component[]|Column[]|BaseFilter[]  $items
+     * @param  object[]  $objects
      * @return array<string, int>
      */
-    protected function countTypes(array $items): array
+    private function typeCounts(array $objects): array
     {
-        $counts = [];
+        $types = [];
 
-        foreach ($items as $item) {
-            $type = class_basename($item);
-            $counts[$type] = ($counts[$type] ?? 0) + 1;
+        foreach ($objects as $object) {
+            $type = class_basename($object);
+            $types[$type] = ($types[$type] ?? 0) + 1;
         }
 
-        ksort($counts);
+        ksort($types);
 
-        return $counts;
+        return $types;
     }
 
     /**
-     * @param  array<array<string, mixed>, mixed>  $data
-     * @return array<string, mixed>
+     * @return array<string, int|string|null>|null
      */
-    protected function filterNullValues(array $data): array
-    {
-        return array_filter($data, static fn (mixed $value): bool => $value !== null && $value !== []);
-    }
-
-    protected function hasAttribute(string $class, string $attributeClass): bool
-    {
-        if (! class_exists($class)) {
-            return false;
-        }
-
-        $reflection = new ReflectionClass($class);
-
-        return $reflection->getAttributes($attributeClass, ReflectionAttribute::IS_INSTANCEOF) !== [];
-    }
-
-    protected function getAttributeInstance(string $class, string $attributeClass): mixed
-    {
-        if (! class_exists($class)) {
-            return null;
-        }
-
-        $reflection = new ReflectionClass($class);
-        $attributes = $reflection->getAttributes($attributeClass, ReflectionAttribute::IS_INSTANCEOF);
-
-        if ($attributes === []) {
-            return null;
-        }
-
-        return $attributes[0]->newInstance();
-    }
-
-    /**
-     * @return list<string>
-     */
-    protected function getAttributeClassNames(string $class): array
-    {
-        if (! class_exists($class)) {
-            return [];
-        }
-
-        $reflection = new ReflectionClass($class);
-
-        return array_map(
-            static fn (ReflectionAttribute $attribute): string => $attribute->getName(),
-            $reflection->getAttributes(),
-        );
-    }
-
-    /**
-     * @return array<string, mixed>|null
-     */
-    protected function describeClassSource(string $class): ?array
+    private function classSource(string $class): ?array
     {
         if (! class_exists($class)) {
             return null;
@@ -1635,166 +1253,45 @@ class ResourceContextScanner
             return null;
         }
 
+        $base = rtrim(base_path(), DIRECTORY_SEPARATOR).DIRECTORY_SEPARATOR;
+
         return [
-            'file' => $file,
+            'file' => Str::startsWith($file, $base) ? Str::after($file, $base) : $file,
             'start_line' => $reflection->getStartLine(),
             'end_line' => $reflection->getEndLine(),
         ];
     }
 
-    /**
-     * @return array<string, mixed>|null
-     */
-    protected function describeMethodSource(string $class, string $method): ?array
-    {
-        if (! class_exists($class) || ! method_exists($class, $method)) {
-            return null;
-        }
-
-        $reflectionMethod = new ReflectionMethod($class, $method);
-        $file = $reflectionMethod->getFileName();
-
-        if (! is_string($file) || $file === '') {
-            return null;
-        }
-
-        return [
-            'file' => $file,
-            'start_line' => $reflectionMethod->getStartLine(),
-            'end_line' => $reflectionMethod->getEndLine(),
-        ];
-    }
-
-    protected function normalizeValue(mixed $value): mixed
+    private function normalize(mixed $value): mixed
     {
         if ($value instanceof BackedEnum) {
             return $value->value;
         }
 
         if ($value instanceof Htmlable) {
-            return $this->normalizeString($value->toHtml());
-        }
-
-        if (is_array($value)) {
-            return array_map($this->normalizeValue(...), $value);
+            $value = $value->toHtml();
         }
 
         if (is_object($value) && method_exists($value, '__toString')) {
-            return $this->normalizeString((string) $value);
+            $value = (string) $value;
         }
 
         if (is_string($value)) {
-            return $this->normalizeString($value);
+            return (string) Str::of(strip_tags($value))->squish()->limit(160, '...');
         }
 
         return $value;
     }
 
-    protected function normalizeString(string $value): string
-    {
-        return (string) Str::of(strip_tags($value))
-            ->squish()
-            ->limit(240, '...');
-    }
-
-    protected function callPublicMethod(object|string $target, string $method, bool $requireStatic = false): mixed
-    {
-        try {
-            if (is_string($target)) {
-                if (! class_exists($target) || ! method_exists($target, $method)) {
-                    return null;
-                }
-
-                $reflectionMethod = new ReflectionMethod($target, $method);
-
-                if (! $reflectionMethod->isPublic() || $reflectionMethod->getNumberOfRequiredParameters() > 0) {
-                    return null;
-                }
-
-                if ($requireStatic && ! $reflectionMethod->isStatic()) {
-                    return null;
-                }
-
-                return $target::$method();
-            }
-
-            if (! method_exists($target, $method)) {
-                return null;
-            }
-
-            $reflectionMethod = new ReflectionMethod($target, $method);
-
-            if (! $reflectionMethod->isPublic() || $reflectionMethod->getNumberOfRequiredParameters() > 0) {
-                return null;
-            }
-
-            return $target->{$method}();
-        } catch (Throwable) {
-            return null;
-        }
-    }
-
-    protected function callMethodAnyVisibility(object $target, string $method): mixed
-    {
-        if (! method_exists($target, $method)) {
-            return null;
-        }
-
-        try {
-            $reflectionMethod = new ReflectionMethod($target, $method);
-
-            if ($reflectionMethod->getNumberOfRequiredParameters() > 0) {
-                return null;
-            }
-
-            if ($reflectionMethod->isPublic()) {
-                return $target->{$method}();
-            }
-
-            $invoker = Closure::bind(fn (): mixed => $this->{$method}(), $target, $target::class);
-
-            return $invoker();
-        } catch (Throwable) {
-            return null;
-        }
-    }
-
-    protected function makeModel(string $modelClass): ?Model
-    {
-        try {
-            /** @var Model $model */
-            $model = $this->app->make($modelClass);
-
-            return $model;
-        } catch (Throwable) {
-            return null;
-        }
-    }
-
     /**
-     * @return list<class-string>
+     * @param  array<string, mixed>  $values
+     * @return array<string, mixed>
      */
-    protected function discoverAnnotatedClasses(string $attributeClass): array
+    private function withoutEmpty(array $values): array
     {
-        if (! class_exists(Discover::class)) {
-            throw new RuntimeException('spatie/php-structure-discoverer is not installed. Run composer update before using accelerator:resource-context.');
-        }
-
-        $structures = Discover::in(app_path('Filament'))
-            ->classes()
-            ->withoutChains()
-            ->get();
-
-        $classes = [];
-
-        foreach ($structures as $structure) {
-            if (is_string($structure) && class_exists($structure) && $this->hasAttribute($structure, $attributeClass)) {
-                $classes[] = $structure;
-            }
-        }
-
-        sort($classes);
-
-        return array_values(array_unique($classes));
+        return array_filter(
+            $values,
+            static fn (mixed $value): bool => $value !== null && $value !== [],
+        );
     }
 }

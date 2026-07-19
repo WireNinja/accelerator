@@ -7,6 +7,7 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Table;
 use Override;
+use WireNinja\Accelerator\Attributes\DiscoverAsResource;
 use WireNinja\Accelerator\Filament\Resources\Support\TicketBoards\Pages\CreateTicketBoard;
 use WireNinja\Accelerator\Filament\Resources\Support\TicketBoards\Pages\EditTicketBoard;
 use WireNinja\Accelerator\Filament\Resources\Support\TicketBoards\Pages\ListTicketBoards;
@@ -15,7 +16,14 @@ use WireNinja\Accelerator\Filament\Resources\Support\TicketBoards\Tables\TicketB
 use WireNinja\Accelerator\Filament\Traits\AutoBadge;
 use WireNinja\Accelerator\Filament\Traits\BetterResource;
 use WireNinja\Accelerator\Model\TicketBoard;
+use WireNinja\Accelerator\Policies\TicketBoardPolicy;
 
+#[DiscoverAsResource(
+    key: 'ticket_board',
+    form: TicketBoardForm::class,
+    table: TicketBoardsTable::class,
+    policy: TicketBoardPolicy::class,
+)]
 class TicketBoardResource extends Resource
 {
     use AutoBadge;

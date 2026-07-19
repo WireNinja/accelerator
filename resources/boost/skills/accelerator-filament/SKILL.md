@@ -104,6 +104,8 @@ Use `ResourceEnum::getResourcesPermissions()` to declare custom abilities ONLY w
 
 `accelerator:resource-context` payload is the primary summary. It must surface model, pages, relation managers, widgets, actions, and authorization (string ability or default policy hint). Bulk actions appearing in the payload are violations to clean, not capabilities to keep.
 
+The scanner reads the configured `ResourceEnum` as its only registry. It no longer performs a second filesystem discovery pass or reports fake zero-count registries. `--compact` controls JSON whitespace; `--expand` adds component trees, relation forms, tabs, and source locations.
+
 ## Localization (Bahasa Indonesia)
 
 All client-facing text uses professional Bahasa Indonesia.

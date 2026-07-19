@@ -11,6 +11,7 @@ use Filament\Schemas\Schema;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Override;
+use WireNinja\Accelerator\Attributes\DiscoverAsResource;
 use WireNinja\Accelerator\Filament\Resources\Support\Tickets\Pages\CreateTicket;
 use WireNinja\Accelerator\Filament\Resources\Support\Tickets\Pages\EditTicket;
 use WireNinja\Accelerator\Filament\Resources\Support\Tickets\Pages\ListTickets;
@@ -23,11 +24,18 @@ use WireNinja\Accelerator\Filament\Resources\Support\Tickets\Tables\TicketsTable
 use WireNinja\Accelerator\Filament\Traits\AutoBadge;
 use WireNinja\Accelerator\Filament\Traits\BetterResource;
 use WireNinja\Accelerator\Model\Ticket;
+use WireNinja\Accelerator\Policies\TicketPolicy;
 use WireNinja\Accelerator\Support\UserModel;
 
 /**
  * @extends resource<Ticket>
  */
+#[DiscoverAsResource(
+    key: 'ticket',
+    form: TicketForm::class,
+    table: TicketsTable::class,
+    policy: TicketPolicy::class,
+)]
 class TicketResource extends Resource
 {
     use AutoBadge;

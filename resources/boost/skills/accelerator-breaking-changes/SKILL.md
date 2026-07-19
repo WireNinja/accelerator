@@ -53,6 +53,14 @@ Google OAuth is disabled unless its feature and mode are enabled. `existing_only
 
 `system.password_reset_enabled` and `system.email_verification_enabled` are removed. Filament password reset, email verification, and email-change verification routes are registered during panel configuration for every Accelerator panel. They cannot be enabled or disabled from `SystemSettings`, because route registration is complete before Filament runs `bootUsing()`. Existing settings rows are deleted by the v2 settings migration. Public self-registration remains disabled.
 
+### 🔴 BREAKING — Schedule wrappers and dead system widget removed
+
+`BuiltinSystemSchedule` and the unused `SystemInfoWidget` are removed. Define schedules directly with Laravel's `Schedule` facade. Fresh installs always schedule database/file backups and only render ticketing, Horizon, or telemetry schedules when onboarding activates that feature.
+
+### 🔴 BREAKING — Resource context is ResourceEnum-backed
+
+`agent:resource-context` now treats the configured `ResourceEnum` as the authoritative registry and removes the duplicate filesystem discovery layer, arbitrary complexity score, fake empty form/table/page/widget registries, and two synthetic Filament host classes. `--expand` is now real and adds detailed trees/source data. Managed resources need `#[DiscoverAsResource]`; registered external vendor resources are reported explicitly and are exempt from Accelerator-owned metadata checks.
+
 ## v1.1.79
 
 No deployment contract changes beyond v1.1.66.

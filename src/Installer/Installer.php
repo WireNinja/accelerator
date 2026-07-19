@@ -606,6 +606,20 @@ final class Installer
             $providers[] = '    HorizonServiceProvider::class,';
         }
 
+        $optionalSchedules = [];
+
+        if ($this->hasFeature('ticketing')) {
+            $optionalSchedules[] = "Schedule::command('ticket:notify-overdue')->hourly()->withoutOverlapping();";
+        }
+
+        if ($this->hasFeature('horizon')) {
+            $optionalSchedules[] = "Schedule::command('horizon:snapshot')->everyFiveMinutes()->withoutOverlapping();";
+        }
+
+        if ($this->hasFeature('telemetry')) {
+            $optionalSchedules[] = "Schedule::command('telemetry:prune')->dailyAt('04:00')->withoutOverlapping();";
+        }
+
         $primaryRoute = $this->plan->primaryFrontend === 'inertia'
             ? "Route::get('/', static fn () => Inertia::render('Home'))->middleware(['auth', 'verified', 'inertia'])->name('home');"
             : "Route::redirect('/', '/livewire')->name('home');";
@@ -615,6 +629,7 @@ final class Installer
             '{{ primary_route }}' => $primaryRoute,
             '{{ provider_imports }}' => implode(PHP_EOL, $providerImports),
             '{{ providers }}' => implode(PHP_EOL, $providers),
+            '// {{ optional_schedules }}' => implode(PHP_EOL, $optionalSchedules),
             '{{ pwa_enabled }}' => $this->boolean($this->hasFeature('pwa')),
         ]);
     }
