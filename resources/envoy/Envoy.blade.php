@@ -9,8 +9,12 @@
     $truthy = static fn (mixed $value): bool => in_array(strtolower((string) $value), ['1', 'true', 'yes', 'on'], true);
 
     $releaseSha = trim((string) shell_exec('git rev-parse HEAD 2>/dev/null'));
-    if (preg_match('/^[a-f0-9]{40}$/', $releaseSha) !== 1) {
+    $requiresRelease = in_array($requestedTask, ['init', 'deploy', 'deploy-fresh-seed'], true);
+    if ($requiresRelease && preg_match('/^[a-f0-9]{40}$/', $releaseSha) !== 1) {
         throw new RuntimeException('Deployment requires a Git commit at the project root.');
+    }
+    if (preg_match('/^[a-f0-9]{40}$/', $releaseSha) !== 1) {
+        $releaseSha = str_repeat('0', 40);
     }
 
     $releaseShortSha = substr($releaseSha, 0, 8);
@@ -24,6 +28,7 @@
     $nextSymlink = $config->deployRoot.'/current.next';
     $rollbackSymlink = $config->deployRoot.'/current.rollback';
     $maintenanceOwner = $config->sharedPath().'/.accelerator-maintenance-owner';
+    $deployLock = $config->sharedPath().'/.accelerator-deploy-lock';
     $allowDestructiveMigrations = $truthy($allowDestructiveMigrations ?? false);
     $freshSeedConfirmationPhrase = 'aku mengkonfirmasi remigrate fresh seed';
     $freshSeedConfirmation = (string) ($iUnderstandThisWillDropAndReseedDatabase ?? '');
@@ -67,6 +72,7 @@
     remote-preflight
     dns-preflight
     prepare-layout
+    acquire-deploy-lock
     upload-env
     stage-env
     install-infrastructure
@@ -82,12 +88,14 @@
     ensure-ssl
     https-check
     prune-releases
+    release-deploy-lock
 @endstory
 
 @story('deploy')
     local-preflight
     remote-preflight
     infrastructure-drift
+    acquire-deploy-lock
     prepare-layout
     upload-env
     stage-env
@@ -105,12 +113,14 @@
     health-check
     maintenance-off
     prune-releases
+    release-deploy-lock
 @endstory
 
 @story('deploy-fresh-seed')
     local-preflight
     remote-preflight
     infrastructure-drift
+    acquire-deploy-lock
     prepare-layout
     upload-env
     stage-env
@@ -128,6 +138,7 @@
     health-check
     maintenance-off
     prune-releases
+    release-deploy-lock
 @endstory
 
 @story('preflight')
@@ -139,30 +150,43 @@
 @story('bootstrap')
     remote-preflight
     dns-preflight
+    acquire-deploy-lock
     prepare-layout
     install-infrastructure
     activate-runtime
     health-check
+    release-deploy-lock
 @endstory
 
 @story('ssl')
     remote-preflight
     dns-preflight
+    acquire-deploy-lock
     ensure-ssl
     https-check
+    release-deploy-lock
 @endstory
 
 @story('restart')
     remote-preflight
+    acquire-deploy-lock
     activate-runtime
     health-check
+    release-deploy-lock
 @endstory
 
 @story('rollback')
+    confirm-rollback
+    acquire-deploy-lock
     rollback-release
     activate-runtime
     health-check
     clear-deploy-maintenance
+    release-deploy-lock
+@endstory
+
+@story('unlock')
+    unlock-deploy
 @endstory
 
 @story('status')
@@ -190,6 +214,10 @@
     cd {{ escapeshellarg($projectRoot) }}
 
     runtime_env={{ $runtimeEnvironmentFile }}
+    git rev-parse --is-inside-work-tree >/dev/null 2>&1 || {
+        echo "[preflight] Deployment requires an initialized Git repository."
+        exit 1
+    }
     test -s "$runtime_env" || { echo "[preflight] Missing runtime seed: $runtime_env"; exit 1; }
     test -s composer.lock || { echo "[preflight] composer.lock is required."; exit 1; }
     test -s bun.lock || { echo "[preflight] bun.lock is required."; exit 1; }
@@ -372,6 +400,63 @@
     sudo setfacl -R -m u:"$deploy_user":rwx -m u:{{ $config->runUser }}:rwx {{ $config->sharedPath() }}/storage {{ $config->sharedPath() }}/database
     sudo setfacl -dR -m u:"$deploy_user":rwx -m u:{{ $config->runUser }}:rwx {{ $config->sharedPath() }}/storage {{ $config->sharedPath() }}/database
     echo "[layout] release layout ready at {{ $config->deployRoot }}."
+@endtask
+
+@task('acquire-deploy-lock', ['on' => 'vps'])
+    set -Eeuo pipefail
+    lock={{ $deployLock }}
+    owner="$lock/owner"
+
+    if mkdir "$lock" 2>/dev/null; then
+        printf '%s\n' {{ escapeshellarg($releaseId) }} > "$owner"
+        printf '%s\n' {{ escapeshellarg($requestedTask) }} > "$lock/task"
+        date -u +%Y-%m-%dT%H:%M:%SZ > "$lock/started_at"
+        echo "[lock] acquired for {{ $requestedTask }} release {{ $releaseId }}."
+        exit 0
+    fi
+
+    if [ -f "$owner" ] && [ "$(cat "$owner")" = {{ escapeshellarg($releaseId) }} ]; then
+        echo "[lock] resuming the same release {{ $releaseId }}."
+        exit 0
+    fi
+
+    echo "[lock] another or failed deployment owns {{ $deployLock }}."
+    if [ -f "$lock/task" ]; then echo "[lock] task=$(cat "$lock/task")"; fi
+    if [ -f "$lock/started_at" ]; then echo "[lock] started_at=$(cat "$lock/started_at")"; fi
+    echo "[lock] Confirm no deployment is running, then use: vendor/bin/envoy run unlock --stage={{ $config->stage }}"
+    exit 1
+@endtask
+
+@task('release-deploy-lock', ['on' => 'vps'])
+    set -Eeuo pipefail
+    lock={{ $deployLock }}
+    owner="$lock/owner"
+
+    [ -d "$lock" ] || { echo "[lock] no deployment lock exists."; exit 0; }
+    [ -f "$owner" ] && [ "$(cat "$owner")" = {{ escapeshellarg($releaseId) }} ] || {
+        echo "[lock] refusing to release a lock owned by another deployment."
+        exit 1
+    }
+
+    rm -f "$owner" "$lock/task" "$lock/started_at"
+    rmdir "$lock"
+    echo "[lock] released."
+@endtask
+
+@task('unlock-deploy', ['on' => 'vps', 'confirm' => true])
+    set -Eeuo pipefail
+    lock={{ $deployLock }}
+
+    [ -d "$lock" ] || { echo "[lock] no deployment lock exists."; exit 0; }
+    if [ -f "$lock/task" ]; then echo "[lock] removing task=$(cat "$lock/task")"; fi
+    if [ -f "$lock/started_at" ]; then echo "[lock] started_at=$(cat "$lock/started_at")"; fi
+    rm -f "$lock/owner" "$lock/task" "$lock/started_at"
+    rmdir "$lock"
+    echo "[lock] removed. Maintenance state was not changed."
+@endtask
+
+@task('confirm-rollback', ['on' => 'localhost', 'confirm' => true])
+    echo "[rollback] operator confirmation received for stage {{ $config->stage }}."
 @endtask
 
 @task('upload-env', ['on' => 'localhost'])
@@ -825,6 +910,11 @@
         code=$?
         trap - ERR EXIT
         cleanup_ssl
+        lock={{ $deployLock }}
+        if [ -f "$lock/owner" ] && [ "$(cat "$lock/owner")" = {{ escapeshellarg($releaseId) }} ]; then
+            rm -f "$lock/owner" "$lock/task" "$lock/started_at"
+            rmdir "$lock"
+        fi
         if [ "$code" -ne 0 ]; then
             echo "[ssl] PARTIAL_READY: the application is healthy over HTTP, but HTTPS setup failed."
             echo "[ssl] Resume with: vendor/bin/envoy run ssl --stage={{ $config->stage }}"
@@ -876,6 +966,11 @@
     public_status="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 12 https://{{ $config->domain }}/up || true)"
     [ "$local_status" = "200" ] && [ "$public_status" = "200" ] || {
         echo "[ssl] HTTPS verification failed (local=$local_status public=$public_status)."
+        lock={{ $deployLock }}
+        if [ -f "$lock/owner" ] && [ "$(cat "$lock/owner")" = {{ escapeshellarg($releaseId) }} ]; then
+            rm -f "$lock/owner" "$lock/task" "$lock/started_at"
+            rmdir "$lock"
+        fi
         exit 1
     }
     echo "[ssl] local and public HTTPS health checks returned 200."
@@ -928,7 +1023,7 @@
     echo "[prune] kept=$kept pruned=$pruned; archive evidence was not touched."
 @endtask
 
-@task('rollback-release', ['on' => 'vps', 'confirm' => true])
+@task('rollback-release', ['on' => 'vps'])
     set -Eeuo pipefail
     current="$(readlink -f {{ $config->currentPath() }} 2>/dev/null || true)"
     target=""
@@ -970,6 +1065,9 @@
     echo "runtime_env=$(test -s {{ $config->sharedPath() }}/.env && echo present || echo missing)"
     echo "maintenance=$(test -f {{ $config->sharedPath() }}/storage/framework/down && echo active || echo inactive)"
     echo "maintenance_owner=$(test -f {{ $maintenanceOwner }} && echo envoy || echo none)"
+    echo "deploy_lock=$(test -d {{ $deployLock }} && echo active || echo inactive)"
+    if [ -f {{ $deployLock }}/task ]; then echo "deploy_lock_task=$(cat {{ $deployLock }}/task)"; fi
+    if [ -f {{ $deployLock }}/started_at ]; then echo "deploy_lock_started_at=$(cat {{ $deployLock }}/started_at)"; fi
     echo "certificate=$(sudo test -s /etc/letsencrypt/live/{{ $config->domain }}/fullchain.pem && echo present || echo missing)"
     sudo nginx -t
     @if($hasSupervisorPrograms)

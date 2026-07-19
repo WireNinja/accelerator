@@ -102,7 +102,7 @@ final readonly class DeploymentConfig
         $octaneServer = self::value($values, "OPS_DEPLOY_{$stageKey}_OCTANE_SERVER", 'swoole');
         $octanePort = self::integer($values, "OPS_DEPLOY_{$stageKey}_OCTANE_PORT", 1, 65535);
         $octaneWorkers = self::integer($values, "OPS_DEPLOY_{$stageKey}_OCTANE_WORKERS", 1, 512);
-        $octaneTaskWorkers = self::integer($values, "OPS_DEPLOY_{$stageKey}_OCTANE_TASK_WORKERS", 0, 512);
+        $octaneTaskWorkers = self::integer($values, "OPS_DEPLOY_{$stageKey}_OCTANE_TASK_WORKERS", 1, 512);
         $horizonEnabled = self::boolean($values, "OPS_DEPLOY_{$stageKey}_HORIZON_ENABLED");
         $queueWorkerEnabled = self::boolean($values, "OPS_DEPLOY_{$stageKey}_QUEUE_WORKER_ENABLED");
         $queueWorkerConnection = self::value($values, "OPS_DEPLOY_{$stageKey}_QUEUE_WORKER_CONNECTION", 'database');
@@ -459,7 +459,7 @@ final readonly class DeploymentConfig
 
     private static function validateSshHost(string $value): void
     {
-        if (preg_match('/^[A-Za-z0-9_.@:-]+$/', $value) !== 1 || str_starts_with($value, '-')) {
+        if (preg_match('/^[A-Za-z0-9_.@-]+$/', $value) !== 1 || str_starts_with($value, '-')) {
             throw new InvalidArgumentException("Invalid SSH host [{$value}].");
         }
     }

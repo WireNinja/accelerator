@@ -41,6 +41,7 @@ vendor/bin/envoy run deploy-fresh-seed --stage=staging \
 
 # Recovery and operations
 vendor/bin/envoy run rollback --stage=staging
+vendor/bin/envoy run unlock --stage=staging
 vendor/bin/envoy run restart --stage=staging --service=all
 vendor/bin/envoy run status --stage=staging
 vendor/bin/envoy run releases --stage=staging
@@ -138,6 +139,8 @@ Risky window:
 Finally, prune old releases while preserving current, retained rollback releases, referenced env files, and the entire archive.
 
 If build, migration, runtime, or health fails, Envoy exits non-zero. A post-maintenance failure deliberately leaves the app in maintenance for operator triage.
+
+Mutating stories acquire `{root}/shared/.accelerator-deploy-lock`. A failed deploy keeps that lock so a second deploy cannot race the failed state. After confirming no Envoy process is active, run `envoy unlock`; it removes only the deploy lock and never clears maintenance. Then repair or roll back.
 
 ## Infrastructure Ownership And Drift
 

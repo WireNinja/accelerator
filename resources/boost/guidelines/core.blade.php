@@ -45,6 +45,7 @@ Accelerator is an intentionally batteries-included foundation for internal Larav
 - Never enable Horizon and the plain queue worker together. Swoole always has at least one request worker; task workers are explicit and may be `0` when the application does not use task dispatch.
 - FPM is not globally reloaded; immutable release realpaths avoid stale OPcache keys and cross-project restarts. Supervisor-managed stage processes are restarted by scoped group.
 - Build and migration failures before maintenance do not interrupt traffic. Failures after maintenance leave it active for rollback/repair.
+- Mutating stories use a persistent per-root deploy lock. After a failed run, confirm no deploy is active and use `envoy unlock`; unlocking never clears maintenance.
 - `deploy-fresh-seed` is destructive, backup-first, and requires its exact confirmation phrase.
 - Rollback switches code plus its matching env; database rollback remains manual.
 
