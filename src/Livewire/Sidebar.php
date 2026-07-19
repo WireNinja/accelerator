@@ -2,7 +2,7 @@
 
 namespace WireNinja\Accelerator\Livewire;
 
-use App\Enums\System\PanelEnum;
+use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Actions\Concerns\InteractsWithActions;
 use Filament\Actions\Contracts\HasActions;
@@ -27,7 +27,7 @@ class Sidebar extends Component implements HasActions, HasSchemas
     public function refresh(): void {}
 
     /**
-     * @return array<PanelEnum>
+     * @return array<BackedEnum>
      */
     public function getPanels(): array
     {
@@ -35,8 +35,16 @@ class Sidebar extends Component implements HasActions, HasSchemas
         if (! is_string($panelEnum) || ! enum_exists($panelEnum)) {
             return [];
         }
-        /** @var array<PanelEnum> $cases */
-        $cases = $panelEnum::cases();
+
+        $registeredPanelIds = array_keys(Filament::getPanels());
+
+        $cases = [];
+
+        foreach ($panelEnum::cases() as $panel) {
+            if ($panel instanceof BackedEnum && in_array($panel->value, $registeredPanelIds, true)) {
+                $cases[] = $panel;
+            }
+        }
 
         return $cases;
     }

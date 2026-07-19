@@ -7,8 +7,8 @@ namespace WireNinja\Accelerator\Providers\Filament;
 use BezhanSalleh\FilamentShield\FilamentShieldPlugin;
 use Filament\Panel;
 use Filament\PanelProvider;
+use WireNinja\Accelerator\Filament\Pages\ManageSystemSettings;
 use WireNinja\Accelerator\Filament\PanelPreset;
-use WireNinja\Accelerator\Filament\Plugins\BuiltinSettingPlugin;
 
 class SystemPanelProvider extends PanelProvider
 {
@@ -21,7 +21,7 @@ class SystemPanelProvider extends PanelProvider
             );
 
         if (config('accelerator.features.settings')) {
-            $panel->plugin(BuiltinSettingPlugin::make());
+            $panel->pages([ManageSystemSettings::class]);
         }
 
         return $panel;

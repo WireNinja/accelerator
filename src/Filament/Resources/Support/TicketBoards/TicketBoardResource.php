@@ -13,7 +13,6 @@ use WireNinja\Accelerator\Filament\Resources\Support\TicketBoards\Pages\EditTick
 use WireNinja\Accelerator\Filament\Resources\Support\TicketBoards\Pages\ListTicketBoards;
 use WireNinja\Accelerator\Filament\Resources\Support\TicketBoards\Schemas\TicketBoardForm;
 use WireNinja\Accelerator\Filament\Resources\Support\TicketBoards\Tables\TicketBoardsTable;
-use WireNinja\Accelerator\Filament\Traits\AutoBadge;
 use WireNinja\Accelerator\Filament\Traits\BetterResource;
 use WireNinja\Accelerator\Model\TicketBoard;
 use WireNinja\Accelerator\Policies\TicketBoardPolicy;
@@ -26,7 +25,6 @@ use WireNinja\Accelerator\Policies\TicketBoardPolicy;
 )]
 class TicketBoardResource extends Resource
 {
-    use AutoBadge;
     use BetterResource;
 
     protected static ?string $model = TicketBoard::class;

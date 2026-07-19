@@ -36,7 +36,7 @@ return [
         'role' => RoleEnum::class,
         'resource' => ResourceEnum::class,
         'panel' => PanelEnum::class,
-        'launcher' => LauncherEnum::class,
+        'launcher' => enum_exists(LauncherEnum::class) ? LauncherEnum::class : null,
     ],
 
     'horizon' => [

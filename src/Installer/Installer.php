@@ -54,7 +54,6 @@ final class Installer
      * @var array<string, string>
      */
     private const RECIPE_FILES = [
-        'stubs/app/Enums/System/LauncherEnum.php' => 'app/Enums/System/LauncherEnum.php',
         'stubs/app/Enums/System/PanelEnum.php' => 'app/Enums/System/PanelEnum.php',
         'stubs/app/Enums/System/ResourceEnum.php' => 'app/Enums/System/ResourceEnum.php',
         'stubs/app/Enums/System/RoleEnum.php' => 'app/Enums/System/RoleEnum.php',

@@ -71,6 +71,16 @@ Google OAuth is disabled unless its feature and mode are enabled. `existing_only
 
 `Support\Cast::asBool()` is also removed after its final internal consumer disappeared. Keep `asString()`, `strictString()`, and `asInt()` only at genuinely mixed input boundaries.
 
+### 🔴 BREAKING — Ceremonial Filament plugins, count badges, and launcher panel removed
+
+`BuiltinSettingPlugin` and `BuiltinTicketingPlugin` are removed. Accelerator now registers their pages/resources directly in the owning System and Support panel providers, while ticket policies are registered by `TicketingServiceProvider`.
+
+`AutoBadge` is removed. It performed hidden cached full-model counts for Ticket and Ticket Board navigation without representing actionable state. Define an application-specific navigation badge explicitly when a meaningful scoped count exists.
+
+`AppLauncherWidget` is removed. External application launchers already render in the shared sidebar, so a second panel showing the same links was redundant. Remove application `AppPanelProvider` classes and their `PanelEnum::App` cases.
+
+Fresh installs no longer create `LauncherEnum`. It is optional, application-owned, and discovered when the class exists. Fresh `PanelEnum` contains only Admin, Support, and System; add application domain panels explicitly. The sidebar filters enum cases against Filament's registered panels, preventing inactive cases from producing dead links.
+
 ## v1.1.79
 
 No deployment contract changes beyond v1.1.66.

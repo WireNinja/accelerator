@@ -122,7 +122,6 @@ final class DoctorCommand extends Command
     private function inspectRecipe(): void
     {
         $requiredFiles = [
-            'app/Enums/System/LauncherEnum.php',
             'app/Enums/System/PanelEnum.php',
             'app/Enums/System/ResourceEnum.php',
             'app/Enums/System/RoleEnum.php',

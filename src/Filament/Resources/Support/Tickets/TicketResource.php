@@ -21,7 +21,6 @@ use WireNinja\Accelerator\Filament\Resources\Support\Tickets\RelationManagers\Ti
 use WireNinja\Accelerator\Filament\Resources\Support\Tickets\RelationManagers\TicketRelationsRelationManager;
 use WireNinja\Accelerator\Filament\Resources\Support\Tickets\Schemas\TicketForm;
 use WireNinja\Accelerator\Filament\Resources\Support\Tickets\Tables\TicketsTable;
-use WireNinja\Accelerator\Filament\Traits\AutoBadge;
 use WireNinja\Accelerator\Filament\Traits\BetterResource;
 use WireNinja\Accelerator\Model\Ticket;
 use WireNinja\Accelerator\Policies\TicketPolicy;
@@ -38,7 +37,6 @@ use WireNinja\Accelerator\Support\UserModel;
 )]
 class TicketResource extends Resource
 {
-    use AutoBadge;
     use BetterResource;
 
     protected static ?string $model = Ticket::class;

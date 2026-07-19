@@ -45,7 +45,7 @@ return [
         'role' => RoleEnum::class,
         'resource' => ResourceEnum::class,
         'panel' => PanelEnum::class,
-        'launcher' => LauncherEnum::class,
+        'launcher' => enum_exists(LauncherEnum::class) ? LauncherEnum::class : null,
     ],
 
     'horizon' => [
@@ -59,6 +59,8 @@ return [
     ],
 ];
 ```
+
+`LauncherEnum` is an application-owned optional extension point. Fresh installs do not create a fake launcher or a project-specific external URL. When an application adds `App\Enums\System\LauncherEnum`, Accelerator discovers it through the conditional config default and renders its cases in the shared sidebar. Panel links are also filtered against Filament's registered panel IDs, so an enum case never creates a navigation link to an inactive panel.
 
 Runtime detection is intentionally not env-driven. Accelerator is opinionated for Octane Swoole when running under Octane, and uses the current PHP process marker instead:
 
