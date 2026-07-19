@@ -56,7 +56,7 @@ The recipe executes these journaled steps:
 3. `composer` — configure autoload/scripts and install Boost, Envoy, Larastan, Rector, and PHPStan rules.
 4. `frontend` — install the generated frontend with Bun.
 5. `application` — autoload, translations, `migrate:fresh --seed`, storage link, Shield, optional PWA icons, and production build.
-6. `quality` — configure Boost for `wireninja/accelerator`, install all package skills, run Pint, and run doctor.
+6. `quality` — configure Boost for `wireninja/accelerator`, install all package skills, run Pint, PHPStan, ESLint, Prettier, Vue type checking, and doctor.
 
 Any failed required process returns non-zero. State lives in ignored `.accelerator/install-state.json`; rerunning the same command resumes after the last completed step. Once finished, rerun exits successfully without touching files or the database.
 

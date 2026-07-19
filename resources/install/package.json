@@ -5,8 +5,8 @@
     "scripts": {
         "build": "vite build",
         "dev": "vite",
-        "format": "prettier --write resources/ vite.config.js",
-        "format:check": "prettier --check resources/ vite.config.js",
+        "format": "prettier --write resources/ vite.config.js eslint.config.js",
+        "format:check": "prettier --check resources/ vite.config.js eslint.config.js",
         "lint": "eslint . --fix",
         "lint:check": "eslint .",
         "types:check": "vue-tsc --noEmit"
@@ -23,7 +23,6 @@
         "vue": "^3.5.40"
     },
     "devDependencies": {
-        "@eslint/js": "^9.39.4",
         "@laravel/vite-plugin-wayfinder": "^0.1.7",
         "@tailwindcss/vite": "^4.3.3",
         "@types/node": "^26.0.0",

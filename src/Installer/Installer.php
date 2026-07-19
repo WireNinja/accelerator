@@ -82,6 +82,9 @@ final class Installer
         'resources/install/views/layouts/app.blade.php' => 'resources/views/layouts/app.blade.php',
         'resources/install/views/pages/home.blade.php' => 'resources/views/pages/home.blade.php',
         'resources/install/package.json' => 'package.json',
+        'resources/install/eslint.config.js' => 'eslint.config.js',
+        'resources/install/.prettierignore' => '.prettierignore',
+        'resources/install/.prettierrc' => '.prettierrc',
         'resources/install/tsconfig.json' => 'tsconfig.json',
         'resources/install/vite.config.js' => 'vite.config.js',
     ];
@@ -418,6 +421,10 @@ final class Installer
         ], $this->projectRoot);
         $this->assertAcceleratorBoostResources();
         $this->processRunner->run(['vendor/bin/pint', '--format=agent'], $this->projectRoot);
+        $this->processRunner->run(['composer', 'analyse'], $this->projectRoot);
+        $this->processRunner->run(['bun', 'run', 'lint:check'], $this->projectRoot);
+        $this->processRunner->run(['bun', 'run', 'format:check'], $this->projectRoot);
+        $this->processRunner->run(['bun', 'run', 'types:check'], $this->projectRoot);
         $this->processRunner->run(['php', 'artisan', 'accelerator:doctor'], $this->projectRoot);
     }
 

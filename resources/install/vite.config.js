@@ -68,7 +68,13 @@ export default defineConfig(({ mode }) => {
         server: {
             cors: true,
             watch: {
-                ignored: ['**/storage/**', '**/node_modules/**', '**/public/build/**', '**/.git/**', '**/*.log'],
+                ignored: [
+                    '**/storage/**',
+                    '**/node_modules/**',
+                    '**/public/build/**',
+                    '**/.git/**',
+                    '**/*.log',
+                ],
             },
         },
     };
