@@ -501,6 +501,7 @@ final class Installer
         $contents = $this->setEnvironmentValue($contents, 'APP_ENV', 'production');
         $contents = $this->setEnvironmentValue($contents, 'APP_DEBUG', 'false');
         $contents = $this->setEnvironmentValue($contents, 'APP_URL', "https://{$this->plan->domain}");
+        $contents = $this->setEnvironmentValue($contents, 'LOG_LEVEL', 'error');
 
         if ($environment === 'staging') {
             $contents = $this->setEnvironmentValue($contents, 'APP_URL', "https://staging.{$this->plan->domain}");
