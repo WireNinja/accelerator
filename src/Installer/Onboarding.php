@@ -63,10 +63,8 @@ final class Onboarding
      */
     public function plan(array $arguments): InstallPlan
     {
-        if ($unfinishedPlan = $this->unfinishedPlan()) {
-            note('Resuming the unfinished Accelerator installation.');
-
-            return $unfinishedPlan;
+        if ($savedPlan = $this->savedPlan()) {
+            return $savedPlan;
         }
 
         $options = $this->parseArguments($arguments);
@@ -174,7 +172,7 @@ final class Onboarding
     /**
      * @throws JsonException
      */
-    private function unfinishedPlan(): ?InstallPlan
+    private function savedPlan(): ?InstallPlan
     {
         $path = $this->projectRoot.'/.accelerator/install-state.json';
 
@@ -187,6 +185,10 @@ final class Onboarding
 
         if (! is_array($state) || ! is_array($state['plan'] ?? null)) {
             throw new RuntimeException('The existing Accelerator install journal is invalid.');
+        }
+
+        if (($state['finished'] ?? false) !== true) {
+            note('Resuming the unfinished Accelerator installation.');
         }
 
         return InstallPlan::fromArray($state['plan']);

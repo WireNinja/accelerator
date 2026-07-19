@@ -131,6 +131,8 @@ final class DoctorCommand extends Command
             'bootstrap/app.php',
             'bootstrap/providers.php',
             'public/favicon.svg',
+            'phpstan.neon',
+            'rector.php',
             'resources/css/app.css',
             'resources/css/filament/theme.css',
             'resources/js/app.ts',

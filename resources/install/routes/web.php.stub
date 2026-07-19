@@ -8,8 +8,10 @@ use Inertia\Inertia;
 {{ primary_route }}
 
 Route::get('/inertia', static fn () => Inertia::render('Home'))
-    ->middleware('inertia')
+    ->middleware(['auth', 'verified', 'inertia'])
     ->name('inertia.home');
 
-Route::livewire('/livewire', 'pages::home')->name('livewire.home');
+Route::livewire('/livewire', 'pages::home')
+    ->middleware(['auth', 'verified'])
+    ->name('livewire.home');
 Route::redirect('/login', '/admin/login')->name('login');

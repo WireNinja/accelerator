@@ -14,6 +14,8 @@ final class InstallJournal
 
     private string $fingerprint;
 
+    private bool $finished = false;
+
     private readonly string $path;
 
     /**
@@ -28,9 +30,19 @@ final class InstallJournal
         $this->load();
     }
 
+    public function start(): void
+    {
+        $this->persist();
+    }
+
     public function isCompleted(string $step): bool
     {
         return in_array($step, $this->completedSteps, true);
+    }
+
+    public function isFinished(): bool
+    {
+        return $this->finished;
     }
 
     /**
@@ -47,9 +59,8 @@ final class InstallJournal
 
     public function finish(): void
     {
-        if (is_file($this->path) && ! unlink($this->path)) {
-            throw new RuntimeException('Unable to remove completed installation journal.');
-        }
+        $this->finished = true;
+        $this->persist();
     }
 
     /**
@@ -58,8 +69,6 @@ final class InstallJournal
     private function load(): void
     {
         if (! is_file($this->path)) {
-            $this->persist();
-
             return;
         }
 
@@ -74,6 +83,7 @@ final class InstallJournal
         $this->completedSteps = is_array($steps)
             ? array_values(array_filter($steps, is_string(...)))
             : [];
+        $this->finished = ($state['finished'] ?? false) === true;
     }
 
     /**
@@ -91,6 +101,7 @@ final class InstallJournal
             'fingerprint' => $this->fingerprint,
             'plan' => $this->plan->toArray(),
             'completed_steps' => $this->completedSteps,
+            'finished' => $this->finished,
         ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR).PHP_EOL;
 
         $temporaryPath = $this->path.'.tmp';

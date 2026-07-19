@@ -64,6 +64,8 @@ final class Installer
         'stubs/bootstrap/app.php' => 'bootstrap/app.php',
         'stubs/bootstrap/providers.php.stub' => 'bootstrap/providers.php',
         'stubs/public/favicon.svg' => 'public/favicon.svg',
+        'stubs/phpstan.neon' => 'phpstan.neon',
+        'stubs/rector.php' => 'rector.php',
         'stubs/routes/console.php' => 'routes/console.php',
         'resources/install/routes/channels.php' => 'routes/channels.php',
         'resources/install/routes/web.php.stub' => 'routes/web.php',
@@ -92,8 +94,18 @@ final class Installer
      */
     public function run(): void
     {
-        $this->preflight();
+        $this->preflightRuntime();
         $journal = new InstallJournal($this->projectRoot, $this->plan);
+
+        if ($journal->isFinished()) {
+            outro('Accelerator v2 is already installed with this configuration. Nothing changed.');
+
+            return;
+        }
+
+        $this->validateRecipeTargets();
+        $this->validateEnvironmentTargets();
+        $journal->start();
 
         $this->step($journal, 'scaffold', function (): void {
             $this->installRecipe();
@@ -129,7 +141,7 @@ final class Installer
         outro('Accelerator v2 installed. Run php artisan accelerator:doctor at any time to verify it.');
     }
 
-    private function preflight(): void
+    private function preflightRuntime(): void
     {
         foreach (['artisan', 'composer.json', 'vendor/autoload.php'] as $requiredFile) {
             if (! is_file($this->projectRoot.'/'.$requiredFile)) {
@@ -147,8 +159,6 @@ final class Installer
             }
         }
 
-        $this->validateRecipeTargets();
-        $this->validateEnvironmentTargets();
     }
 
     private function installRecipe(): void
@@ -303,10 +313,8 @@ final class Installer
             'Composer\\Config::disableProcessTimeout',
             'bunx concurrently -c "#93c5fd,#c4b5fd,#fb7185,#fdba74" "php artisan serve" "php artisan queue:listen --tries=1 --timeout=0" "php artisan pail --timeout=0" "bun run dev" --names=server,queue,logs,vite --kill-others',
         ];
-        $composer['scripts']['format'] = [
-            'rector --output-format=json',
-            'pint --format=json',
-        ];
+        $composer['scripts']['format'] = 'pint --format=json';
+        $composer['scripts']['refactor'] = 'rector --output-format=json';
         $composer['scripts']['analyse'] = 'phpstan analyse --memory-limit=2G --no-progress';
         $composer['config']['sort-packages'] = true;
         unset($composer['config']['allow-plugins']['wireninja/accelerator']);
@@ -599,7 +607,7 @@ final class Installer
         }
 
         $primaryRoute = $this->plan->primaryFrontend === 'inertia'
-            ? "Route::get('/', static fn () => Inertia::render('Home'))->middleware('inertia')->name('home');"
+            ? "Route::get('/', static fn () => Inertia::render('Home'))->middleware(['auth', 'verified', 'inertia'])->name('home');"
             : "Route::redirect('/', '/livewire')->name('home');";
 
         return strtr($contents, [
