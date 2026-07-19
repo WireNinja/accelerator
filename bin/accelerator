@@ -43,6 +43,15 @@ HELP;
     exit(0);
 }
 
+$journalPath = $projectRoot.'/.accelerator/install-state.json';
+$environment = @file_get_contents($projectRoot.'/.env');
+
+if (! is_file($journalPath) && is_string($environment) && str_contains($environment, 'ACCELERATOR_FEATURE_FILAMENT=')) {
+    Laravel\Prompts\outro('Accelerator v2 is already installed. Run php artisan accelerator:doctor to verify it.');
+
+    exit(0);
+}
+
 try {
     $processRunner = new ProcessRunner;
     $plan = (new Onboarding($projectRoot, $processRunner))->plan(array_slice($argv, 1));

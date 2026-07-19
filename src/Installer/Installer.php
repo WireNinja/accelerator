@@ -118,7 +118,14 @@ final class Installer
         });
 
         $journal->finish();
-        outro('Accelerator v2 installed. Run vendor/bin/envoy run init --stage=staging when the server is ready.');
+
+        if ($this->plan->deploy) {
+            outro('Accelerator v2 installed. Run vendor/bin/envoy run init --stage=test when the server is ready.');
+
+            return;
+        }
+
+        outro('Accelerator v2 installed. Run php artisan accelerator:doctor at any time to verify it.');
     }
 
     private function preflight(): void
