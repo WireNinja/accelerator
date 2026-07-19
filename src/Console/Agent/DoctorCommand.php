@@ -14,6 +14,7 @@ use Illuminate\Routing\Route;
 use Illuminate\Support\Facades\Schema;
 use JsonException;
 use Laravel\Fortify\FortifyServiceProvider;
+use Livewire\LivewireManager;
 use Spatie\Permission\Models\Role;
 use Symfony\Component\Process\ExecutableFinder;
 use Throwable;
@@ -165,6 +166,56 @@ final class DoctorCommand extends Command
             passed: $missingFiles === [],
             message: 'Required application files are missing: '.implode(', ', $missingFiles),
         );
+
+        if (is_file(base_path('.accelerator/install-state.json'))) {
+            $freshFiles = [
+                '.prettierignore',
+                '.prettierrc',
+                'eslint.config.js',
+                'package.json',
+                'resources/views/pages/home.blade.php',
+            ];
+            $missingFreshFiles = array_values(array_filter(
+                $freshFiles,
+                fn (string $path): bool => ! is_file(base_path($path)),
+            ));
+            $this->assert(
+                category: 'Install recipe',
+                label: 'Fresh frontend files',
+                value: $missingFreshFiles === [] ? count($freshFiles).' present' : implode(', ', $missingFreshFiles),
+                passed: $missingFreshFiles === [],
+                message: 'Fresh frontend files are missing: '.implode(', ', $missingFreshFiles),
+            );
+
+            $routeNames = collect(app('router')->getRoutes()->getRoutes())
+                ->map(static fn (Route $route): ?string => $route->getName())
+                ->filter(is_string(...));
+            $missingStarterRoutes = array_values(array_diff(
+                ['home', 'inertia.home', 'livewire.home'],
+                $routeNames->all(),
+            ));
+            $this->assert(
+                category: 'Install recipe',
+                label: 'Starter routes',
+                value: $missingStarterRoutes === [] ? 'Inertia + Livewire' : implode(', ', $missingStarterRoutes),
+                passed: $missingStarterRoutes === [],
+                message: 'Fresh starter routes are missing: '.implode(', ', $missingStarterRoutes),
+            );
+
+            try {
+                app(LivewireManager::class)->new('pages::home');
+                $livewirePageResolved = true;
+            } catch (Throwable) {
+                $livewirePageResolved = false;
+            }
+            $this->assert(
+                category: 'Install recipe',
+                label: 'Livewire starter page',
+                value: $livewirePageResolved ? 'pages::home resolved' : 'unresolved',
+                passed: $livewirePageResolved,
+                message: 'The fresh Livewire page component pages::home cannot be resolved.',
+            );
+        }
 
         $configuredUserClass = config('auth.providers.users.model');
         $userClass = is_string($configuredUserClass) ? $configuredUserClass : '[not configured]';

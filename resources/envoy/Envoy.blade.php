@@ -303,7 +303,7 @@
     set -Eeuo pipefail
     sudo -n true >/dev/null || { echo "[preflight] Passwordless sudo is required for scoped Nginx/Supervisor operations."; exit 1; }
 
-    for command in git composer {{ $config->phpBinary }} {{ $config->bunBinary }} curl base64 sha256sum setfacl nginx; do
+    for command in git composer {{ $config->phpBinary }} {{ $config->bunBinary }} curl base64 sha256sum setfacl nginx openssl; do
         command -v "$command" >/dev/null || { echo "[preflight] Missing VPS command: $command"; exit 1; }
     done
     @if($hasSupervisorPrograms)
@@ -498,7 +498,7 @@
     nginx_backup=""
     trap 'rm -f "$nginx_candidate" /tmp/{{ $config->group }}-supervisor-$$.conf' EXIT
 
-    if sudo test -s /etc/letsencrypt/live/{{ $config->domain }}/fullchain.pem; then
+    if sudo openssl x509 -in /etc/letsencrypt/live/{{ $config->domain }}/fullchain.pem -noout -checkhost {{ $config->domain }} -checkend 0 >/dev/null 2>&1; then
         printf '%s' {{ escapeshellarg($nginxSslBase64) }} | base64 --decode > "$nginx_candidate"
     else
         printf '%s' {{ escapeshellarg($nginxHttpBase64) }} | base64 --decode > "$nginx_candidate"
@@ -591,7 +591,7 @@
     set -Eeuo pipefail
     nginx_target=/etc/nginx/sites-available/{{ $config->domain }}.conf
     nginx_link=/etc/nginx/sites-enabled/{{ $config->domain }}.conf
-    if sudo test -s /etc/letsencrypt/live/{{ $config->domain }}/fullchain.pem; then expected_nginx={{ $nginxSslHash }}; else expected_nginx={{ $nginxHttpHash }}; fi
+    if sudo openssl x509 -in /etc/letsencrypt/live/{{ $config->domain }}/fullchain.pem -noout -checkhost {{ $config->domain }} -checkend 0 >/dev/null 2>&1; then expected_nginx={{ $nginxSslHash }}; else expected_nginx={{ $nginxHttpHash }}; fi
     actual_nginx="$(sudo sha256sum "$nginx_target" 2>/dev/null | awk '{ print $1 }')"
     enabled_target="$(sudo readlink -f "$nginx_link" 2>/dev/null || true)"
     [ "$actual_nginx" = "$expected_nginx" ] && [ "$enabled_target" = "$nginx_target" ] || {
@@ -872,7 +872,7 @@
 
 @task('health-check', ['on' => 'vps'])
     set -Eeuo pipefail
-    if sudo test -s /etc/letsencrypt/live/{{ $config->domain }}/fullchain.pem; then
+    if sudo openssl x509 -in /etc/letsencrypt/live/{{ $config->domain }}/fullchain.pem -noout -checkhost {{ $config->domain }} -checkend 0 >/dev/null 2>&1; then
         scheme=https
         resolve="--resolve {{ $config->domain }}:443:127.0.0.1"
     else
@@ -924,7 +924,7 @@
     trap report_partial ERR
     trap cleanup_ssl EXIT
 
-    if ! sudo test -s /etc/letsencrypt/live/{{ $config->domain }}/fullchain.pem; then
+    if ! sudo openssl x509 -in /etc/letsencrypt/live/{{ $config->domain }}/fullchain.pem -noout -checkhost {{ $config->domain }} -checkend 0 >/dev/null 2>&1; then
         challenge={{ $config->sharedPath() }}/acme/.well-known/acme-challenge/accelerator-preflight
         printf '%s\n' "{{ $releaseId }}" > "$challenge"
         body="$(curl -fsS --max-time 8 http://{{ $config->domain }}/.well-known/acme-challenge/accelerator-preflight)"
@@ -1068,7 +1068,7 @@
     echo "deploy_lock=$(test -d {{ $deployLock }} && echo active || echo inactive)"
     if [ -f {{ $deployLock }}/task ]; then echo "deploy_lock_task=$(cat {{ $deployLock }}/task)"; fi
     if [ -f {{ $deployLock }}/started_at ]; then echo "deploy_lock_started_at=$(cat {{ $deployLock }}/started_at)"; fi
-    echo "certificate=$(sudo test -s /etc/letsencrypt/live/{{ $config->domain }}/fullchain.pem && echo present || echo missing)"
+    echo "certificate=$(sudo openssl x509 -in /etc/letsencrypt/live/{{ $config->domain }}/fullchain.pem -noout -checkhost {{ $config->domain }} -checkend 0 >/dev/null 2>&1 && echo valid || echo missing_or_invalid)"
     sudo nginx -t
     @if($hasSupervisorPrograms)
         sudo supervisorctl status {{ $config->group }}:* || true
