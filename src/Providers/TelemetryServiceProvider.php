@@ -51,8 +51,8 @@ final class TelemetryServiceProvider extends ServiceProvider
         $flusher = $this->app->make(TelemetryFlusher::class);
         $interval = max(1, (int) config('accelerator.telemetry.flush_interval', 5)) * 1000;
 
-        // Octane's public tick API dispatches through task workers. Accelerator
-        // permits zero optional task workers, so worker 0 owns this native timer.
+        // Worker 0 owns persistence so multiple request workers cannot race the
+        // same buffer. The native timer avoids adding telemetry work to Octane ticks.
         Timer::tick($interval, static fn () => $flusher->flush());
     }
 }

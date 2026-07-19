@@ -96,7 +96,7 @@ Per stage (`TEST` / `PROD`):
 - `OPS_DEPLOY_{STAGE}_OCTANE_SERVER` (Octane only: `swoole`, `roadrunner`, or `frankenphp`)
 - `OPS_DEPLOY_{STAGE}_OCTANE_PORT` (required for Octane)
 - `OPS_DEPLOY_{STAGE}_OCTANE_WORKERS` (request workers; default `1`, must be >= `1`)
-- `OPS_DEPLOY_{STAGE}_OCTANE_TASK_WORKERS` (Swoole task workers; default `0`, set >= `1` only when tasks are used)
+- `OPS_DEPLOY_{STAGE}_OCTANE_TASK_WORKERS` (Swoole task workers; default and minimum `1` because Octane's server tick uses the task queue)
 - `OPS_DEPLOY_{STAGE}_HORIZON_ENABLED`
 - `OPS_DEPLOY_{STAGE}_QUEUE_WORKER_ENABLED`, `_QUEUE_WORKER_CONNECTION`, `_QUEUE_WORKER_QUEUE`, `_QUEUE_WORKER_PROCESSES`
 - `OPS_DEPLOY_{STAGE}_REVERB_ENABLED`, `_REVERB_PORT`
@@ -156,7 +156,7 @@ wss_test:wss_test_scheduler
 
 Every listed program is conditional. In FPM mode there is no Octane program; PHP-FPM is managed by systemd, not Supervisor. Envoy resolves the service from `OPS_DEPLOY_PHP_VERSION` and optional `OPS_DEPLOY_{STAGE}_FPM_POOL`, then reloads that service during `restart-service`. Reverb also controls whether its websocket Nginx location exists. Nightwatch runs `nightwatch:agent` only when enabled; runtime env must set `NIGHTWATCH_ENABLED=true` and `NIGHTWATCH_INGEST_URI` to the configured port.
 
-Octane concurrency is opt-in beyond the minimum request worker. The generated Supervisor command never uses `auto`: it starts with one request worker and, for Swoole, zero task workers. Apps that call `Octane::concurrently()` or otherwise dispatch Swoole tasks must set `OPS_DEPLOY_{STAGE}_OCTANE_TASK_WORKERS` to an intentional positive count and re-run `bootstrap`.
+Octane concurrency is opt-in beyond one request worker and one Swoole task worker. The generated Supervisor command never uses `auto`. Laravel Octane's default server tick needs the task queue, so zero Swoole task workers is invalid. Increase either count intentionally and re-run `bootstrap` when capacity or `Octane::concurrently()` requires it.
 
 ## DB Backup During Deploy
 
@@ -563,7 +563,7 @@ Do NOT:
 - Run as `www-data` (or configured run user)
 - One group containing only this stage's programs
 - Never use `--workers=auto` or `--task-workers=auto`; keep explicit counts in `.env.envoy`.
-- For Swoole, task workers default to `0`. Set a positive count before using Octane task dispatch/concurrency.
+- For Swoole, task workers default to `1` and cannot be zero because Laravel Octane dispatches its server tick through the task queue.
 - NEVER use generic names (`octane`, `horizon`, `reverb`)
 
 ## OPcache

@@ -392,7 +392,7 @@ New generated deploy env files default to PHP-FPM and no Supervisor-managed appl
 ```dotenv
 OPS_DEPLOY_{STAGE}_HTTP_RUNTIME=octane
 OPS_DEPLOY_{STAGE}_OCTANE_WORKERS=1
-OPS_DEPLOY_{STAGE}_OCTANE_TASK_WORKERS=0
+OPS_DEPLOY_{STAGE}_OCTANE_TASK_WORKERS=1
 OPS_DEPLOY_{STAGE}_HORIZON_ENABLED=true
 OPS_DEPLOY_{STAGE}_REVERB_ENABLED=true
 OPS_DEPLOY_{STAGE}_SCHEDULER_ENABLED=true
@@ -401,7 +401,7 @@ OPS_DEPLOY_{STAGE}_NIGHTWATCH_ENABLED=true
 
 `OPS_DEPLOY_{STAGE}_HTTP_RUNTIME=fpm` instead renders PHP-FPM Nginx locations using `OPS_DEPLOY_{STAGE}_FPM_SOCKET` and does not start Octane. Reverb websocket Nginx configuration is emitted only when Reverb is enabled. Nightwatch now actually renders `nightwatch:agent` when enabled.
 
-For Swoole, Envoy renders `octane:swoole` so `0` genuinely disables task workers; Laravel Octane's public dispatcher otherwise converts `--task-workers=0` back to its `auto` fallback.
+For Swoole, one task worker is mandatory. Laravel Octane dispatches its default server tick through the task queue; zero produces a recurring runtime warning even when application code never calls `Octane::concurrently()`. Envoy therefore rejects zero and uses the public `octane:start` command.
 
 Apps using Redis queue without Horizon may set:
 

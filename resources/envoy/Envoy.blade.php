@@ -179,7 +179,7 @@
 
     $octanePort = $value($envoy, "OPS_DEPLOY_{$stageKey}_OCTANE_PORT");
     $octaneWorkers = $value($envoy, "OPS_DEPLOY_{$stageKey}_OCTANE_WORKERS", '1');
-    $octaneTaskWorkers = $value($envoy, "OPS_DEPLOY_{$stageKey}_OCTANE_TASK_WORKERS", '0');
+    $octaneTaskWorkers = $value($envoy, "OPS_DEPLOY_{$stageKey}_OCTANE_TASK_WORKERS", '1');
     $horizonEnabled = $truthy($value($envoy, "OPS_DEPLOY_{$stageKey}_HORIZON_ENABLED", 'false'));
     $queueWorkerEnabled = $truthy($value($envoy, "OPS_DEPLOY_{$stageKey}_QUEUE_WORKER_ENABLED", 'false'));
     $queueWorkerConnection = $value($envoy, "OPS_DEPLOY_{$stageKey}_QUEUE_WORKER_CONNECTION", 'redis');
@@ -248,7 +248,11 @@
         }
 
         if (! ctype_digit($octaneTaskWorkers)) {
-            throw new RuntimeException("OPS_DEPLOY_{$stageKey}_OCTANE_TASK_WORKERS must be an integer greater than or equal to zero.");
+            throw new RuntimeException("OPS_DEPLOY_{$stageKey}_OCTANE_TASK_WORKERS must be a non-negative integer.");
+        }
+
+        if ($octaneServer === 'swoole' && (int) $octaneTaskWorkers < 1) {
+            throw new RuntimeException("OPS_DEPLOY_{$stageKey}_OCTANE_TASK_WORKERS must be greater than zero for Swoole because Laravel Octane dispatches its server tick through the task queue.");
         }
     }
 
@@ -318,14 +322,7 @@
 
     $sslEmail = $value($envoy, 'OPS_DEPLOY_SSL_EMAIL', 'admin@'.$domain);
 
-    /*
-     * The public `octane:start` command converts `--task-workers=0` back to
-     * Octane's `auto` default. Call the registered Swoole command directly so
-     * zero genuinely disables optional task workers.
-     */
-    $octaneServerCommand = $octaneServer === 'swoole'
-        ? 'octane:swoole'
-        : "octane:start --server={$octaneServer}";
+    $octaneServerCommand = "octane:start --server={$octaneServer}";
     $octaneTaskWorkersOption = $octaneServer === 'swoole'
         ? "--task-workers={$octaneTaskWorkers}"
         : '';

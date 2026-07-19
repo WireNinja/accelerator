@@ -135,7 +135,7 @@ When comparing env files, compare keys first. Values may intentionally differ be
 
 `OPS_DEPLOY_{STAGE}_HTTP_RUNTIME=fpm` routes Nginx through the configured FPM socket and health-checks through Nginx. `octane` requires `OPS_DEPLOY_{STAGE}_OCTANE_PORT` and health-checks the Octane process directly.
 For FPM, prefer `OPS_DEPLOY_PHP_VERSION=8.5` (or `8.4`) plus optional `OPS_DEPLOY_{STAGE}_FPM_POOL=pool-name`. Envoy derives `phpX.Y`, `/run/php/phpX.Y-fpm[-pool].sock`, and the matching systemd service. Keep `_FPM_SOCKET` and `_FPM_SERVICE` blank unless the VPS uses non-standard names.
-`OPS_DEPLOY_{STAGE}_OCTANE_WORKERS` defaults to `1`. For Swoole, `OPS_DEPLOY_{STAGE}_OCTANE_TASK_WORKERS` defaults to `0`; set a positive task-worker count only when the application dispatches Octane tasks.
+`OPS_DEPLOY_{STAGE}_OCTANE_WORKERS` defaults to `1`. For Swoole, `OPS_DEPLOY_{STAGE}_OCTANE_TASK_WORKERS` also defaults to `1` and cannot be zero because Laravel Octane's default server tick uses the task queue. Increase the count only when application concurrency needs it.
 Use either `OPS_DEPLOY_{STAGE}_HORIZON_ENABLED=true` or `OPS_DEPLOY_{STAGE}_QUEUE_WORKER_ENABLED=true`, never both. The latter renders a bounded `queue:work` Supervisor program suitable for Redis queue apps without Horizon.
 
 Runtime deploy intent belongs only in `.env.envoy` via `OPS_DEPLOY_{STAGE}_HTTP_RUNTIME` and, for Octane, `OPS_DEPLOY_{STAGE}_OCTANE_SERVER`. Do not add deploy runtime selector keys back to Laravel runtime `.env` files.

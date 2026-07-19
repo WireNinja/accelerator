@@ -31,7 +31,7 @@ WireNinja Accelerator provides reusable Laravel application conventions, built-i
 - Envoy reads deploy configuration from project-root `.env.envoy`, rendered from package `.base-env.envoy.example`; it contains only `OPS_DEPLOY_*` keys and must not be committed.
 - Per-stage `OPS_DEPLOY_{STAGE}_HTTP_RUNTIME` selects `fpm` or `octane`. FPM is the scaffold default; prefer `OPS_DEPLOY_PHP_VERSION` plus optional `_FPM_POOL`, and leave `_FPM_SOCKET` / `_FPM_SERVICE` blank unless overriding non-standard VPS names. Octane requires `_OCTANE_PORT` and uses `_OCTANE_SERVER`.
 - Supervisor services are opt-in through per-stage flags: `_HORIZON_ENABLED`, `_QUEUE_WORKER_ENABLED`, `_REVERB_ENABLED`, `_SCHEDULER_ENABLED`, and `_NIGHTWATCH_ENABLED`. Never enable Horizon and the plain queue worker together.
-- Octane concurrency is explicit: `_OCTANE_WORKERS` defaults to `1`; Swoole-only `_OCTANE_TASK_WORKERS` defaults to `0`. Increase intentionally when capacity or `Octane::concurrently()` requires it.
+- Octane concurrency is explicit: `_OCTANE_WORKERS` and Swoole-only `_OCTANE_TASK_WORKERS` both default to `1`. Laravel Octane dispatches its default server tick through the Swoole task queue, so zero task workers is invalid. Increase either count only when capacity or `Octane::concurrently()` requires it.
 - Do not put `OPS_DEPLOY_*` keys in `.env`, `.env.staging`, `.env.production`, `.env.example`, or `.base-env.example`.
 - Envoy syncs the selected runtime env seed to `{root}/shared/.env` on every deploy; old shared env is archived first.
 - Use the package Envoy bridge at `vendor/wireninja/accelerator/resources/envoy/Envoy.blade.php`; project Envoy files only define server aliases.
