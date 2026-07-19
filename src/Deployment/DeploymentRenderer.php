@@ -187,7 +187,7 @@ NGINX;
     private function octaneProgram(): string
     {
         $command = $this->config->octaneServer === 'swoole'
-            ? "{$this->config->phpBinary} -d upload_max_filesize=100M -d post_max_size=110M {$this->config->deployRoot}/current/artisan octane:start --server=swoole --host=127.0.0.1 --port={$this->config->octanePort} --workers={$this->config->octaneWorkers} --task-workers={$this->config->octaneTaskWorkers} --max-requests=500"
+            ? "{$this->config->phpBinary} -d upload_max_filesize=100M -d post_max_size=110M {$this->config->deployRoot}/current/artisan octane:swoole --host=127.0.0.1 --port={$this->config->octanePort} --workers={$this->config->octaneWorkers} --task-workers={$this->config->octaneTaskWorkers} --max-requests=500"
             : "{$this->config->phpBinary} -d upload_max_filesize=100M -d post_max_size=110M {$this->config->deployRoot}/current/artisan octane:start --server={$this->config->octaneServer} --host=127.0.0.1 --port={$this->config->octanePort} --workers={$this->config->octaneWorkers} --max-requests=500";
 
         return $this->program('octane', $command);
