@@ -112,7 +112,7 @@ Every release retains its own immutable env symlink. `current` selects code that
 7. shared links, locked Composer install, locked Bun install, and asset build;
 8. release permissions, normal migration, initial Super Admin provisioning, storage link, and Laravel caches;
 9. atomic current switch, stage service activation, and `/up` health check;
-10. ACME public-path probe, Certbot, HTTPS vhost activation, local/public HTTPS checks, and release pruning.
+10. ACME public-path probe, hostname-valid certificate check, Certbot when needed, HTTPS vhost activation, local/public HTTPS checks, and release pruning.
 
 There is no separate bootstrap-before-init ceremony. If SSL fails after HTTP health succeeds, the application remains usable over HTTP and reports `PARTIAL_READY`; fix DNS/firewall/Certbot and run `envoy ssl`.
 
@@ -157,8 +157,8 @@ Normal deploy rejects manual drift. Either move intentional changes into the ren
 ## Runtime Rules
 
 - `HTTP_RUNTIME=fpm`: Nginx uses the configured Unix socket. Deploy does not reload the shared FPM service; the new release realpath creates distinct OPcache keys and avoids restarting unrelated pools/projects.
-- `HTTP_RUNTIME=octane`: Supervisor starts `octane:swoole` directly for Swoole so an explicit task-worker count of `0` is preserved; other supported servers use `octane:start`.
-- Octane requires at least one request worker. Swoole task workers may be `0` and should increase only when application code uses task dispatch.
+- `HTTP_RUNTIME=octane`: Supervisor uses the public `octane:start` command for every supported server.
+- Octane requires at least one request worker. Swoole also requires at least one task worker because Octane's default tick dispatch uses the task worker pool; increase it intentionally when application concurrency needs more capacity.
 - Enable Horizon or the plain queue worker, never both.
 - Reverb, Scheduler, and Nightwatch are independent stage flags.
 - Enabled ports must be distinct and unused during fresh init.
