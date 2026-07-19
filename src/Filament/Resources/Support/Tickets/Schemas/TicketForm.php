@@ -62,12 +62,12 @@ class TicketForm
                                                     ->columnSpanFull(),
                                                 Select::make('type')
                                                     ->label('Jenis Permintaan')
-                                                    ->options(TicketTypeEnum::options())
+                                                    ->options(TicketTypeEnum::class)
                                                     ->required()
                                                     ->default(TicketTypeEnum::Question->value),
                                                 Select::make('priority')
                                                     ->label('Prioritas')
-                                                    ->options(TicketPriorityEnum::options())
+                                                    ->options(TicketPriorityEnum::class)
                                                     ->required()
                                                     ->default(TicketPriorityEnum::Medium->value),
                                             ]),
@@ -129,7 +129,7 @@ class TicketForm
                                                     ->visible(fn (): bool => $canManageRouting()),
                                                 Select::make('status')
                                                     ->label('Status')
-                                                    ->options(TicketStatusEnum::options())
+                                                    ->options(TicketStatusEnum::class)
                                                     ->required(fn (): bool => $canManageRouting())
                                                     ->default(TicketStatusEnum::Open->value)
                                                     ->visible(fn (): bool => $canManageRouting()),

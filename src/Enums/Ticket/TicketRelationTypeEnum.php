@@ -4,10 +4,11 @@ declare(strict_types=1);
 
 namespace WireNinja\Accelerator\Enums\Ticket;
 
+use Filament\Support\Contracts\HasColor;
 use Filament\Support\Contracts\HasLabel;
 use WireNinja\Accelerator\Concerns\BetterEnum;
 
-enum TicketRelationTypeEnum: string implements HasLabel
+enum TicketRelationTypeEnum: string implements HasColor, HasLabel
 {
     use BetterEnum;
 

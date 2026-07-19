@@ -131,11 +131,11 @@ class TicketsTable
                     ->multiple(),
                 SelectFilter::make('status')
                     ->label('Status')
-                    ->options(TicketStatusEnum::options())
+                    ->options(TicketStatusEnum::class)
                     ->multiple(),
                 SelectFilter::make('priority')
                     ->label('Prioritas')
-                    ->options(TicketPriorityEnum::options())
+                    ->options(TicketPriorityEnum::class)
                     ->multiple(),
                 SelectFilter::make('assignee_id')
                     ->label('Penanggung Jawab')

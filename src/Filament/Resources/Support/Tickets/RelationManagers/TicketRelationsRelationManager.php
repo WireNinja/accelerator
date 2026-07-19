@@ -41,7 +41,7 @@ class TicketRelationsRelationManager extends RelationManager
                     ->required(),
                 Select::make('relation_type')
                     ->label('Jenis Relasi')
-                    ->options(TicketRelationTypeEnum::options())
+                    ->options(TicketRelationTypeEnum::class)
                     ->required()
                     ->default(TicketRelationTypeEnum::RelatedTo->value),
             ]);

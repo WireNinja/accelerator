@@ -45,6 +45,10 @@ Google OAuth is disabled unless its feature and mode are enabled. `existing_only
 
 `InteractsWithApplication` is removed. Applications must not import package provider internals. Core owns Eloquent/session/password defaults; the Filament provider owns UI and Shield defaults. Telegram settings are applied lazily when the Telegram client is resolved, so application boot no longer queries settings or silently swallows that failure.
 
+### 🔴 BREAKING — BetterEnum is comparison-only
+
+`BetterEnum` retains `is`, `isNot`, `isAny`, `isNone`, `resolve`, and the default gray `getColor`. Unused collection, array, presentation, name-resolution, and option aliases are removed. Pass the enum class directly to Filament `options()` and use native `cases()`, `getLabel()`, `getDescription()`, `getIcon()`, and `getColor()` APIs.
+
 ## v1.1.79
 
 No deployment contract changes beyond v1.1.66.
