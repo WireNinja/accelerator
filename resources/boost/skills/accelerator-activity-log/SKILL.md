@@ -94,4 +94,4 @@ composer analyse
 php artisan accelerator:verify-resource {resourceKey} --compact
 ```
 
-If model columns, casts, or relationships changed, run the relevant `php artisan accelerator:model-doc {Model} --write` before verification.
+If model columns, casts, or relationships changed, run `php artisan agent:model-context {Model} --compact` and Larastan before verification.

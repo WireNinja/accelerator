@@ -21,6 +21,7 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\File;
 use ReflectionClass;
 use ReflectionMethod;
+use ReflectionNamedType;
 use Throwable;
 
 class ModelContextScanner
@@ -28,25 +29,17 @@ class ModelContextScanner
     /**
      * @var array<string, array{
      *     connection: Connection,
-     *     schema: Builder,
      *     current_schemas: list<string>,
-     *     platform: array<string, mixed>,
      *     tables: list<array<string, mixed>>,
      *     tables_by_qualified_name: array<string, array<string, mixed>>,
-     *     table_details: array<string, array<string, mixed>>,
-     *     views: list<array<string, mixed>>,
-     *     types: list<array<string, mixed>>
+     *     table_details: array<string, array<string, mixed>>
      * }>
      */
     protected array $contexts = [];
 
-    protected bool $includeCounts = false;
-
-    protected bool $includeViews = false;
-
-    protected bool $includeTypes = false;
-
     protected ?string $databaseOverride = null;
+
+    protected bool $expand = false;
 
     protected ?array $availableModelClasses = null;
 
@@ -62,28 +55,18 @@ class ModelContextScanner
     public function scan(
         array $requestedModels = [],
         ?string $database = null,
-        bool $includeCounts = false,
-        bool $includeViews = false,
-        bool $includeTypes = false,
+        bool $expand = false,
     ): array {
         $this->contexts = [];
-        $this->includeCounts = $includeCounts;
-        $this->includeViews = $includeViews;
-        $this->includeTypes = $includeTypes;
         $this->databaseOverride = $database;
+        $this->expand = $expand;
 
         $errors = [];
         $requestedModels = array_values(array_filter($requestedModels));
         $resolvedModels = $this->resolveRequestedModels($requestedModels, $errors);
-
-        if ($requestedModels === []) {
-            $resolvedModels = $this->findAvailableModelClasses();
-        }
-
         sort($resolvedModels);
 
         $models = [];
-        $tableToModels = [];
 
         foreach ($resolvedModels as $modelClass) {
             try {
@@ -98,48 +81,16 @@ class ModelContextScanner
             }
 
             $models[] = $modelData;
-            $tableToModels[$modelData['database']][$modelData['table']][] = $modelClass;
         }
-
-        ksort($tableToModels);
-
-        foreach ($tableToModels as &$modelsByTable) {
-            ksort($modelsByTable);
-
-            foreach ($modelsByTable as &$modelClasses) {
-                sort($modelClasses);
-            }
-        }
-
-        $databases = [];
-
-        foreach ($this->contexts as $connectionName => $context) {
-            $databases[$connectionName] = [
-                'platform' => $context['platform'],
-                'tables' => $context['tables'],
-                'views' => $context['views'],
-                'types' => $context['types'],
-            ];
-        }
-
-        ksort($databases);
-
-        $unmappedTables = $this->buildUnmappedTables($databases, $tableToModels);
 
         return [
             'generated_at' => now()->toIso8601String(),
             'requested_models' => $requestedModels,
-            'databases' => $databases,
             'models' => $models,
-            'table_to_models' => $tableToModels,
-            'unmapped_tables' => $unmappedTables,
             'errors' => $errors,
             'summary' => [
-                'connections_scanned' => count($databases),
                 'models_requested' => count($requestedModels),
                 'models_scanned' => count($models),
-                'tables_discovered' => array_sum(array_map(static fn (array $database): int => count($database['tables']), $databases)),
-                'tables_without_models' => count($unmappedTables),
                 'models_missing_tables' => count(array_filter($models, static fn (array $model): bool => ! $model['table_exists'])),
                 'models_with_inspection_errors' => count(array_filter($models, static fn (array $model): bool => $model['inspection_error'] !== null)),
                 'models_with_cast_drift' => count(array_filter($models, fn (array $model): bool => $model['diagnostics']['casts_missing_columns'] !== []
@@ -151,6 +102,36 @@ class ModelContextScanner
                 'errors' => count($errors),
             ],
         ];
+    }
+
+    /**
+     * @return array{generated_at: string, models: list<array{key: string, class: string}>, summary: array{models_registered: int}}
+     */
+    public function registry(): array
+    {
+        $models = array_map(
+            static fn (string $modelClass): array => [
+                'key' => class_basename($modelClass),
+                'class' => $modelClass,
+            ],
+            $this->availableModels(),
+        );
+
+        return [
+            'generated_at' => now()->toIso8601String(),
+            'models' => $models,
+            'summary' => [
+                'models_registered' => count($models),
+            ],
+        ];
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function availableModels(): array
+    {
+        return $this->findAvailableModelClasses();
     }
 
     /**
@@ -195,6 +176,10 @@ class ModelContextScanner
             $relationSummaries[$relationSummary['name']] = $relationSummary;
         }
 
+        if ($this->hasDisabledPermissionTeamsRelation($relationSummaries)) {
+            unset($relationSummaries['teams']);
+        }
+
         ksort($relationSummaries);
 
         $relations = array_map(
@@ -217,32 +202,99 @@ class ModelContextScanner
             }
         }
 
-        return [
+        $attributes = $modelInfo?->attributes?->values()->all()
+            ?? $this->fallbackAttributes($tableSchema, $effectiveCasts);
+        $diagnostics = $this->buildDiagnostics($model, $tableSchema, $casts, $effectiveCasts, $relations);
+
+        $modelData = [
             'class' => $modelClass,
-            'short_name' => class_basename($modelClass),
             'database' => $connectionName,
             'table' => $tableName,
-            'schema_table' => $tableInfo['schema_qualified_name'] ?? $tableName,
             'table_exists' => $tableSchema !== null,
             'primary_key' => $model->getKeyName(),
-            'incrementing' => $model->getIncrementing(),
             'timestamps' => $model->usesTimestamps(),
             'uses_soft_deletes' => in_array(SoftDeletes::class, class_uses_recursive($modelClass), true),
             'policy' => $modelInfo?->policy,
+            'casts' => $casts,
+            'attributes' => $attributes,
+            'relations' => array_map($this->compactRelation(...), $relations),
+            'inspection_error' => $inspectionError,
+            'diagnostics' => $diagnostics,
+        ];
+
+        if (! $this->expand) {
+            return $modelData;
+        }
+
+        return array_merge($modelData, [
+            'short_name' => class_basename($modelClass),
+            'schema_table' => $tableInfo['schema_qualified_name'] ?? $tableName,
+            'incrementing' => $model->getIncrementing(),
             'collection' => $modelInfo?->collection,
             'builder' => $modelInfo?->builder,
             'resource' => $modelInfo?->resource,
             'hidden' => array_values($model->getHidden()),
             'appends' => array_values($model->getAppends()),
-            'casts' => $casts,
-            'attributes' => $modelInfo?->attributes?->values()->all() ?? [],
             'events' => $modelInfo?->events?->values()->all() ?? [],
             'observers' => $modelInfo?->observers?->values()->all() ?? [],
             'relations' => $relations,
             'schema' => $tableSchema,
-            'inspection_error' => $inspectionError,
-            'diagnostics' => $this->buildDiagnostics($model, $tableSchema, $casts, $effectiveCasts, $relations),
-        ];
+        ]);
+    }
+
+    /**
+     * Spatie deliberately returns an empty synthetic teams relation for IDE
+     * tooling when its teams feature is disabled. It is not application schema.
+     *
+     * @param  array<string, array<string, mixed>>  $relationSummaries
+     */
+    protected function hasDisabledPermissionTeamsRelation(array $relationSummaries): bool
+    {
+        if (config('permission.teams', false)) {
+            return false;
+        }
+
+        $permissionModel = config('permission.models.permission');
+
+        return is_string($permissionModel)
+            && ($relationSummaries['teams']['related'] ?? null) === $permissionModel;
+    }
+
+    /**
+     * @param  array<string, mixed>  $relation
+     * @return array<string, mixed>
+     */
+    protected function compactRelation(array $relation): array
+    {
+        return array_filter([
+            'name' => $relation['name'],
+            'type' => $relation['type'],
+            'related_model' => $relation['related_model'],
+            'dynamic_related_model' => $relation['dynamic_related_model'] ? true : null,
+            'error' => $relation['error'] ?? null,
+        ], static fn (mixed $value): bool => $value !== null);
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $tableSchema
+     * @param  array<string, mixed>  $casts
+     * @return list<array<string, mixed>>
+     */
+    protected function fallbackAttributes(?array $tableSchema, array $casts): array
+    {
+        if ($tableSchema === null) {
+            return [];
+        }
+
+        return array_map(
+            static fn (array $column): array => [
+                'name' => $column['column'],
+                'type' => $column['type'],
+                'nullable' => in_array('nullable', $column['attributes'], true),
+                'cast' => $casts[$column['column']] ?? null,
+            ],
+            $tableSchema['columns'],
+        );
     }
 
     protected function resolveRequestedModels(array $requestedModels, array &$errors): array
@@ -368,6 +420,16 @@ class ModelContextScanner
             }
 
             if (! str_starts_with($method->getDeclaringClass()->getName(), 'App\\Models\\')) {
+                continue;
+            }
+
+            $returnType = $method->getReturnType();
+
+            if (
+                ! $returnType instanceof ReflectionNamedType
+                || $returnType->isBuiltin()
+                || ! is_subclass_of($returnType->getName(), Relation::class)
+            ) {
                 continue;
             }
 
@@ -783,7 +845,7 @@ class ModelContextScanner
                 ];
             }
 
-            if ($normalizedType === 'json' && ($normalizedCast === null || ! $this->usesStructuredJsonCast($normalizedCast))) {
+            if (in_array($normalizedType, ['json', 'jsonb'], true) && ($normalizedCast === null || ! $this->usesStructuredJsonCast($normalizedCast))) {
                 $diagnostics['json_columns_without_structured_casts'][] = [
                     'column' => $columnName,
                     'type' => $column['type'],
@@ -866,63 +928,27 @@ class ModelContextScanner
         return false;
     }
 
-    /**
-     * @param  array<string, array<string, list<string>>>  $tableToModels
-     * @param  array<string, array<string, array<int|string, mixed>>>  $databases
-     */
-    protected function buildUnmappedTables(array $databases, array $tableToModels): array
-    {
-        $unmappedTables = [];
-
-        foreach ($databases as $connectionName => $database) {
-            foreach ($database['tables'] as $table) {
-                if (! empty($tableToModels[$connectionName][$table['table']])) {
-                    continue;
-                }
-
-                $unmappedTables[] = [
-                    'database' => $connectionName,
-                    'schema' => $table['schema'],
-                    'table' => $table['table'],
-                    'schema_qualified_name' => $table['schema_qualified_name'],
-                ];
-            }
-        }
-
-        return $unmappedTables;
-    }
-
     protected function &getContext(string $connectionName): array
     {
         if (! isset($this->contexts[$connectionName])) {
             /** @var Connection $connection */
             $connection = $this->connections->connection($connectionName);
             $schema = $connection->getSchemaBuilder();
-            $tables = $this->buildTables($connection, $schema);
+            $tables = $this->buildTables($schema);
 
             $this->contexts[$connectionName] = [
                 'connection' => $connection,
-                'schema' => $schema,
                 'current_schemas' => Arr::wrap($schema->getCurrentSchemaListing() ?? $schema->getCurrentSchemaName()),
-                'platform' => [
-                    'config' => Arr::except(config('database.connections.'.$connectionName, []), ['password']),
-                    'name' => $connection->getDriverTitle(),
-                    'connection' => $connection->getName(),
-                    'version' => $connection->getServerVersion(),
-                    'open_connections' => $connection->threadCount(),
-                ],
                 'tables' => $tables,
                 'tables_by_qualified_name' => $this->keyTablesByQualifiedName($tables),
                 'table_details' => [],
-                'views' => $this->includeViews ? $this->buildViews($connection, $schema) : [],
-                'types' => $this->includeTypes ? $this->buildTypes($schema) : [],
             ];
         }
 
         return $this->contexts[$connectionName];
     }
 
-    protected function buildTables(Connection $connection, Builder $schema): array
+    protected function buildTables(Builder $schema): array
     {
         $tables = [];
 
@@ -932,9 +958,6 @@ class ModelContextScanner
                 'schema' => $table['schema'],
                 'schema_qualified_name' => $table['schema_qualified_name'],
                 'size' => $table['size'],
-                'rows' => $this->includeCounts
-                    ? $connection->withoutTablePrefix(fn ($connection) => $connection->table($table['schema_qualified_name'])->count())
-                    : null,
                 'engine' => $table['engine'],
                 'collation' => $table['collation'],
                 'comment' => $table['comment'],
@@ -942,37 +965,6 @@ class ModelContextScanner
         }
 
         return $tables;
-    }
-
-    protected function buildViews(Connection $connection, Builder $schema): array
-    {
-        $views = [];
-
-        foreach ($schema->getViews() as $view) {
-            $views[] = [
-                'view' => $view['name'],
-                'schema' => $view['schema'],
-                'rows' => $connection->withoutTablePrefix(fn ($connection) => $connection->table($view['schema_qualified_name'])->count()),
-            ];
-        }
-
-        return $views;
-    }
-
-    protected function buildTypes(Builder $schema): array
-    {
-        $types = [];
-
-        foreach ($schema->getTypes() as $type) {
-            $types[] = [
-                'name' => $type['name'],
-                'schema' => $type['schema'],
-                'type' => $type['type'],
-                'category' => $type['category'],
-            ];
-        }
-
-        return $types;
     }
 
     protected function keyTablesByQualifiedName(array $tables): array

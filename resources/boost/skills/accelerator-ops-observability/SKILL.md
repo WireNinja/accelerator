@@ -141,6 +141,6 @@ For Livewire, Filament, or dynamic package JavaScript 404s behind Nginx, check w
 Do not use this skill for:
 
 - Shield regeneration; use the Filament/security workflow that is changing permissions.
-- Model relationship/cast/schema review; use `accelerator-model-outline`.
+- Model relationship/cast/schema review; use `accelerator-model-context`.
 - Filament resource gates; use `accelerator-filament`.
 - Deployment mutation; use `accelerator-deployment`.

@@ -284,7 +284,7 @@ accelerator-installation
 accelerator-deployment
 accelerator-env-config
 accelerator-filament
-accelerator-model-outline
+accelerator-model-context
 accelerator-ops-observability
 accelerator-pwa-development
 ```

@@ -70,6 +70,7 @@ class User extends Authenticatable implements AcceleratorUser, HasAppAuthenticat
             'email_verified_at' => 'immutable_datetime',
             'has_email_authentication' => 'boolean',
             'suspended_at' => 'immutable_datetime',
+            'two_factor_confirmed_at' => 'immutable_datetime',
         ];
     }
 

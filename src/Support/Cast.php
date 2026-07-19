@@ -43,21 +43,4 @@ final class Cast
 
         return is_numeric($value) ? (int) $value : $default;
     }
-
-    public static function asBool(mixed $value, bool $default = false): bool
-    {
-        if (is_bool($value)) {
-            return $value;
-        }
-
-        if (is_int($value)) {
-            return $value !== 0;
-        }
-
-        if (! is_string($value)) {
-            return $default;
-        }
-
-        return filter_var($value, FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE) ?? $default;
-    }
 }

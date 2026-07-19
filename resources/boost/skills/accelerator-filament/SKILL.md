@@ -1,11 +1,11 @@
 ---
 name: accelerator-filament
-description: Build Filament v5 resources the Accelerator way — BetterResource, ResourceEnum, Shield, DiscoverAsResource only, concentrated long form, BigDecimal, Lookup helper, and strict deprecation rules.
+description: Build Filament v5 resources the Accelerator way — BetterResource, ResourceEnum, Shield, DiscoverAsResource, concentrated forms, BigDecimal, and strict deprecation rules.
 ---
 
 # Accelerator Filament
 
-Authoritative source for Filament v5 conventions in Accelerator-powered apps. Mirrors `misc/llm/FILAMENT.md` shipped with pilot projects. Update this skill (not the userland file) so `php artisan boost:install` distributes the latest version.
+Authoritative Filament v5 conventions for Accelerator-powered apps.
 
 ## When To Use
 
@@ -26,7 +26,7 @@ Old patterns to avoid:
 
 ### Strict enforcement
 
-- Do NOT change a working Filament API just because it looks "more standard" (e.g. swapping `recordActions` for `actions`). Only change when this skill or `FILAMENT.md` lists it as deprecated.
+- Do NOT change a working Filament API merely because it looks more standard. Change it only for a verified deprecation, correctness issue, or explicit project convention.
 - No over-engineering: if a need is met by Filament default behavior or a single string policy ability, do not add closures, hooks, wrappers, or layers.
 - If you encounter an unfamiliar pattern that is not flagged here, ask the user before refactoring.
 
@@ -100,9 +100,7 @@ Use `ResourceEnum::getResourcesPermissions()` to declare custom abilities ONLY w
 7. Use strict namespaces: `Filament\Schemas\Components\Utilities\Get` / `Set`, `Filament\Schemas\Components\Tabs\Tab`. Never the legacy `Filament\Forms\Get`.
 8. All static Eloquent calls must start with `->query()` (e.g. `Location::query()->whereIn(...)`) for strict analysis.
 9. **Anti-bullshit closing gate** — run `php artisan accelerator:verify-resource {key} --compact`. Exit 0 + `"status":"PASS"` is the only acceptable signal. Critical checks: `BetterResource` trait, `#[DiscoverAsResource]` attribute, no bulk action leak, policy registered. Do NOT claim "selesai" without a clean PASS.
-10. Final response when touching a resource MUST start with the markdown checklist below. Trigger the checklist whenever the user mentions `FILAMENT.md`, asks you to audit a resource, or you modify Filament code.
-
-`accelerator:resource-context` payload is the primary summary. It must surface model, pages, relation managers, widgets, actions, and authorization (string ability or default policy hint). Bulk actions appearing in the payload are violations to clean, not capabilities to keep.
+`agent:resource-context` payload is the primary summary. It must surface model, pages, relation managers, widgets, actions, and authorization (string ability or default policy hint). Bulk actions appearing in the payload are violations to clean, not capabilities to keep.
 
 The scanner reads the configured `ResourceEnum` as its only registry. It no longer performs a second filesystem discovery pass or reports fake zero-count registries. `--compact` controls JSON whitespace; `--expand` adds component trees, relation forms, tabs, and source locations.
 
@@ -145,7 +143,7 @@ Do NOT set `->label('Edit')` on `EditAction::make()` or `->label('Hapus')` on `D
 
 ### Empty state
 
-Every table needs `emptyState`. Globals are already wired (`lucide-database` icon, "Belum ada data" heading, default description). Override only when a domain-specific copy improves UX. Provide `emptyStateActions([CreateAction::make()])` so the user can act immediately.
+Accelerator provides the generic empty state globally. Override it only when domain-specific copy or an immediate create action materially improves the resource.
 
 ### Flat, complete, toggleable columns
 
@@ -199,9 +197,9 @@ Default answer for a new action class is **NO**.
 
 - Do NOT wrap simple `sync()`, `attach()`, `detach()`, `update()`, `save()` in an action class without a real domain invariant, multi-step transaction, sequencing, posting, audit side effect, or lifecycle transition.
 - Do NOT create an action class just because the resource/page method "looks tidier" elsewhere — short, clear, single-step methods stay in place.
-- Do NOT introduce boilerplate helpers (`getActor()`, `getXRecord()`, `reloadRecordAndForm()`) just to placate static analysis. Fix typing or model PHPDoc instead.
+- Do NOT introduce boilerplate helpers (`getActor()`, `getXRecord()`, `reloadRecordAndForm()`) just to placate static analysis. Fix explicit return types, casts, or Larastan configuration instead.
 - Do NOT use `Location|int` union types when the contract really only needs the ID.
-- Do NOT add `getRawOriginal()` or repeated manual casts to compensate for bad typing. Run `php artisan accelerator:model-doc {Model} --write`.
+- Do NOT add `getRawOriginal()` or repeated manual casts to compensate for bad typing. Fix the actual cast or relationship return type, then run `php artisan agent:model-context {Model} --compact` and Larastan.
 - Do NOT use `strval()`, `intval()`, `(string)`, `(int)` etc for application data flows. Use `WireNinja\Accelerator\Support\Cast` where boundary conversion is genuinely required.
 - Do NOT call `CarbonImmutable::now(config('app.timezone'))` for normal flows — `app.timezone` is global. `CarbonImmutable::now()` is enough unless a non-default timezone is explicitly required.
 
@@ -211,7 +209,7 @@ Default answer for a new action class is **NO**.
 - Use normal Eloquent properties for reads and direct assignment, `fill()`, or `update()` for writes. Prefer `fill()` when one transition changes several attributes.
 - For `BigDecimalCast` columns, do NOT recast model values via additional helpers. Use `$model->quantity` directly.
 - For `BetterEnum`-cast columns, the property is the enum instance. Compare with `->is(...)`, `->isNot(...)`, `->isAny(...)`, `->isNone(...)`. Never downgrade to `->value` for comparison.
-- After adding or changing a column, cast, relationship, or nullability, run `php artisan accelerator:model-doc ModelName --write` so model property PHPDoc stays in sync. Runtime behavior must never depend on PHPDoc.
+- After adding or changing a column, cast, relationship, or nullability, run `php artisan agent:model-context ModelName --compact` and Larastan. Runtime behavior and typing must never depend on generated PHPDoc.
 
 ### Relationship save hooks are an escape hatch
 
@@ -299,17 +297,9 @@ php artisan agent:resource-context product --compact --expand
 php artisan agent:resource-context --list --compact
 ```
 
-- `--compact` is default for AI agents (token-friendly).
-- `--expand` overrides minification when full tree is needed.
+- AI agents should pass `--compact` for whitespace-efficient JSON.
+- `--expand` adds component trees, source locations, relation forms, and tabs.
 - Bulk actions surfacing in the payload are violations to clean.
-
-## Reference Files
-
-Use these as the actual source of truth — do NOT copy older examples:
-
-- `app/Filament/Resources/Users/UserResource.php` — thin resource delegating to form/table/pages.
-- `app/Filament/Resources/Users/Tables/UsersTable.php` — empty state, flat primary columns, toggleable secondary, `ActionGroup`, default Edit/Delete actions, custom actions with string `->authorize('ability')`.
-- `app/Filament/Resources/Users/Schemas/UserForm.php` — tabs, sections, default-when-sufficient relationship fields.
 
 ## Tabs & Stats Widgets
 
@@ -326,29 +316,19 @@ Standards:
 - `modifyQueryUsing()` on a tab is simple and explicit.
 - For small or weakly-segmented resources, do NOT add stats/tabs just for completeness — that's over-engineering.
 
-## Lookup Helper
+## Dependent options
 
-For dependent fields (cascading select), use `WireNinja\Accelerator\Support\Filament\Lookup`:
+Use a direct Eloquent query for dependent fields. Do not wrap a single `whereKey()->pluck()` chain in an Accelerator helper:
 
 ```php
-use WireNinja\Accelerator\Support\Filament\Lookup;
+use Illuminate\Support\Arr;
 
-->options(static fn (Get $get) => Lookup::pluck($get, 'parent_field_name')
-    ->model(RelatedModel::class)
-    ->label('nama_kolom_label')
-    ->value('nama_kolom_id')
-    ->modifyQuery(fn ($query) => $query->active())
-    ->get()
+->options(static fn (Get $get): array => RelatedModel::query()
+    ->whereKey(Arr::wrap($get('parent_field_name')))
+    ->pluck('name', 'id')
+    ->all()
 )
 ```
-
-Why required:
-
-1. No more `if (empty($ids)) return []` boilerplate.
-2. Consistent dependency-handling logic across the app.
-3. Centralised place to add global filter rules later.
-
-`Lookup` hardcodes `whereIn('id', ...)` because the project convention is always integer `id` primary keys. If the project ever drops that convention, the helper itself must be updated — not the call sites.
 
 ## VerticalWizard (Special Case)
 
@@ -369,9 +349,9 @@ VerticalWizard::make([
     ->columnSpanFull();
 ```
 
-## Resource Verification Checklist
+## Resource Verification
 
-When you finish or audit a resource (or the user mentions `FILAMENT.md`), the response MUST end with the `accelerator:verify-resource` JSON output:
+When you finish or audit a resource, run the hard verifier:
 
 ```bash
 php artisan accelerator:verify-resource {key} --compact
@@ -386,10 +366,4 @@ The command checks the four critical, non-negotiable rules from this skill:
 3. No bulk action API leak (`BulkAction` / `BulkActionGroup` / `toolbarActions`)
 4. Policy class registered (run `shield:safe-regenerate` after `ResourceEnum` registration)
 
-Best-practice items — split form/table classes, empty state actions, BooleanCard over Toggle, `static fn`, Bahasa Indonesia labels, action label removal — are reviewed in code, not gated by the command. They remain mandatory by skill, but they are not part of the JSON gate.
-
-Last line of the response MUST ask: *"Apakah saya (atau Anda) sudah mengikuti seluruh standar dan aturan di file `FILAMENT.md` ini termasuk `ResourceEnum` dan menjalankan regenerasi Shield?"*
-
----
-
-**Note**: keep this skill in sync with `misc/llm/FILAMENT.md` shipped to pilot projects. Skill is the upstream — userland file is the consumed convention. Run `php artisan boost:install` in pilot projects to get updates.
+Best-practice items that are not machine-gated still require normal code review. Report the verifier result concisely; do not generate a ceremonial checklist that merely repeats this skill.

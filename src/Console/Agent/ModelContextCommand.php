@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace WireNinja\Accelerator\Console\Agent;
 
 use Illuminate\Console\Attributes\Description;
@@ -12,32 +14,61 @@ use Throwable;
 use WireNinja\Accelerator\Support\ModelContextScanner;
 
 #[Signature('agent:model-context
-    {model? : Optional model class name. Omit to scan every model in app/Models}
-    {--database= : Database connection override for the scan}
-    {--write= : Write the JSON payload to the given path instead of stdout}
-    {--counts : Include table row counts in the database summary}
-    {--views : Include database views in the summary}
-    {--types : Include database user-defined types in the summary}
-    {--compact : Output compact JSON instead of pretty JSON}')]
-#[Description('Scan model, relation, cast, and schema context into one JSON payload')]
+    {model? : Model class, basename, or App\\Models-relative name}
+    {--list : List application models without inspecting them}
+    {--all : Inspect every application model}
+    {--expand : Include schema, relation keys, events, observers, and model internals}
+    {--database= : Database connection override}
+    {--write= : Write JSON to this absolute or project-relative path}
+    {--compact : Remove JSON indentation}')]
+#[Description('Inspect application model, relation, cast, schema, and diagnostic context')]
 class ModelContextCommand extends Command
 {
     public function handle(ModelContextScanner $scanner): int
     {
+        $model = $this->argument('model');
+        $model = is_string($model) && $model !== '' ? $model : null;
+        $all = (bool) $this->option('all');
+        $list = (bool) $this->option('list');
+
+        if (($model !== null && ($all || $list)) || ($all && $list)) {
+            $this->components->error('Pass a model, --all, or --list; do not combine them.');
+
+            return self::FAILURE;
+        }
+
         try {
-            $payload = $scanner->scan(
-                requestedModels: $this->argument('model') ? [$this->argument('model')] : [],
-                database: $this->option('database'),
-                includeCounts: (bool) $this->option('counts'),
-                includeViews: (bool) $this->option('views'),
-                includeTypes: (bool) $this->option('types'),
-            );
+            $payload = ($list || ($model === null && ! $all))
+                ? $scanner->registry()
+                : $scanner->scan(
+                    requestedModels: $all ? $scanner->availableModels() : [$model],
+                    database: $this->stringOption('database'),
+                    expand: (bool) $this->option('expand'),
+                );
         } catch (Throwable $throwable) {
             $this->components->error($throwable->getMessage());
 
-            return 1;
+            return self::FAILURE;
         }
 
+        if (! $this->emit($payload)) {
+            return self::FAILURE;
+        }
+
+        if (! isset($payload['errors'])) {
+            return $payload['summary']['models_registered'] > 0 ? self::SUCCESS : self::FAILURE;
+        }
+
+        return $payload['summary']['models_scanned'] > 0 && $payload['summary']['errors'] === 0
+            ? self::SUCCESS
+            : self::FAILURE;
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function emit(array $payload): bool
+    {
         try {
             $json = json_encode(
                 $payload,
@@ -49,39 +80,41 @@ class ModelContextCommand extends Command
         } catch (JsonException $jsonException) {
             $this->components->error($jsonException->getMessage());
 
-            return 1;
+            return false;
         }
 
-        $outputPath = $this->option('write');
+        $outputPath = $this->stringOption('write');
 
-        if (is_string($outputPath) && $outputPath !== '') {
-            $resolvedPath = $this->resolveOutputPath($outputPath);
-            $directory = dirname($resolvedPath);
-
-            if (! File::isDirectory($directory)) {
-                File::makeDirectory($directory, 0755, true);
-            }
-
-            File::put($resolvedPath, $json.PHP_EOL);
-
-            $this->components->success(sprintf('Model context written to [%s].', $resolvedPath));
-
-            if ($payload['summary']['errors'] > 0) {
-                $this->components->warn(sprintf('Scan completed with %s error(s). Check the JSON payload for details.', $payload['summary']['errors']));
-            }
-        } else {
+        if ($outputPath === null) {
             $this->output->writeln($json);
+
+            return true;
         }
 
-        return $payload['summary']['models_scanned'] > 0 ? 0 : 1;
+        $resolvedPath = Str::startsWith($outputPath, DIRECTORY_SEPARATOR)
+            ? $outputPath
+            : base_path($outputPath);
+        $directory = dirname($resolvedPath);
+
+        if (! File::isDirectory($directory)) {
+            File::makeDirectory($directory, 0755, true);
+        }
+
+        if (File::put($resolvedPath, $json.PHP_EOL) === false) {
+            $this->components->error(sprintf('Unable to write model context to [%s].', $resolvedPath));
+
+            return false;
+        }
+
+        $this->components->success(sprintf('Model context written to [%s].', $resolvedPath));
+
+        return true;
     }
 
-    protected function resolveOutputPath(string $path): string
+    private function stringOption(string $name): ?string
     {
-        if (Str::startsWith($path, DIRECTORY_SEPARATOR)) {
-            return $path;
-        }
+        $value = $this->option($name);
 
-        return base_path($path);
+        return is_string($value) && $value !== '' ? $value : null;
     }
 }

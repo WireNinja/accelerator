@@ -31,7 +31,7 @@ The database-backed `registration_enabled` toggle and Filament registration rout
 
 ### 🔴 BREAKING — Runtime typed-column magic removed
 
-`HasTypedColumnMethods` and its generated `getColumn*()` / `setColumn*()` API are removed. Read casted Eloquent attributes directly and write them with property assignment, `fill()`, or `update()`. `accelerator:model-doc` now generates property and relationship types only; it no longer turns PHPDoc into a runtime validation system or queries the schema from `Model::__call()`.
+`HasTypedColumnMethods` and its generated `getColumn*()` / `setColumn*()` API are removed. Read casted Eloquent attributes directly and write them with property assignment, `fill()`, or `update()`. Runtime behavior and static typing must not depend on generated PHPDoc.
 
 ### 🔴 BREAKING — The application owns its user model
 
@@ -60,6 +60,16 @@ Google OAuth is disabled unless its feature and mode are enabled. `existing_only
 ### 🔴 BREAKING — Resource context is ResourceEnum-backed
 
 `agent:resource-context` now treats the configured `ResourceEnum` as the authoritative registry and removes the duplicate filesystem discovery layer, arbitrary complexity score, fake empty form/table/page/widget registries, and two synthetic Filament host classes. `--expand` is now real and adds detailed trees/source data. Managed resources need `#[DiscoverAsResource]`; registered external vendor resources are reported explicitly and are exempt from Accelerator-owned metadata checks.
+
+### 🔴 BREAKING — Duplicate model commands removed
+
+`accelerator:generate-model-outline`, `accelerator:model-audit`, and `accelerator:model-doc` are removed. Use Laravel's native `model:show {Model} --json` for the standard overview and `agent:model-context {Model} --compact` for Accelerator schema-key diagnostics. Calling `agent:model-context` without a model now lists the application model registry; use `--all` for the intentionally large full scan and `--expand` for detailed schema and relation keys. The Boost skill is renamed from `accelerator-model-outline` to `accelerator-model-context`.
+
+### 🔴 BREAKING — Lookup query wrapper removed
+
+`Support\Filament\Lookup` is removed. It wrapped one `Get` value and one Eloquent `whereKey()->pluck()` chain, had one application caller, and silently returned an empty array when misconfigured. Write the dependent options query directly with `Arr::wrap($get(...))`.
+
+`Support\Cast::asBool()` is also removed after its final internal consumer disappeared. Keep `asString()`, `strictString()`, and `asInt()` only at genuinely mixed input boundaries.
 
 ## v1.1.79
 
