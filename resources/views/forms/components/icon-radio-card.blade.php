@@ -23,9 +23,7 @@
     <div @if (FilamentView::hasSpaMode()) {{-- format-ignore-start --}}x-load="visible || event (x-modal-opened)" {{--
     format-ignore-end --}} @else x-load @endif
         x-load-src="{{ \Filament\Support\Facades\FilamentAsset::getAlpineComponentSrc('checkbox-list', 'filament/forms') }}"
-        x-data="checkboxListFormComponent({ livewireId: @js($this->getId()) })"
-        {{ $getExtraAlpineAttributeBag()->class(['fi-fo-checkbox-list']) }}
-    >
+        x-data="checkboxListFormComponent({ livewireId: @js($this->getId()) })" class="fi-fo-checkbox-list">
         @if (!$isDisabled)
             @if ($isSearchable)
                 <x-filament::input.wrapper inline-prefix :prefix-icon="\Filament\Support\Icons\Heroicon::MagnifyingGlass"
