@@ -2,6 +2,23 @@
 
 Accelerator is an intentionally batteries-included foundation for internal Laravel applications. Dependency breadth is deliberate; runtime activation and boot cost must remain explicit.
 
+### AI Skill Routing
+
+Before acting, match the task to the installed skill and read that `SKILL.md` completely. Do not guess an Accelerator convention from generic Laravel knowledge.
+
+- Fresh install or installer failure: `accelerator-installation`.
+- Existing v1 upgrade: `accelerator-breaking-changes`.
+- Env, feature flags, or preload middleware: `accelerator-env-config`.
+- Filament resources, forms, tables, policies, or custom fields: `accelerator-filament`.
+- Models, relationships, casts, or schema context: `accelerator-model-context`.
+- Activity logging: `accelerator-activity-log`.
+- PWA and Vite assets: `accelerator-pwa-development`.
+- Exception telemetry: `accelerator-telemetry`.
+- Init, deploy, rollback, Nginx, or Supervisor mutation: `accelerator-deployment`.
+- Read-only runtime and service diagnosis: `accelerator-ops-observability`.
+
+Use every relevant skill when work crosses boundaries. If none matches, use the relevant framework/package skill and version-specific documentation instead of forcing an unrelated Accelerator skill.
+
 ### Installation
 
 - The supported fresh flow is `laravel new` → `composer require wireninja/accelerator:^2.0 -W` → `bash vendor/wireninja/accelerator/bin/install`.

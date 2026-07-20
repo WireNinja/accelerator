@@ -9,7 +9,6 @@
     $columns = $getColumns();
     $gridDirection = $getGridDirection();
     $isInline = false;
-    $isHtmlAllowed = $isHtmlAllowed();
     $enum = $getEnum();
     $isDisabled = $isDisabled();
     $hasCursorPointer = $hasCursorPointer();
@@ -116,11 +115,7 @@
                             <div class="fi-fo-checkbox-list-option-text flex-1">
                                 <span
                                     class="fi-fo-checkbox-list-option-label block text-sm font-medium text-gray-900 dark:text-gray-100">
-                                    @if ($isHtmlAllowed)
-                                        {!! $label !!}
-                                    @else
-                                        {{ $label }}
-                                    @endif
+                                    {{ $label }}
                                 </span>
                                 @if ($description)
                                     <span
