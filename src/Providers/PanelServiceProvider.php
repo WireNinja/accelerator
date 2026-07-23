@@ -14,7 +14,10 @@ final class PanelServiceProvider extends ServiceProvider
     #[Override]
     public function register(): void
     {
-        $this->app->register(SupportPanelProvider::class);
         $this->app->register(SystemPanelProvider::class);
+
+        if (config('accelerator.features.ticketing', false)) {
+            $this->app->register(SupportPanelProvider::class);
+        }
     }
 }

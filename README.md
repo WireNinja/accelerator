@@ -7,9 +7,11 @@ An intentionally batteries-included Laravel 13 foundation for authenticated inte
 ```bash
 laravel new my-project --no-interaction
 cd my-project
-composer require wireninja/accelerator:^2.0 -W --no-interaction
+composer require wireninja/accelerator:^2.0@dev -W --no-interaction
 bash vendor/wireninja/accelerator/bin/install
 ```
+
+`@dev` is required while v2 has no stable tag. Remove it from this command only after an explicit stable v2 release.
 
 The Laravel Prompts onboarding collects application identity, initial administrator, frontend, database, optional feature activation, and optional deployment topology. The installer then owns the scaffold, env files, migrations, frontend, Filament, Shield, Boost, Pint, production build, and verification.
 
@@ -39,15 +41,21 @@ Laravel application
     |
     +--> CoreServiceProvider                     always-safe foundation
     +--> config('accelerator.features.*')
-            +--> Filament / panels / OAuth       only when enabled
-            +--> telemetry / PWA / ticketing     only when enabled
+            +--> Filament Admin + System         core internal UI
+            +--> Support panel                   only with ticketing
+            +--> OAuth / telemetry / PWA         only when enabled
             +--> disabled feature                no provider, routes, or boot work
 
 Deployment is a separate boundary:
 
-.env.envoy --> preflight --> immutable release + matching env
-                         --> migrate --> atomic current symlink
-                         --> scoped Nginx/Supervisor --> HTTPS /up check
+.accelerator/deploy.env -------------------------+
+.accelerator/environments/{stage}.env -----------+--> Envoy preflight
+                                                       |
+                                                       +--> locked build + backup
+                                                       +--> immutable code/env pair
+                                                       +--> atomic current symlink
+                                                       +--> scoped Nginx/Supervisor
+                                                       +--> HTTPS /up
 ```
 
 The Bash command is only an entrypoint. Laravel Prompts builds one plan, PHP owns all mutations, and the ignored install journal makes an interrupted run resumable. Envoy never edits the local scaffold; it builds exact committed releases on the server.
@@ -60,10 +68,10 @@ export ACCELERATOR_ADMIN_PASSWORD='use-a-real-secret'
 bash vendor/wireninja/accelerator/bin/install \
   --no-interaction \
   --app-name='My Project' \
-  --app-url=http://my-project.test \
+  --app-url=http://localhost:8000 \
   --frontend=inertia \
   --database=sqlite \
-  --features=filament,fortify,panels,settings,ticketing,pwa,insider,scout,wayfinder
+  --features=filament,fortify,settings,ticketing,pwa,insider,scout,wayfinder
 ```
 
 If `ACCELERATOR_ADMIN_PASSWORD` is absent, a secure generated password is printed once. Use Bun; npm, pnpm, Yarn, and legacy Bun lockfiles are not supported by v2.
@@ -72,7 +80,17 @@ If `ACCELERATOR_ADMIN_PASSWORD` is absent, a secure generated password is printe
 
 Dependencies remain installed by design. Feature selection controls runtime activation and integration, not Composer package presence.
 
-Available features include Fortify, panels, settings, ticketing, OAuth, PWA, Telegram, telemetry, Insider, Horizon, Reverb, Scout, Nightwatch, and Wayfinder. Filament remains the internal-app core.
+Available features include Fortify, settings, ticketing, OAuth, PWA, Telegram, telemetry, Insider, Horizon, Reverb, Scout, Nightwatch, and Wayfinder. Filament, Admin, and System are core; Support exists only with ticketing.
+
+Change state later through one local-only command:
+
+```bash
+php artisan accelerator:configure
+php artisan accelerator:configure deployment
+php artisan accelerator:configure environment --stage=production
+```
+
+The command reads real env files, validates a complete draft, redacts secrets, asks before writing, and prints the next action. It never SSHes, migrates, deploys, or restarts a service.
 
 ## Deployment
 
@@ -84,7 +102,7 @@ bash vendor/wireninja/accelerator/bin/install \
   --deploy \
   --deployment-mode=single \
   --project=my-project \
-  --ssh-host=server \
+  --ssh-host=my-vps \
   --repo=git@github.com:example/my-project.git \
   --branch=main \
   --domain=app.example.com \
@@ -108,7 +126,9 @@ Valid stages are `staging` and `production`. Envoy renders scoped Nginx and Supe
 
 ```bash
 php artisan accelerator:doctor
-php artisan agent:model-context User --compact
+php artisan accelerator:context model User
+php artisan accelerator:context resource user
+php artisan accelerator:verify-resource user --compact
 composer analyse
 bun run build
 ```

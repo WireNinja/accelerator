@@ -76,7 +76,7 @@ class User extends Authenticatable implements AcceleratorUser, HasAppAuthenticat
 
     public function isSuperAdmin(): bool
     {
-        return $this->hasRole('super_admin');
+        return $this->hasRole((string) config('filament-shield.super_admin.name', 'super_admin'));
     }
 
     /** @return BelongsTo<User, $this> */

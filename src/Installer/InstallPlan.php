@@ -13,7 +13,6 @@ final readonly class InstallPlan
     private const FEATURES = [
         'filament',
         'fortify',
-        'panels',
         'settings',
         'ticketing',
         'oauth',
@@ -94,11 +93,11 @@ final readonly class InstallPlan
             throw new InvalidArgumentException('Unknown Accelerator features: '.implode(', ', $unknownFeatures));
         }
 
-        if (! in_array($this->httpRuntime, ['fpm', 'octane'], true)) {
+        if ($this->deploy && ! in_array($this->httpRuntime, ['fpm', 'octane'], true)) {
             throw new InvalidArgumentException('HTTP runtime must be fpm or octane.');
         }
 
-        if (! in_array($this->deploymentMode, ['single', 'dual'], true)) {
+        if ($this->deploy && ! in_array($this->deploymentMode, ['single', 'dual'], true)) {
             throw new InvalidArgumentException('Deployment mode must be single or dual.');
         }
 

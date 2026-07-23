@@ -19,7 +19,6 @@ use Spatie\Permission\Models\Role;
 use Symfony\Component\Process\ExecutableFinder;
 use Throwable;
 use WireNinja\Accelerator\AcceleratorServiceProvider;
-use WireNinja\Accelerator\Console\Concerns\HasBanner;
 use WireNinja\Accelerator\Contracts\AcceleratorUser;
 use WireNinja\Accelerator\Telemetry\TelemetryBuffer;
 
@@ -27,8 +26,6 @@ use WireNinja\Accelerator\Telemetry\TelemetryBuffer;
 #[Description('Verify the Accelerator installation contract and report host warnings')]
 final class DoctorCommand extends Command
 {
-    use HasBanner;
-
     /**
      * @var list<array{
      *     category: string,
@@ -39,13 +36,6 @@ final class DoctorCommand extends Command
      * }>
      */
     private array $checks = [];
-
-    public function __construct()
-    {
-        parent::__construct();
-
-        $this->setAliases(['agent:audit']);
-    }
 
     /**
      * @throws JsonException
@@ -71,8 +61,6 @@ final class DoctorCommand extends Command
 
             return $errors === [] ? self::SUCCESS : self::FAILURE;
         }
-
-        $this->displayBanner();
 
         foreach ($this->groupedChecks() as $category => $checks) {
             $this->components->info($category);
@@ -129,7 +117,6 @@ final class DoctorCommand extends Command
     {
         $requiredFiles = [
             'app/Enums/System/PanelEnum.php',
-            'app/Enums/System/ResourceEnum.php',
             'app/Enums/System/RoleEnum.php',
             'app/Models/User.php',
             'app/Support/helpers.php',
@@ -291,7 +278,6 @@ final class DoctorCommand extends Command
         $featureNames = [
             'filament',
             'fortify',
-            'panels',
             'oauth',
             'insider',
             'pwa',
@@ -299,6 +285,7 @@ final class DoctorCommand extends Command
             'telegram',
             'telemetry',
             'ticketing',
+            'horizon',
         ];
         $missingFeatureKeys = [];
 
@@ -333,7 +320,6 @@ final class DoctorCommand extends Command
 
         $filamentEnabled = (bool) config('accelerator.features.filament', false);
         $fortifyEnabled = (bool) config('accelerator.features.fortify', false);
-        $panelsEnabled = (bool) config('accelerator.features.panels', false);
         $fortifyLoaded = app()->getProvider(FortifyServiceProvider::class) !== null;
         $fortifyRouteCount = collect(app('router')->getRoutes()->getRoutes())
             ->filter(static fn (Route $route): bool => str_contains($route->getActionName(), 'Laravel\\Fortify'))
@@ -344,13 +330,6 @@ final class DoctorCommand extends Command
             value: sprintf('%s, %d routes', $fortifyLoaded ? 'loaded' : 'not loaded', $fortifyRouteCount),
             passed: $fortifyEnabled === $fortifyLoaded && $fortifyRouteCount === ($fortifyEnabled ? 4 : 0),
             message: 'Fortify provider/routes do not match ACCELERATOR_FEATURE_FORTIFY; rebuild config and route caches.',
-        );
-        $this->assert(
-            category: 'Configuration',
-            label: 'Panel dependency',
-            value: $panelsEnabled ? 'enabled' : 'disabled',
-            passed: ! $panelsEnabled || $filamentEnabled,
-            message: 'ACCELERATOR_FEATURE_PANELS requires ACCELERATOR_FEATURE_FILAMENT=true.',
         );
 
         $oauthEnabled = (bool) config('accelerator.features.oauth', false);

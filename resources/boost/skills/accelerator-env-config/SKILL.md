@@ -30,7 +30,7 @@ All secret files are local-only and mode `0600`. Do not create `.env.testing` by
 
 ## Mutation workflow
 
-Use `php artisan accelerator:configure` when available. Before mutation:
+Use `php artisan accelerator:configure`. Before mutation:
 
 1. read the real target files, not the install receipt;
 2. validate the full in-memory draft;
@@ -39,7 +39,7 @@ Use `php artisan accelerator:configure` when available. Before mutation:
 5. write via same-directory temp and atomic rename;
 6. run local validation only and print the next command.
 
-Configuration must never SSH, deploy, migrate, or restart services. If the target command is not yet implemented on the v2 development branch, inspect the actual files and report that gap; do not emulate unsafe writes.
+Configuration must never SSH, deploy, migrate, or restart services.
 
 ## Inspection
 

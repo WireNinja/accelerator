@@ -17,7 +17,7 @@ Read the matching skill before acting:
 - deploy/init/rollback/server mutation: `accelerator-deployment`
 - read-only runtime diagnosis: `accelerator-ops-observability`
 
-Use framework/package skills too when the task crosses domains. Verify available commands before running them; v2 development plans are not proof that a command is implemented.
+Use framework/package skills too when the task crosses domains.
 
 ### Core contract
 

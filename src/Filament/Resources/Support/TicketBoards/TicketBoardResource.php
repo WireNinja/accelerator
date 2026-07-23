@@ -2,32 +2,29 @@
 
 namespace WireNinja\Accelerator\Filament\Resources\Support\TicketBoards;
 
+use BackedEnum;
 use Filament\Resources\Pages\PageRegistration;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Table;
 use Override;
-use WireNinja\Accelerator\Attributes\DiscoverAsResource;
+use UnitEnum;
 use WireNinja\Accelerator\Filament\Resources\Support\TicketBoards\Pages\CreateTicketBoard;
 use WireNinja\Accelerator\Filament\Resources\Support\TicketBoards\Pages\EditTicketBoard;
 use WireNinja\Accelerator\Filament\Resources\Support\TicketBoards\Pages\ListTicketBoards;
 use WireNinja\Accelerator\Filament\Resources\Support\TicketBoards\Schemas\TicketBoardForm;
 use WireNinja\Accelerator\Filament\Resources\Support\TicketBoards\Tables\TicketBoardsTable;
-use WireNinja\Accelerator\Filament\Traits\BetterResource;
 use WireNinja\Accelerator\Model\TicketBoard;
-use WireNinja\Accelerator\Policies\TicketBoardPolicy;
 
-#[DiscoverAsResource(
-    key: 'ticket_board',
-    form: TicketBoardForm::class,
-    table: TicketBoardsTable::class,
-    policy: TicketBoardPolicy::class,
-)]
 class TicketBoardResource extends Resource
 {
-    use BetterResource;
-
     protected static ?string $model = TicketBoard::class;
+
+    protected static string|BackedEnum|null $navigationIcon = 'lucide-layout-grid';
+
+    protected static ?string $modelLabel = 'Board Tiket';
+
+    protected static string|UnitEnum|null $navigationGroup = 'Support';
 
     #[Override]
     public static function form(Schema $schema): Schema

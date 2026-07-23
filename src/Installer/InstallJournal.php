@@ -99,7 +99,15 @@ final class InstallJournal
 
         $payload = json_encode([
             'fingerprint' => $this->fingerprint,
-            'plan' => $this->plan->toArray(),
+            'plan' => $this->finished ? null : $this->plan->toArray(),
+            'receipt' => $this->finished ? [
+                'app_name' => $this->plan->appName,
+                'app_url' => $this->plan->appUrl,
+                'frontend' => $this->plan->primaryFrontend,
+                'database' => $this->plan->database,
+                'features' => $this->plan->features,
+                'deployment_configured' => $this->plan->deploy,
+            ] : null,
             'completed_steps' => $this->completedSteps,
             'finished' => $this->finished,
         ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR).PHP_EOL;

@@ -11,6 +11,7 @@ use Illuminate\Http\Middleware\TrustProxies;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Session;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
@@ -18,11 +19,12 @@ use Livewire\LivewireManager;
 use NotificationChannels\Telegram\Telegram;
 use SessionHandlerInterface;
 use WireNinja\Accelerator\Console\Agent\DoctorCommand;
-use WireNinja\Accelerator\Console\Agent\ModelContextCommand;
-use WireNinja\Accelerator\Console\Agent\ResourceContextCommand;
+use WireNinja\Accelerator\Console\ConfigureCommand;
+use WireNinja\Accelerator\Console\ContextCommand;
 use WireNinja\Accelerator\Console\EnvCommand;
 use WireNinja\Accelerator\Console\ProvisionAdminCommand;
 use WireNinja\Accelerator\Console\Vps\BackupStatusCommand;
+use WireNinja\Accelerator\Contracts\AcceleratorUser;
 use WireNinja\Accelerator\Livewire\Synthesizers\BigDecimalSynth;
 use WireNinja\Accelerator\Support\OctaneTableSessionHandler;
 use WireNinja\Accelerator\Support\Telegram\TelegramBotConfigurator;
@@ -52,6 +54,7 @@ final class CoreServiceProvider extends ServiceProvider
         $this->registerCustomSessionDriver();
         $this->configureEloquent();
         $this->configureApplicationDefaults();
+        $this->configureSuperAdminGate();
 
         $this->app->make(LivewireManager::class)->propertySynthesizer(BigDecimalSynth::class);
 
@@ -61,8 +64,8 @@ final class CoreServiceProvider extends ServiceProvider
 
         $this->commands([
             DoctorCommand::class,
-            ModelContextCommand::class,
-            ResourceContextCommand::class,
+            ConfigureCommand::class,
+            ContextCommand::class,
             EnvCommand::class,
             ProvisionAdminCommand::class,
             BackupStatusCommand::class,
@@ -120,5 +123,20 @@ final class CoreServiceProvider extends ServiceProvider
                 ->symbols()
                 ->uncompromised()
             : null);
+    }
+
+    private function configureSuperAdminGate(): void
+    {
+        Gate::before(static function (mixed $user): ?bool {
+            if (! $user instanceof AcceleratorUser) {
+                return null;
+            }
+
+            if ($user->isSuspended()) {
+                return false;
+            }
+
+            return $user->isSuperAdmin() ? true : null;
+        });
     }
 }

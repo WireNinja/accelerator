@@ -2,83 +2,43 @@
 
 namespace WireNinja\Accelerator\Console\Filament;
 
+use Filament\Resources\Resource;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Gate;
 use JsonException;
 use Throwable;
-use WireNinja\Accelerator\Support\Filament\ResourceContextScanner;
+use WireNinja\Accelerator\Support\Context\ResourceRegistry;
 
-/**
- * Hard pass/fail JSON gate for Filament resources.
- *
- * Critical checks only — anti-bullshit anchor for AI agents. Anything
- * "best practice" but not strictly required (form/table split, empty
- * state, page count) belongs in code review, not in a CI gate.
- *
- * Exit codes:
- *   0  PASS   — all critical checks satisfied
- *   1  FAIL   — at least one critical violation
- */
 #[Signature('accelerator:verify-resource
     {resource : Resource key (e.g. user) or class FQN}
     {--compact : Compact JSON for piping}')]
-#[Description('Hard pass/fail gate: BetterResource trait, DiscoverAsResource attribute, no bulk action leak, policy registered.')]
+#[Description('Verify hard Filament registration, model, and policy invariants.')]
 class VerifyResourceCommand extends Command
 {
-    public function handle(ResourceContextScanner $scanner): int
+    public function handle(ResourceRegistry $registry): int
     {
         $key = (string) $this->argument('resource');
 
         try {
-            $payload = $scanner->scan(resource: $key);
+            $resourceClass = $registry->resolve($key);
         } catch (Throwable $throwable) {
-            return $this->emit('FAIL', $key, '', [['critical', 'scan', $throwable->getMessage()]]);
+            return $this->emit('FAIL', $key, '', [['critical', 'lookup', $throwable->getMessage()]]);
         }
 
-        $resource = $payload['resource'] ?? null;
-
-        if (! is_array($resource)) {
-            return $this->emit('FAIL', $key, '', [['critical', 'lookup', "Resource [{$key}] not found. Register it in ResourceEnum first."]]);
-        }
-
-        $resourceClass = (string) ($resource['class'] ?? '');
         $findings = [];
 
-        // 1. ResourceEnum registration
-        if (empty($resource['registered_in_resource_enum'])) {
-            $findings[] = ['critical', 'registry', 'Resource is not registered in ResourceEnum.'];
+        if (! is_subclass_of($resourceClass, Resource::class)) {
+            $findings[] = ['critical', 'resource', 'Registered class is not a Filament resource.'];
         }
 
-        // External vendor resources are registered intentionally but cannot use
-        // application-owned metadata traits or attributes.
-        if (($resource['managed'] ?? true) === false) {
-            return $this->emit($findings === [] ? 'PASS' : 'FAIL', $key, $resourceClass, $findings);
-        }
+        $model = is_subclass_of($resourceClass, Resource::class) ? $resourceClass::getModel() : null;
 
-        // 2. Discovery attribute
-        if (empty($resource['discovery']['annotated_as_resource'])) {
-            $findings[] = ['critical', 'discovery', 'Missing #[DiscoverAsResource] attribute.'];
-        }
-
-        // 3. BetterResource trait
-        if (
-            $resourceClass !== '' && class_exists($resourceClass)
-            && ! in_array('WireNinja\\Accelerator\\Filament\\Traits\\BetterResource', class_uses_recursive($resourceClass), true)
-        ) {
-            $findings[] = ['critical', 'trait', 'Resource class does not use BetterResource trait.'];
-        }
-
-        // 4. Forbidden table action APIs.
-        foreach ($resource['table']['violations'] ?? [] as $violation) {
-            $violationKey = is_array($violation) ? (string) ($violation['key'] ?? 'table_action') : (string) $violation;
-            $findings[] = ['critical', 'table-actions', 'Forbidden table action API (scanner: '.$violationKey.').'];
-
-            break;
-        }
-
-        // 5. Policy registered
-        if (empty($resource['authorization']['policy']['class'] ?? null)) {
+        if (! is_string($model) || ! is_subclass_of($model, Model::class)) {
+            $findings[] = ['critical', 'model', 'Resource does not resolve an Eloquent model.'];
+        } elseif (Gate::getPolicyFor($model) === null) {
             $findings[] = ['critical', 'policy', 'No policy class registered. Run shield:safe-regenerate.'];
         }
 

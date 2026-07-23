@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-use App\Enums\System\ResourceEnum;
 use App\Models\User;
 use Filament\Pages\Dashboard;
 use Filament\Widgets\AccountWidget;
 use Filament\Widgets\FilamentInfoWidget;
+use WireNinja\Accelerator\Support\Filament\ShieldPermissions;
 
 return [
 
@@ -73,7 +73,7 @@ return [
     'super_admin' => [
         'enabled' => true,
         'name' => 'super_admin',
-        'define_via_gate' => false,
+        'define_via_gate' => true,
         'intercept_gate' => 'before',
     ],
 
@@ -171,7 +171,7 @@ return [
 
     'resources' => [
         'subject' => 'model',
-        'manage' => ResourceEnum::getResourcesPermissions(),
+        'manage' => ShieldPermissions::builtIn(),
         'exclude' => [
             //
         ],

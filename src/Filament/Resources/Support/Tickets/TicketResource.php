@@ -2,6 +2,7 @@
 
 namespace WireNinja\Accelerator\Filament\Resources\Support\Tickets;
 
+use BackedEnum;
 use Filament\Resources\Pages\PageRegistration;
 use Filament\Resources\RelationManagers\RelationGroup;
 use Filament\Resources\RelationManagers\RelationManager;
@@ -11,7 +12,7 @@ use Filament\Schemas\Schema;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Override;
-use WireNinja\Accelerator\Attributes\DiscoverAsResource;
+use UnitEnum;
 use WireNinja\Accelerator\Filament\Resources\Support\Tickets\Pages\CreateTicket;
 use WireNinja\Accelerator\Filament\Resources\Support\Tickets\Pages\EditTicket;
 use WireNinja\Accelerator\Filament\Resources\Support\Tickets\Pages\ListTickets;
@@ -21,25 +22,21 @@ use WireNinja\Accelerator\Filament\Resources\Support\Tickets\RelationManagers\Ti
 use WireNinja\Accelerator\Filament\Resources\Support\Tickets\RelationManagers\TicketRelationsRelationManager;
 use WireNinja\Accelerator\Filament\Resources\Support\Tickets\Schemas\TicketForm;
 use WireNinja\Accelerator\Filament\Resources\Support\Tickets\Tables\TicketsTable;
-use WireNinja\Accelerator\Filament\Traits\BetterResource;
 use WireNinja\Accelerator\Model\Ticket;
-use WireNinja\Accelerator\Policies\TicketPolicy;
 use WireNinja\Accelerator\Support\UserModel;
 
 /**
  * @extends resource<Ticket>
  */
-#[DiscoverAsResource(
-    key: 'ticket',
-    form: TicketForm::class,
-    table: TicketsTable::class,
-    policy: TicketPolicy::class,
-)]
 class TicketResource extends Resource
 {
-    use BetterResource;
-
     protected static ?string $model = Ticket::class;
+
+    protected static string|BackedEnum|null $navigationIcon = 'lucide-ticket';
+
+    protected static ?string $modelLabel = 'Tiket';
+
+    protected static string|UnitEnum|null $navigationGroup = 'Support';
 
     #[Override]
     public static function form(Schema $schema): Schema

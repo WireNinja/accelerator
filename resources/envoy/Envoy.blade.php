@@ -260,7 +260,7 @@
         [ -n "$(env_value DB_USERNAME)" ] || { echo "[preflight] DB_USERNAME is blank."; exit 1; }
     fi
 
-    for ignored in .env .env.envoy .env.staging .env.production; do
+    for ignored in .env .accelerator; do
         if git ls-files --error-unmatch "$ignored" >/dev/null 2>&1; then
             echo "[preflight] $ignored contains local configuration and must not be tracked."
             exit 1
@@ -301,7 +301,7 @@
     set -Eeuo pipefail
     sudo -n true >/dev/null || { echo "[preflight] Passwordless sudo is required for scoped Nginx/Supervisor operations."; exit 1; }
 
-    for command in git composer {{ $config->phpBinary }} {{ $config->bunBinary }} curl base64 sha256sum setfacl nginx openssl; do
+    for command in git composer {{ $config->phpBinary }} {{ $config->bunBinary }} curl base64 sha256sum nginx openssl; do
         command -v "$command" >/dev/null || { echo "[preflight] Missing VPS command: $command"; exit 1; }
     done
     @if($hasSupervisorPrograms)
@@ -363,7 +363,10 @@
         fi
     @endif
 
-    echo "[preflight] remote tools, runtime, disk, and stage state are ready."
+    runtime_group="$(id -gn {{ $config->runUser }} 2>/dev/null || true)"
+    [ -n "$runtime_group" ] || { echo "[preflight] Runtime user {{ $config->runUser }} or its primary group is unavailable."; exit 1; }
+
+    echo "[preflight] trusted single-VPS sudo, runtime group [$runtime_group], tools, disk, and stage state are ready."
 @endtask
 
 @task('dns-preflight', ['on' => 'vps'])
@@ -387,11 +390,11 @@
 @task('prepare-layout', ['on' => 'vps'])
     set -Eeuo pipefail
     deploy_user="$(id -un)"
-    deploy_group="$(id -gn)"
+    runtime_group="$(id -gn {{ $config->runUser }})"
 
-    sudo install -d -o "$deploy_user" -g "$deploy_group" -m 0755 \
+    sudo install -d -o "$deploy_user" -g "$runtime_group" -m 2750 \
         {{ $config->deployRoot }} {{ $config->releasesPath() }} {{ $config->archivePath() }} {{ $config->sharedPath() }}
-    sudo install -d -o "$deploy_user" -g {{ $config->runUser }} -m 2775 \
+    sudo install -d -o "$deploy_user" -g "$runtime_group" -m 2770 \
         {{ $config->sharedPath() }}/storage/app/public \
         {{ $config->sharedPath() }}/storage/framework/cache \
         {{ $config->sharedPath() }}/storage/framework/sessions \
@@ -399,10 +402,10 @@
         {{ $config->sharedPath() }}/storage/logs \
         {{ $config->sharedPath() }}/database \
         {{ $config->sharedPath() }}/acme/.well-known/acme-challenge
-    sudo install -d -o "$deploy_user" -g {{ $config->runUser }} -m 0750 {{ $config->sharedPath() }}/env
-
-    sudo setfacl -R -m u:"$deploy_user":rwx -m u:{{ $config->runUser }}:rwx {{ $config->sharedPath() }}/storage {{ $config->sharedPath() }}/database
-    sudo setfacl -dR -m u:"$deploy_user":rwx -m u:{{ $config->runUser }}:rwx {{ $config->sharedPath() }}/storage {{ $config->sharedPath() }}/database
+    sudo install -d -o "$deploy_user" -g "$runtime_group" -m 2750 {{ $config->sharedPath() }}/env
+    sudo chown -R "$deploy_user:$runtime_group" {{ $config->sharedPath() }}/storage {{ $config->sharedPath() }}/database {{ $config->sharedPath() }}/acme
+    find {{ $config->sharedPath() }}/storage {{ $config->sharedPath() }}/database {{ $config->sharedPath() }}/acme -type d -exec chmod 2770 {} +
+    find {{ $config->sharedPath() }}/storage {{ $config->sharedPath() }}/database {{ $config->sharedPath() }}/acme -type f -exec chmod 0660 {} +
     echo "[layout] release layout ready at {{ $config->deployRoot }}."
 @endtask
 
@@ -486,10 +489,10 @@
         fi
     @endif
     candidate={{ $releaseEnvironmentPath }}.upload
-    install -m 0600 "$source" "$candidate"
+    install -m 0640 "$source" "$candidate"
     mv -f "$candidate" {{ $releaseEnvironmentPath }}
     rm -f "$source"
-    sudo setfacl -m u:{{ $config->runUser }}:r {{ $releaseEnvironmentPath }}
+    sudo chown "$(id -un):$(id -gn {{ $config->runUser }})" {{ $releaseEnvironmentPath }}
     echo "[env] staged immutable environment for release {{ $releaseId }}."
 @endtask
 
@@ -698,11 +701,11 @@
         database={{ $config->sharedPath() }}/database/database.sqlite
         touch "$database"
         chmod 0660 "$database"
-        sudo setfacl -m u:{{ $config->runUser }}:rw "$database"
+        sudo chown "$(id -un):$(id -gn {{ $config->runUser }})" "$database"
     fi
 
-    sudo setfacl -R -m u:{{ $config->runUser }}:rwx bootstrap/cache
-    sudo setfacl -dR -m u:{{ $config->runUser }}:rwx bootstrap/cache
+    sudo chown -R "$(id -un):$(id -gn {{ $config->runUser }})" bootstrap/cache
+    chmod 2770 bootstrap/cache
     echo "[release] linked staged env and shared writable state."
 @endtask
 
@@ -732,12 +735,14 @@
 
 @task('harden-release', ['on' => 'vps'])
     set -Eeuo pipefail
-    chmod 0755 {{ $releasePath }} {{ $releasePath }}/artisan {{ $releasePath }}/public {{ $releasePath }}/bootstrap/cache
-    chmod 0600 {{ $releaseEnvironmentPath }}
-    sudo setfacl -m u:{{ $config->runUser }}:r {{ $releaseEnvironmentPath }}
-    sudo setfacl -R -m u:{{ $config->runUser }}:rwx {{ $releasePath }}/bootstrap/cache
-    sudo setfacl -dR -m u:{{ $config->runUser }}:rwx {{ $releasePath }}/bootstrap/cache
-    echo "[release] permissions hardened without traversing vendor or source trees."
+    runtime_group="$(id -gn {{ $config->runUser }})"
+    sudo chown -R "$(id -un):$runtime_group" {{ $releasePath }}
+    find {{ $releasePath }} -type d -exec chmod 2750 {} +
+    find {{ $releasePath }} -type f -exec chmod 0640 {} +
+    chmod 0750 {{ $releasePath }}/artisan
+    chmod 2770 {{ $releasePath }}/bootstrap/cache
+    chmod 0640 {{ $releaseEnvironmentPath }}
+    echo "[release] owner/group permissions applied: directories 2750, files 0640, writable cache 2770."
 @endtask
 
 @task('migration-safety', ['on' => 'vps'])
@@ -794,7 +799,7 @@
         previous="$(readlink -f "$active" 2>/dev/null || printf '%s' "$active")"
         test -f "$previous"
         cp "$previous" {{ $config->archivePath() }}/.env-before-{{ $releaseId }}
-        chmod 0600 {{ $config->archivePath() }}/.env-before-{{ $releaseId }}
+        chmod 0640 {{ $config->archivePath() }}/.env-before-{{ $releaseId }}
     fi
 
     active_next={{ $config->sharedPath() }}/.env.next

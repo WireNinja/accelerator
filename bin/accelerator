@@ -28,16 +28,16 @@ Interactive:
 
 Non-interactive:
   bash vendor/wireninja/accelerator/bin/install --no-interaction \
-    --app-name="My Project" --app-url=http://my-project.test \
+    --app-name="My Project" --app-url=http://localhost:8000 \
     --admin-name="Super Administrator" --admin-username=superadmin \
     --admin-email=admin@example.com --frontend=inertia --database=sqlite
 
 Options:
   ACCELERATOR_ADMIN_PASSWORD="..." supplies the initial password without
   exposing it in shell history. Without it, a secure password is shown once.
-  --features=filament,fortify,panels,settings,ticketing,pwa,insider,scout,wayfinder
+  --features=filament,fortify,settings,ticketing,pwa,insider,scout,wayfinder
   --redis
-  --deploy --deployment-mode=single --project=app --ssh-host=server \
+  --deploy --deployment-mode=single --project=app --ssh-host=my-vps \
     --repo=git@example/app.git --branch=main --domain=app.example.com \
     --deploy-root=/var/www/app.example.com --http-runtime=octane
 
@@ -51,6 +51,14 @@ HELP;
 
 $journalPath = $projectRoot.'/.accelerator/install-state.json';
 $environment = @file_get_contents($projectRoot.'/.env');
+$journal = @file_get_contents($journalPath);
+$journalState = is_string($journal) ? json_decode($journal, true) : null;
+
+if (is_array($journalState) && ($journalState['finished'] ?? false) === true) {
+    Laravel\Prompts\outro('Accelerator v2 is already installed. Nothing changed.');
+
+    exit(0);
+}
 
 if (! is_file($journalPath) && is_string($environment) && str_contains($environment, 'ACCELERATOR_FEATURE_FILAMENT=')) {
     Laravel\Prompts\outro('Accelerator v2 is already installed. Run php artisan accelerator:doctor to verify it.');

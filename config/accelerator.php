@@ -2,14 +2,12 @@
 
 use App\Enums\System\LauncherEnum;
 use App\Enums\System\PanelEnum;
-use App\Enums\System\ResourceEnum;
 use App\Enums\System\RoleEnum;
 
 return [
     'features' => [
         'filament' => env('ACCELERATOR_FEATURE_FILAMENT', false),
         'fortify' => env('ACCELERATOR_FEATURE_FORTIFY', false),
-        'panels' => env('ACCELERATOR_FEATURE_PANELS', false),
         'oauth' => env('ACCELERATOR_FEATURE_OAUTH', false),
         'insider' => env('ACCELERATOR_FEATURE_INSIDER', false),
         'pwa' => env('ACCELERATOR_FEATURE_PWA', false),
@@ -17,10 +15,7 @@ return [
         'telegram' => env('ACCELERATOR_FEATURE_TELEGRAM', false),
         'telemetry' => env('ACCELERATOR_FEATURE_TELEMETRY', false),
         'ticketing' => env('ACCELERATOR_FEATURE_TICKETING', false),
-    ],
-
-    'infra' => [
-        'hosting' => env('INFRA_HOSTING', 'dedicated'), // 'shared' or 'dedicated'
+        'horizon' => env('ACCELERATOR_FEATURE_HORIZON', false),
     ],
 
     'proxy' => [
@@ -35,13 +30,11 @@ return [
 
     'enums' => [
         'role' => RoleEnum::class,
-        'resource' => ResourceEnum::class,
         'panel' => PanelEnum::class,
         'launcher' => enum_exists(LauncherEnum::class) ? LauncherEnum::class : null,
     ],
 
     'horizon' => [
-        'auto_register' => true,
         'email_to' => env('HORIZON_EMAIL_TO'),
     ],
 
@@ -87,6 +80,8 @@ return [
         'notify' => [
             'discord_webhook' => env('ACCELERATOR_TELEMETRY_DISCORD_WEBHOOK'),
             'telegram_chat_id' => env('ACCELERATOR_TELEMETRY_TELEGRAM_CHAT'),
+            'telegram_bot_token' => env('TELEGRAM_BOT_TOKEN'),
+            'telegram_base_uri' => env('TELEGRAM_API_BASE_URI', 'https://api.telegram.org'),
         ],
         'sensitive_params' => [
             'password',

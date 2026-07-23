@@ -10,7 +10,6 @@ use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
-use WireNinja\Accelerator\Console\Concerns\HasBanner;
 
 #[Signature('shield:safe-regenerate
     {--panel=admin : Filament panel ID to regenerate policies for}
@@ -19,15 +18,12 @@ use WireNinja\Accelerator\Console\Concerns\HasBanner;
 #[Description('Safe regenerate shield policies and permissions for a panel')]
 final class SafeRegenerateCommand extends Command
 {
-    use HasBanner;
-
     public function handle(): int
     {
         $panel = (string) $this->option('panel');
         $isJson = (bool) $this->option('json');
 
         if (! $isJson) {
-            $this->displayBanner();
             $this->components->info(sprintf('Regenerating shield policies and permissions safely for panel [%s]...', $panel));
         }
 

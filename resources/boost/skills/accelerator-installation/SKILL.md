@@ -10,7 +10,7 @@ description: Install or resume WireNinja Accelerator v2 in a pristine Laravel 13
 ```bash
 laravel new my-project --no-interaction
 cd my-project
-composer require wireninja/accelerator:^2.0 -W --no-interaction
+composer require wireninja/accelerator:^2.0@dev -W --no-interaction
 bash vendor/wireninja/accelerator/bin/install
 ```
 

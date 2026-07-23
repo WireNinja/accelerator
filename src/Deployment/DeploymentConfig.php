@@ -56,7 +56,8 @@ final readonly class DeploymentConfig
     public static function load(string $projectRoot, ?string $requestedStage = null): self
     {
         $projectRoot = rtrim($projectRoot, '/');
-        $values = self::parse($projectRoot.'/.env.envoy');
+        self::assertNoLegacyFiles($projectRoot);
+        $values = self::parse($projectRoot.'/.accelerator/deploy.env');
         self::rejectUnknownKeys($values);
         self::validateEnabledStageIsolation($values);
 
@@ -69,7 +70,7 @@ final readonly class DeploymentConfig
         $stageKey = strtoupper($stage);
 
         if (! self::boolean($values, "OPS_DEPLOY_{$stageKey}_ENABLED")) {
-            throw new RuntimeException("Deploy stage [{$stage}] is disabled in .env.envoy.");
+            throw new RuntimeException("Deploy stage [{$stage}] is disabled in .accelerator/deploy.env.");
         }
 
         $project = self::required($values, 'OPS_DEPLOY_PROJECT');
@@ -178,7 +179,7 @@ final readonly class DeploymentConfig
 
     public function runtimeEnvironmentFile(): string
     {
-        return $this->projectRoot.'/.env.'.$this->stage;
+        return $this->projectRoot.'/.accelerator/environments/'.$this->stage.'.env';
     }
 
     public function sharedPath(): string
@@ -246,13 +247,13 @@ final readonly class DeploymentConfig
     private static function parse(string $path): array
     {
         if (! is_file($path)) {
-            throw new RuntimeException('Missing .env.envoy. Re-run onboarding or create it from the v2 template.');
+            throw new RuntimeException('Deployment is not configured. Run: php artisan accelerator:configure deployment');
         }
 
         $lines = file($path, FILE_IGNORE_NEW_LINES);
 
         if (! is_array($lines)) {
-            throw new RuntimeException('Unable to read .env.envoy.');
+            throw new RuntimeException('Unable to read .accelerator/deploy.env.');
         }
 
         $values = [];
@@ -265,17 +266,17 @@ final readonly class DeploymentConfig
             }
 
             if (! str_contains($line, '=')) {
-                throw new RuntimeException(sprintf('Invalid .env.envoy line %d: expected KEY=VALUE.', $number + 1));
+                throw new RuntimeException(sprintf('Invalid .accelerator/deploy.env line %d: expected KEY=VALUE.', $number + 1));
             }
 
             [$key, $value] = array_map(trim(...), explode('=', $line, 2));
 
             if (preg_match('/^[A-Z][A-Z0-9_]*$/', $key) !== 1) {
-                throw new RuntimeException(sprintf('Invalid .env.envoy key on line %d.', $number + 1));
+                throw new RuntimeException(sprintf('Invalid .accelerator/deploy.env key on line %d.', $number + 1));
             }
 
             if (array_key_exists($key, $values)) {
-                throw new RuntimeException("Duplicate .env.envoy key [{$key}].");
+                throw new RuntimeException("Duplicate .accelerator/deploy.env key [{$key}].");
             }
 
             if (strlen($value) >= 2 && (($value[0] === '"' && str_ends_with($value, '"')) || ($value[0] === "'" && str_ends_with($value, "'")))) {
@@ -286,6 +287,22 @@ final readonly class DeploymentConfig
         }
 
         return $values;
+    }
+
+    public static function assertNoLegacyFiles(string $projectRoot): void
+    {
+        $legacy = array_values(array_filter([
+            is_file($projectRoot.'/.env.envoy') ? '.env.envoy' : null,
+            is_file($projectRoot.'/.env.staging') ? '.env.staging' : null,
+            is_file($projectRoot.'/.env.production') ? '.env.production' : null,
+        ]));
+
+        if ($legacy !== []) {
+            throw new RuntimeException(
+                'Legacy deployment files detected: '.implode(', ', $legacy)
+                .'. Move them deliberately into .accelerator/ before using Envoy.',
+            );
+        }
     }
 
     /**
@@ -346,7 +363,7 @@ final readonly class DeploymentConfig
         $unknown = array_values(array_diff(array_keys($values), $allowed));
 
         if ($unknown !== []) {
-            throw new RuntimeException('Unknown or legacy .env.envoy keys: '.implode(', ', $unknown));
+            throw new RuntimeException('Unknown or legacy .accelerator/deploy.env keys: '.implode(', ', $unknown));
         }
     }
 
@@ -410,7 +427,7 @@ final readonly class DeploymentConfig
         $value = self::value($values, $key);
 
         if ($value === '') {
-            throw new RuntimeException("Missing required .env.envoy key [{$key}].");
+            throw new RuntimeException("Missing required .accelerator/deploy.env key [{$key}].");
         }
 
         return $value;

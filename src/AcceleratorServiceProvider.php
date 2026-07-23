@@ -8,6 +8,7 @@ use Override;
 use WireNinja\Accelerator\Providers\CoreServiceProvider;
 use WireNinja\Accelerator\Providers\FilamentServiceProvider;
 use WireNinja\Accelerator\Providers\FortifyServiceProvider;
+use WireNinja\Accelerator\Providers\HorizonServiceProvider;
 use WireNinja\Accelerator\Providers\InsiderServiceProvider;
 use WireNinja\Accelerator\Providers\OAuthServiceProvider;
 use WireNinja\Accelerator\Providers\PanelServiceProvider;
@@ -23,12 +24,12 @@ class AcceleratorServiceProvider extends ServiceProvider
     private const FEATURE_PROVIDERS = [
         'filament' => FilamentServiceProvider::class,
         'fortify' => FortifyServiceProvider::class,
-        'panels' => PanelServiceProvider::class,
         'oauth' => OAuthServiceProvider::class,
         'insider' => InsiderServiceProvider::class,
         'pwa' => PwaServiceProvider::class,
         'telemetry' => TelemetryServiceProvider::class,
         'ticketing' => TicketingServiceProvider::class,
+        'horizon' => HorizonServiceProvider::class,
     ];
 
     #[Override]
@@ -47,11 +48,15 @@ class AcceleratorServiceProvider extends ServiceProvider
                 continue;
             }
 
-            if (in_array($feature, ['panels', 'oauth'], true) && ! config('accelerator.features.filament', false)) {
+            if ($feature === 'oauth' && ! config('accelerator.features.filament', false)) {
                 continue;
             }
 
             $this->app->register($provider);
+        }
+
+        if (config('accelerator.features.filament', false)) {
+            $this->app->register(PanelServiceProvider::class);
         }
     }
 }

@@ -17,7 +17,7 @@ Context output is navigation, not truth. Do not add UI code merely to satisfy a 
 
 ## Resource truth
 
-Filament's registered panel/resource is authoritative. Conventional paths should be inferred. Do not require duplicate `ResourceEnum`, attribute, and trait registration unless the current v2 branch still has an explicit consumer; migrate that consumer before deletion.
+Filament's registered panel/resource is authoritative. Conventional paths are inferred; do not recreate duplicate resource enums, discovery attributes, or metadata traits.
 
 Custom Shield abilities belong in a permission-specific declaration, not navigation metadata. Super Admin bypass/access must remain valid after Shield regeneration.
 
@@ -65,7 +65,7 @@ php artisan accelerator:context resource {resource} --expand
 php artisan accelerator:verify-resource {resource}
 ```
 
-Before using them, verify command availability on the current v2 branch. The default context must not execute field closures or instantiate schemas with a null record. The verifier must be independent and enforce only real Accelerator invariants plus policy registration.
+Default context does not execute field closures or instantiate schemas with a null record. The verifier is independent and enforces only registration, model, and policy invariants.
 
 ## Taste gate
 

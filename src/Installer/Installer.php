@@ -56,7 +56,6 @@ final class Installer
      */
     private const RECIPE_FILES = [
         'stubs/app/Enums/System/PanelEnum.php' => 'app/Enums/System/PanelEnum.php',
-        'stubs/app/Enums/System/ResourceEnum.php' => 'app/Enums/System/ResourceEnum.php',
         'stubs/app/Enums/System/RoleEnum.php' => 'app/Enums/System/RoleEnum.php',
         'stubs/app/Models/User.php' => 'app/Models/User.php',
         'stubs/app/Providers/Filament/AdminPanelProvider.php' => 'app/Providers/Filament/AdminPanelProvider.php',
@@ -149,7 +148,7 @@ final class Installer
 
         if ($this->plan->deploy) {
             $firstStage = $this->plan->deploymentMode === 'dual' ? 'staging' : 'production';
-            outro("Accelerator v2 installed. Complete .env.{$firstStage}, then run vendor/bin/envoy run init --stage={$firstStage}.");
+            outro("Accelerator v2 installed. Complete .accelerator/environments/{$firstStage}.env, then run php artisan accelerator:configure environment --stage={$firstStage}.");
 
             return;
         }
@@ -250,13 +249,15 @@ final class Installer
 
     private function writeDeploymentFiles(): void
     {
+        $bridge = "{{-- WireNinja Accelerator v2. Configure with: php artisan accelerator:configure deployment --}}\n"
+            ."@servers(['vps' => [\\WireNinja\\Accelerator\\Deployment\\DeploymentConfig::load(getcwd(), isset(\$stage) ? (string) \$stage : null)->sshHost], 'localhost' => '127.0.0.1'])\n\n"
+            ."@import('vendor/wireninja/accelerator/resources/envoy/Envoy.blade.php')\n";
+        $this->writeFile('Envoy.blade.php', $bridge);
+
         if (! $this->plan->deploy) {
             return;
         }
 
-        $sshHost = var_export($this->plan->sshHost, true);
-        $bridge = "@servers(['vps' => [{$sshHost}], 'localhost' => '127.0.0.1'])\n\n"
-            ."@import('vendor/wireninja/accelerator/resources/envoy/Envoy.blade.php')\n";
         $template = file_get_contents($this->packageRoot.'/.base-env.envoy.example');
 
         if (! is_string($template)) {
@@ -287,14 +288,13 @@ final class Installer
             '{{ nightwatch_enabled }}' => $this->boolean($this->hasFeature('nightwatch')),
         ];
 
-        $this->writeFile('Envoy.blade.php', $bridge);
-        $this->writeFile('.env.envoy', strtr($template, $replacements), 0600);
+        $this->writeFile('.accelerator/deploy.env', strtr($template, $replacements), 0600);
 
         $runtime = file_get_contents($this->projectRoot.'/.env.example');
 
         if (is_string($runtime)) {
             if ($this->plan->deploymentMode === 'dual') {
-                $this->writeFile('.env.staging', $this->productionEnvironment(
+                $this->writeFile('.accelerator/environments/staging.env', $this->productionEnvironment(
                     $runtime,
                     'staging',
                     $this->plan->stagingDomain,
@@ -302,7 +302,7 @@ final class Installer
                 ), 0600);
             }
 
-            $this->writeFile('.env.production', $this->productionEnvironment(
+            $this->writeFile('.accelerator/environments/production.env', $this->productionEnvironment(
                 $runtime,
                 'production',
                 $this->plan->domain,
@@ -341,6 +341,7 @@ final class Installer
         $composer['extra']['laravel']['dont-discover'] = array_values(array_unique([
             ...$dontDiscover,
             'laravel/fortify',
+            'laravel/horizon',
         ]));
 
         $composer['scripts']['post-autoload-dump'] = [
@@ -493,7 +494,6 @@ final class Installer
             'NIGHTWATCH_ENABLED' => $this->boolean($this->hasFeature('nightwatch')),
             'ACCELERATOR_FEATURE_FILAMENT' => $this->boolean($this->hasFeature('filament')),
             'ACCELERATOR_FEATURE_FORTIFY' => $this->boolean($this->hasFeature('fortify')),
-            'ACCELERATOR_FEATURE_PANELS' => $this->boolean($this->hasFeature('panels')),
             'ACCELERATOR_FEATURE_OAUTH' => $this->boolean($this->hasFeature('oauth')),
             'ACCELERATOR_FEATURE_INSIDER' => $this->boolean($this->hasFeature('insider')),
             'ACCELERATOR_FEATURE_PWA' => $this->boolean($this->hasFeature('pwa')),
@@ -501,6 +501,7 @@ final class Installer
             'ACCELERATOR_FEATURE_TELEGRAM' => $this->boolean($this->hasFeature('telegram')),
             'ACCELERATOR_FEATURE_TELEMETRY' => $this->boolean($this->hasFeature('telemetry')),
             'ACCELERATOR_FEATURE_TICKETING' => $this->boolean($this->hasFeature('ticketing')),
+            'ACCELERATOR_FEATURE_HORIZON' => $this->boolean($this->hasFeature('horizon')),
             'ACCELERATOR_OAUTH_MODE' => $this->hasFeature('oauth') ? 'existing_only' : 'disabled',
             'ACCELERATOR_UPLOAD_MAX_MB' => '100',
             'GOOGLE_REDIRECT_URI' => rtrim($this->plan->appUrl, '/').'/auth/google/callback',
@@ -600,7 +601,7 @@ final class Installer
             throw new RuntimeException('Unable to read .gitignore.');
         }
 
-        foreach (['/.accelerator/', '/.env.envoy', '/.env.staging', '/.env.production'] as $entry) {
+        foreach (['/.accelerator/'] as $entry) {
             if (! preg_match('/^'.preg_quote($entry, '/').'$/m', $contents)) {
                 $contents = rtrim($contents).PHP_EOL.$entry.PHP_EOL;
             }
@@ -730,25 +731,6 @@ final class Installer
             $providers[] = '    AdminPanelProvider::class,';
         }
 
-        if ($this->hasFeature('horizon')) {
-            $providerImports[] = 'use WireNinja\\Accelerator\\Providers\\HorizonServiceProvider;';
-            $providers[] = '    HorizonServiceProvider::class,';
-        }
-
-        $optionalSchedules = [];
-
-        if ($this->hasFeature('ticketing')) {
-            $optionalSchedules[] = "Schedule::command('ticket:notify-overdue')->hourly()->withoutOverlapping();";
-        }
-
-        if ($this->hasFeature('horizon')) {
-            $optionalSchedules[] = "Schedule::command('horizon:snapshot')->everyFiveMinutes()->withoutOverlapping();";
-        }
-
-        if ($this->hasFeature('telemetry')) {
-            $optionalSchedules[] = "Schedule::command('telemetry:prune')->dailyAt('04:00')->withoutOverlapping();";
-        }
-
         $primaryRoute = $this->plan->primaryFrontend === 'inertia'
             ? "Route::get('/', static fn () => Inertia::render('Home'))->middleware(['auth', 'verified', 'inertia'])->name('home');"
             : "Route::redirect('/', '/livewire')->name('home');";
@@ -758,7 +740,6 @@ final class Installer
             '{{ primary_route }}' => $primaryRoute,
             '{{ provider_imports }}' => implode(PHP_EOL, $providerImports),
             '{{ providers }}' => implode(PHP_EOL, $providers),
-            '// {{ optional_schedules }}' => implode(PHP_EOL, $optionalSchedules),
             '{{ pwa_enabled }}' => $this->boolean($this->hasFeature('pwa')),
         ]);
     }

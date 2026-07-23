@@ -7,6 +7,7 @@ namespace WireNinja\Accelerator\Installer;
 use Illuminate\Support\Str;
 use JsonException;
 use RuntimeException;
+use WireNinja\Accelerator\Configuration\SshConfig;
 
 use function Laravel\Prompts\confirm;
 use function Laravel\Prompts\intro;
@@ -24,7 +25,6 @@ final class Onboarding
     private const FEATURES = [
         'filament' => 'Filament internal-app core (always enabled)',
         'fortify' => 'Fortify authentication backend',
-        'panels' => 'Built-in System and Support panels',
         'settings' => 'Application settings UI',
         'ticketing' => 'Internal ticketing',
         'oauth' => 'Google OAuth (existing users only)',
@@ -42,7 +42,6 @@ final class Onboarding
     /** @var list<string> */
     private const DEFAULT_FEATURES = [
         'fortify',
-        'panels',
         'settings',
         'ticketing',
         'pwa',
@@ -53,12 +52,6 @@ final class Onboarding
 
     /** @var list<string> */
     private const CORE_FEATURES = ['filament'];
-
-    /** @var array<string, list<string>> */
-    private const FEATURE_DEPENDENCIES = [
-        'settings' => ['panels'],
-        'ticketing' => ['panels'],
-    ];
 
     public function __construct(
         private readonly string $projectRoot,
@@ -94,7 +87,7 @@ final class Onboarding
         );
         $appUrl = text(
             label: 'Local application URL',
-            default: "http://{$defaultProject}.test",
+            default: 'http://localhost:8000',
             required: true,
             validate: static fn (string $value): ?string => filter_var($value, FILTER_VALIDATE_URL)
                 ? null
@@ -164,22 +157,26 @@ final class Onboarding
             required: false,
         ));
         $deploy = confirm(
-            label: 'Configure staging and production deployment now?',
-            default: true,
+            label: 'Configure VPS deployment now?',
+            default: false,
+            hint: 'You can configure it later with php artisan accelerator:configure deployment.',
         );
 
-        $project = $defaultProject;
-        $sshHost = 'server';
-        $repository = $this->processRunner->capture(['git', 'remote', 'get-url', 'origin'], $this->projectRoot);
-        $repositoryBranch = $this->processRunner->capture(['git', 'branch', '--show-current'], $this->projectRoot) ?: 'main';
-        $deploymentMode = 'single';
-        $domain = (string) parse_url($appUrl, PHP_URL_HOST);
-        $deployRoot = "/var/www/{$project}";
+        $project = '';
+        $sshHost = '';
+        $repository = '';
+        $repositoryBranch = '';
+        $deploymentMode = '';
+        $domain = '';
+        $deployRoot = '';
         $stagingDomain = '';
         $stagingDeployRoot = '';
-        $httpRuntime = 'octane';
+        $httpRuntime = '';
 
         if ($deploy) {
+            $project = $defaultProject;
+            $repository = $this->processRunner->capture(['git', 'remote', 'get-url', 'origin'], $this->projectRoot);
+            $repositoryBranch = $this->processRunner->capture(['git', 'branch', '--show-current'], $this->projectRoot) ?: 'main';
             $deploymentMode = select(
                 label: 'Deployment topology',
                 options: [
@@ -189,12 +186,14 @@ final class Onboarding
                 default: 'single',
             );
             $project = text(label: 'Deployment project key', default: $project, required: true);
-            $sshHost = text(label: 'SSH host alias', default: $sshHost, required: true);
+            $sshAliases = SshConfig::aliases();
+            $sshHost = $sshAliases === []
+                ? text(label: 'SSH host alias from ~/.ssh/config', required: true)
+                : select(label: 'SSH host alias', options: array_combine($sshAliases, $sshAliases));
             $repository = text(label: 'Git repository URL', default: $repository, required: true);
             $repositoryBranch = text(label: 'Git deployment branch', default: $repositoryBranch, required: true);
             $domain = text(
                 label: 'Production domain',
-                default: str_ends_with($domain, '.test') ? '' : $domain,
                 required: true,
                 validate: static fn (string $value): ?string => preg_match('/^(?=.{1,253}$)(?!-)[a-z0-9.-]+(?<!-)$/i', $value)
                     ? null
@@ -305,7 +304,7 @@ final class Onboarding
 
         return new InstallPlan(
             appName: $this->option($options, 'app-name', Str::headline($directoryName)),
-            appUrl: $this->option($options, 'app-url', "http://{$defaultProject}.test"),
+            appUrl: $this->option($options, 'app-url', 'http://localhost:8000'),
             adminName: trim($this->option($options, 'admin-name', 'Super Administrator')),
             adminUsername: strtolower(trim($this->option($options, 'admin-username', 'superadmin'))),
             adminEmail: strtolower(trim($this->option($options, 'admin-email', 'admin@example.com'))),
@@ -315,16 +314,16 @@ final class Onboarding
             useRedis: isset($options['redis']),
             features: $features,
             deploy: $deploy,
-            deploymentMode: $deploymentMode,
-            project: $this->option($options, 'project', $defaultProject),
-            sshHost: $this->option($options, 'ssh-host', 'server'),
-            repository: $this->option($options, 'repo'),
-            repositoryBranch: $this->option($options, 'branch', 'main'),
+            deploymentMode: $deploy ? $deploymentMode : '',
+            project: $deploy ? $this->option($options, 'project', $defaultProject) : '',
+            sshHost: $deploy ? $this->option($options, 'ssh-host') : '',
+            repository: $deploy ? $this->option($options, 'repo') : '',
+            repositoryBranch: $deploy ? $this->option($options, 'branch', 'main') : '',
             domain: $domain,
             deployRoot: $this->option($options, 'deploy-root', $domain === '' ? '' : "/var/www/{$domain}"),
             stagingDomain: $stagingDomain,
             stagingDeployRoot: $this->option($options, 'staging-deploy-root', $stagingDomain === '' ? '' : "/var/www/{$stagingDomain}"),
-            httpRuntime: $this->option($options, 'http-runtime', 'octane'),
+            httpRuntime: $deploy ? $this->option($options, 'http-runtime', 'octane') : '',
         );
     }
 
@@ -335,20 +334,6 @@ final class Onboarding
     private function resolveFeatures(array $features): array
     {
         $selected = array_fill_keys([...self::CORE_FEATURES, ...$features], true);
-
-        do {
-            $count = count($selected);
-
-            foreach (self::FEATURE_DEPENDENCIES as $feature => $dependencies) {
-                if (! isset($selected[$feature])) {
-                    continue;
-                }
-
-                foreach ($dependencies as $dependency) {
-                    $selected[$dependency] = true;
-                }
-            }
-        } while (count($selected) !== $count);
 
         return array_values(array_filter(
             array_keys(self::FEATURES),

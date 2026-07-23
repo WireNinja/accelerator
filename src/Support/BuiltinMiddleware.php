@@ -5,8 +5,6 @@ declare(strict_types=1);
 namespace WireNinja\Accelerator\Support;
 
 use Illuminate\Foundation\Configuration\Middleware;
-use Illuminate\Foundation\Http\Middleware\CheckForMaintenanceMode;
-use Illuminate\Foundation\Http\Middleware\PreventRequestsDuringMaintenance;
 use Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets;
 use Spatie\Permission\Middleware\PermissionMiddleware;
 use Spatie\Permission\Middleware\RoleMiddleware;
@@ -19,11 +17,6 @@ final class BuiltinMiddleware
 {
     public static function make(Middleware $middleware): void
     {
-        $middleware->remove([
-            PreventRequestsDuringMaintenance::class,
-            CheckForMaintenanceMode::class,
-        ]);
-
         $middleware->encryptCookies(except: ['appearance', 'sidebar_state']);
 
         $middleware->web(append: [

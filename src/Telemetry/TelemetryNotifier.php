@@ -162,8 +162,7 @@ final class TelemetryNotifier
 
     private function telegramBotToken(): ?string
     {
-        return $this->configuredString('accelerator.telemetry.notify.telegram_bot_token')
-            ?? $this->configuredString('services.telegram-bot-api.token');
+        return $this->configuredString('accelerator.telemetry.notify.telegram_bot_token');
     }
 
     private function configuredString(string $key): ?string

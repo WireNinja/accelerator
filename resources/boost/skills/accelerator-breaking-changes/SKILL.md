@@ -22,6 +22,9 @@ V2 is a clean break. There is no adopt/merge command or package compatibility fa
 - Provision/resync a verified Super Admin with real Gate/Shield access.
 - Move deployment state to `.accelerator/deploy.env` and stage runtime files to `.accelerator/environments/`.
 - Keep root `Envoy.blade.php` as a thin package bridge.
+- Remove `ACCELERATOR_FEATURE_PANELS`; Admin/System derive from Filament and Support derives from ticketing.
+- Move resource labels/icons/groups onto native resource properties and custom abilities into `ShieldPermissions`; delete the resource enum/attribute/trait trio.
+- Add `laravel/horizon` to Composer `dont-discover`; Accelerator registers its provider from `ACCELERATOR_FEATURE_HORIZON`.
 - Use `staging`/`production`, immutable release envs, and `init`/`deploy`/`rollback`.
 - Archive v1 telemetry SQLite/WAL/SHM before enabling strict schema `200`.
 - Replace broad model/resource scanners with compact context only after consumers migrate.
