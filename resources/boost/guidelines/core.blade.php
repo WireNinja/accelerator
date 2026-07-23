@@ -1,83 +1,48 @@
 ## WireNinja Accelerator v2
 
-Accelerator is an intentionally batteries-included foundation for internal Laravel applications. Dependency breadth is deliberate; runtime activation and boot cost must remain explicit.
+Accelerator is a batteries-included foundation for authenticated Laravel monoliths. Dependency breadth is intentional; runtime boot and service activation must remain explicit.
 
-### AI Skill Routing
+### Skill routing
 
-Before acting, match the task to the installed skill and read that `SKILL.md` completely. Do not guess an Accelerator convention from generic Laravel knowledge.
+Read the matching skill before acting:
 
-- Fresh install or installer failure: `accelerator-installation`.
-- Existing v1 upgrade: `accelerator-breaking-changes`.
-- Env, feature flags, or preload middleware: `accelerator-env-config`.
-- Filament resources, forms, tables, policies, or custom fields: `accelerator-filament`.
-- Models, relationships, casts, or schema context: `accelerator-model-context`.
-- Activity logging: `accelerator-activity-log`.
-- PWA and Vite assets: `accelerator-pwa-development`.
-- Exception telemetry: `accelerator-telemetry`.
-- Init, deploy, rollback, Nginx, or Supervisor mutation: `accelerator-deployment`.
-- Read-only runtime and service diagnosis: `accelerator-ops-observability`.
+- fresh install/resume: `accelerator-installation`
+- v1/existing-app migration: `accelerator-breaking-changes`
+- env/features/configuration: `accelerator-env-config`
+- Filament/Shield/resources/UI: `accelerator-filament`
+- models/casts/relationships/context: `accelerator-model-context`
+- audit logging: `accelerator-activity-log`
+- PWA/Vite assets: `accelerator-pwa-development`
+- telemetry: `accelerator-telemetry`
+- deploy/init/rollback/server mutation: `accelerator-deployment`
+- read-only runtime diagnosis: `accelerator-ops-observability`
 
-Use every relevant skill when work crosses boundaries. If none matches, use the relevant framework/package skill and version-specific documentation instead of forcing an unrelated Accelerator skill.
+Use framework/package skills too when the task crosses domains. Verify available commands before running them; v2 development plans are not proof that a command is implemented.
 
-### Installation
+### Core contract
 
-- The supported fresh flow is `laravel new` → `composer require wireninja/accelerator:^2.0 -W` → `bash vendor/wireninja/accelerator/bin/install`.
-- The Bash installer is fresh-only, uses one Laravel Prompts onboarding plan, and may run `migrate:fresh --seed`.
-- Never run the fresh installer against an existing application. Migrate existing applications surgically.
-- Interactive and `--no-interaction` modes use the same planner, journal, and recipe.
-- The ignored `.accelerator/install-state.json` makes an interrupted install resumable and an identical completed rerun a no-op.
-- Bun is the only supported frontend package manager. Do not add npm/pnpm/yarn branches.
-- Filament is the internal-app core. Other selected features control runtime activation while their dependencies remain installed.
-- `resources/svg/.gitkeep`, the shared Filament theme, env files, migrations, Super Admin, Shield, Boost skills, Pint, doctor, and the production frontend build are installer-owned invariants.
+- Fresh flow: `laravel new` → require Accelerator → package Bash installer.
+- Fresh installer may rewrite a pristine skeleton and `migrate:fresh --seed`; never run it on an existing app.
+- WSS and other existing apps migrate surgically.
+- Bun is the only frontend package manager.
+- Filament is core. Optional dependencies may remain installed while providers/routes/services stay gated.
+- Local URL defaults to `http://localhost:8000`.
+- `resources/svg/.gitkeep`, one discoverable theme, Super Admin, Shield, build, Pint, Boost skills, and doctor are installer invariants.
+- `Model::unguard()`, searchable/preloaded Selects, overrideable table defaults, and 100 MB uploads are intentional.
 
-### Runtime Configuration
+### Configuration boundaries
 
-- Read Accelerator behavior from `config('accelerator.*')`; never call `env()` outside config files.
-- Runtime env files contain Laravel keys only. Deploy orchestration lives only in ignored `.env.envoy` with `OPS_DEPLOY_*` keys.
-- `.env`, `.env.envoy`, `.env.staging`, and `.env.production` are local-only mode-`0600` files.
-- Feature env changes require rebuilt config and route caches.
-- `link_preload` is an explicit middleware alias for Inertia/frontend route groups, not global middleware.
-- Upload policy is 100 MB with a 110 MB PHP/Nginx request envelope.
-- Accelerator targets authenticated internal apps; guest exception telemetry and public registration are not supported defaults.
+- Laravel runtime: root `.env`; read through `config()`, never `env()` outside config files.
+- Deployment: ignored `.accelerator/deploy.env` containing only `OPS_DEPLOY_*`.
+- Stage runtime: ignored `.accelerator/environments/{stage}.env` containing Laravel keys only.
+- Installation state: ignored `.accelerator/install-state.json`; resume/receipt only, never mutable config.
+- Do not create `.env.testing` unless the project explicitly needs it.
+- Feature changes require config/route cache rebuild.
 
-### Authentication
+### Authority and safety
 
-- Filament owns the ready-made login, reset, verification, and MFA experience.
-- Fortify is an optional headless backend feature; it is not auto-discovered when inactive.
-- OAuth is opt-in. Default `existing_only` authenticates pre-provisioned users; `allowed_domains` is the explicit provisioning mode.
-- OAuth never stores provider access or refresh tokens.
-- Suspended users must be rejected across Filament, Fortify, OAuth, normal sessions, and impersonation.
-- `Model::unguard()` is an intentional Filament-stack invariant.
-
-### Deployment
-
-- Valid stages are `staging` and `production`; a single-stage install enables only production.
-- Public flow: `vendor/bin/envoy run init --stage={stage}` once, then `vendor/bin/envoy run deploy --stage={stage}`.
-- `init` owns layout, env, code build, migration, initial administrator, Nginx, Supervisor, SSL, health, and pruning. There is no bootstrap ceremony in the happy path.
-- `bootstrap` and `ssl` are expert repair stories. `deploy-slim`, `bootstrap-ssl`, `test`, and `prod` are removed v1 contracts.
-- Every deploy requires clean/pushed Git, `composer.lock`, `bun.lock`, Bun `packageManager`, read-only Pint verification, strict env boundaries, exact remote SHA, and a valid existing global Nginx configuration before stage mutation.
-- Every release has an immutable env under `{root}/shared/env`; both code and env move together on deploy/rollback.
-- Nginx checks the shared Laravel maintenance marker before PHP/Octane/static/websocket handling, except `/up` and ACME.
-- Nginx and Supervisor files are rendered, scoped, archived before replacement, validated, and drift-checked.
-- Never enable Horizon and the plain queue worker together. Swoole always has at least one request worker and one task worker because Octane's default tick dispatch uses the task worker pool.
-- FPM is not globally reloaded; immutable release realpaths avoid stale OPcache keys and cross-project restarts. Supervisor-managed stage processes are restarted by scoped group.
-- Build and migration failures before maintenance do not interrupt traffic. Failures after maintenance leave it active for rollback/repair.
-- Mutating stories use a persistent per-root deploy lock. After a failed run, confirm no deploy is active and use `envoy unlock`; unlocking never clears maintenance.
-- `deploy-fresh-seed` is destructive, backup-first, and requires its exact confirmation phrase.
-- Rollback switches code plus its matching env; database rollback remains manual.
-
-### Server Safety
-
-- Confirm stage/domain/root/group before mutation and touch only that scope.
-- Never inspect or change unrelated server projects as part of an Accelerator operation.
-- Do not commit deploy env files or print their secrets.
-- Do not run `composer update` on a server.
-- Do not clear maintenance after a failed health check.
-- Do not delete `{root}/archive` during release pruning.
-
-### Telemetry
-
-- Telemetry v2 is authenticated Octane Swoole exception capture with no request-path disk I/O.
-- Swoole rows are acknowledged only after durable SQLite commit; notifications use a durable leased outbox.
-- Schema `200` is strict. Archive v1/unknown databases rather than dropping them automatically.
-- Use `telemetry:status --json`, not direct SQLite guesses, for health inspection.
+- User chooses patch/minor/major/exact release; never tag or publish implicitly.
+- Confirm stage/domain/root/group before server mutation; never touch unrelated projects.
+- Never print/commit secrets, run `composer update` on the VPS, clear failed maintenance, or auto-rollback database migrations.
+- Context commands are navigation. Source, framework registry, policy, database, and runtime state are truth.
+- Custom sidebar/login/wizard refactors require explicit user taste approval.

@@ -1,130 +1,37 @@
 ---
 name: accelerator-pwa-development
-description: Set up and maintain Laravel PWAs with @wireninja/vite-plugin-laravel-pwa, including Vite config, required manifest values, icon source files, CLI asset generation, and build verification.
+description: Configure or change Accelerator Laravel PWA behavior with @wireninja/vite-plugin-laravel-pwa, including manifest values, service worker, source icon, generated assets, and Bun build verification.
 ---
 
-# Laravel PWA Development
+# Accelerator PWA
 
-## When To Use
+Use Bun only. Reuse the installed `@wireninja/vite-plugin-laravel-pwa` and `vite-plugin-pwa`; do not copy a large raw `VitePWA` configuration unless package defaults cannot express the requirement.
 
-Use this skill when setting up or changing a Laravel PWA through Accelerator conventions, `@wireninja/vite-plugin-laravel-pwa`, `vite-plugin-pwa`, service workers, web app manifests, or generated PWA icons.
+## Required inputs
 
-## Install
+- Source icon: square, padded `public/favicon.svg`.
+- Manifest: `name`, `shortName`, `description`, and `themeColor`.
+- Optional behavior: `registerType`, colors, start URL, scope, display/orientation, explicit offline images, or low-level overrides.
 
-Install the package with `vite-plugin-pwa`:
-
-```bash
-bun add -d @wireninja/vite-plugin-laravel-pwa vite-plugin-pwa
-```
-
-Accelerator v2 standardizes on Bun. Do not add npm, pnpm, Yarn, or package-manager branching.
-
-## Required Source Icon
-
-Prepare one source SVG:
-
-```text
-public/favicon.svg
-```
-
-Use a square, centered logo with enough safe padding. This source is used to generate the opinionated Laravel public icon set.
-
-## Generate Assets
-
-Use the package CLI:
+Generate icons after the source exists:
 
 ```bash
 bunx laravel-pwa icons
 ```
 
-It defaults to:
+Expected assets include favicon, 64/192/512 icons, maskable icon, and Apple touch icon.
 
-```text
-public/favicon.svg
-```
+## Defaults to preserve
 
-Generated files:
-
-```text
-public/favicon.ico
-public/pwa-64x64.png
-public/pwa-192x192.png
-public/pwa-512x512.png
-public/maskable-icon-512x512.png
-public/apple-touch-icon-180x180.png
-```
-
-To use a different SVG:
-
-```bash
-bunx laravel-pwa icons --source=public/logo.svg --preset=minimal
-```
-
-## Vite Config
-
-Import and use the plugin in `vite.config.js`:
-
-```js
-import { laravelPwa } from '@wireninja/vite-plugin-laravel-pwa';
-
-laravelPwa({
-    name: 'Application Name',
-    shortName: 'App',
-    description: 'Short application description',
-    themeColor: '#111827',
-});
-```
-
-Required values:
-
-- `name`
-- `shortName`
-- `description`
-- `themeColor`
-
-`backgroundColor` defaults to `themeColor`.
-
-Common optional values:
-
-- `registerType`: use `prompt` for controlled updates or `autoUpdate` for immediate updates
-- `backgroundColor`
-- `startUrl`
-- `scope`
-- `id`
-- `orientation`
-- `display`
-- `additionalImages`: explicit public images that should be available offline
-- `manifest`: low-level manifest overrides
-- `pwa`: low-level `vite-plugin-pwa` overrides
-
-## Defaults
-
-The package is intentionally opinionated for Laravel:
-
-- `outDir` is `public`
-- `buildBase` is `/build/`
-- service worker scope is `/`
-- default icons match the generated filenames
-- public asset revisions use file hashes, not `Date.now()`
-- `public/storage/**`, `vendor/**`, `hot`, and `.git/**` are ignored by Workbox
-- `includeAssets` stays empty to avoid caching the whole Laravel public directory with bad `/build` prefixes
-
-Do not manually copy the old large `VitePWA(...)` config into new projects unless the package defaults are insufficient.
+- output in `public`, service-worker scope `/`, build base `/build/`;
+- hash-based public revisions;
+- exclude storage/vendor/hot/git state;
+- do not precache the entire Laravel public directory.
 
 ## Verification
-
-After setup or changes:
 
 ```bash
 bun run build
 ```
 
-Confirm build output includes:
-
-```text
-public/manifest.webmanifest
-public/sw.js
-public/workbox-*.js
-```
-
-If a browser does not pick up a new PWA version, clear the service worker/application cache in dev tools or change the manifest-visible config.
+Confirm `manifest.webmanifest`, `sw.js`, Workbox output, and generated icons. If development keeps an old worker, clear the browser's service-worker/application cache before changing code again.

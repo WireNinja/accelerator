@@ -1,45 +1,30 @@
 ---
 name: accelerator-model-context
-description: Inspect Accelerator Laravel model, relationship, cast, schema, and diagnostic context before changing domain models.
+description: Inspect Accelerator Laravel models, schema, casts, relationships, policies, factories, observers, and related Filament resources before model changes. Use for model design, Eloquent typing, relation keys, or compact AI context.
 ---
 
 # Accelerator Model Context
 
-## Commands
+## Inspection order
 
-Use Laravel's native inspector for the normal model overview:
+1. Read the model and relevant migration source.
+2. Use Laravel's native inspector and database schema tools.
+3. Inspect policy, factory, observers/events, and consuming resource only when relevant.
+4. Use compact Accelerator context as a file map/diagnostic, never as runtime proof.
 
 ```bash
 php artisan model:show User --json
+php artisan accelerator:context model User
+php artisan accelerator:context model User --expand
 ```
 
-Use Accelerator only for its additional schema-key and convention diagnostics:
-
-```bash
-php artisan agent:model-context --list --compact
-php artisan agent:model-context User --compact
-php artisan agent:model-context User --expand --compact
-php artisan agent:model-context --all --compact
-```
-
-Default output without a model is the lightweight application-model registry. `--all` is explicit because a complete application scan can be large. `--expand` adds table indexes, foreign keys, relation key descriptors, events, observers, hidden attributes, and other model internals.
+Verify command availability on the current v2 branch. Default Accelerator output should contain only identity, file/table/key, significant casts, relations, related files, and issues; deep indexes/events/source detail requires `--expand`.
 
 ## Rules
 
-- Inspect the model, migration, casts, relationships, factory, and policy before changing behavior.
-- Treat command output as navigation and diagnostics, not proof of runtime correctness.
-- Use explicit relationship return types and native Eloquent casts as source code truth.
-- Use Larastan for static model typing. Do not generate giant model PHPDoc blocks or make runtime behavior depend on PHPDoc.
-- For Eloquent static calls, prefer `Model::query()->...` when strict analysis requires it.
-- If an enum-cast attribute has metadata helpers, keep the enum as the single source of truth.
-- Do not add columns, relationships, policies, or lifecycle actions from scanner hints alone.
-
-## Resource Context
-
-When a model is exposed through Filament, also inspect its resource:
-
-```bash
-php artisan agent:resource-context {resource} --compact
-```
-
-Confirm reported violations are in scope before changing unrelated resource code.
+- Use explicit relationship return types and native Eloquent casts.
+- Use Larastan for typing; do not generate giant model PHPDoc or runtime magic.
+- Keep enum metadata in the enum and BigDecimal behavior in the shared cast/synth/input stack.
+- Prefer `Model::query()` for static analysis clarity.
+- Do not add schema, relations, policies, or lifecycle actions from scanner hints alone.
+- If a Filament resource is affected, use `accelerator-filament` too.

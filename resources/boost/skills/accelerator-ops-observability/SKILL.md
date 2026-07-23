@@ -1,146 +1,48 @@
 ---
 name: accelerator-ops-observability
-description: Inspect Accelerator runtime state, logs, backup status, OPcache, Horizon, Nightwatch, Reverb, Supervisor, and Nginx — including JSON output for AI agents — without touching unrelated services.
+description: Diagnose Accelerator runtime, releases, logs, backups, OPcache, Octane, Horizon, Reverb, Nightwatch, Nginx, and Supervisor without changing server state. Use for read-only local or VPS health inspection; switch to accelerator-deployment for mutations.
 ---
 
 # Accelerator Ops Observability
 
-## When To Use
+## Scope first
 
-Read-only debugging of deployment health, runtime services, OPcache state, logs, backup status, Horizon, Nightwatch, Reverb, Octane, Supervisor, or Nginx in an Accelerator project.
+Confirm the configured stage, domain, deploy root, runtime, ports, and Supervisor group. Inspect only that scope. Do not restart, deploy, rollback, prune, unlock, or rewrite infrastructure from this skill.
 
-Use `accelerator-deployment` when the task requires deploying, bootstrapping, rollback, pruning, restarting services, or changing Nginx/Supervisor/systemd state.
-Use `accelerator-env-config` when the task is about `.env`, `.env.envoy`, config keys, or safe env redaction.
-
-## Primary Checks
-
-Use Envoy for deploy/service state:
+Verify available tasks, then prefer package summaries:
 
 ```bash
-vendor/bin/envoy run status --stage=staging
-vendor/bin/envoy run releases --stage=staging
-vendor/bin/envoy run logs --stage=staging --service=octane
+vendor/bin/envoy tasks
+vendor/bin/envoy run status --stage=production
+vendor/bin/envoy run releases --stage=production
+vendor/bin/envoy run logs --stage=production --service=octane
+php artisan vps:backup-status --json --compact
+php artisan telemetry:status --json
 ```
 
-Use `--stage=production` only after confirming production is the intended target.
-Do not run `restart`, `deploy`, `rollback`, `bootstrap`, or `prune` from this skill unless the user explicitly asks for a mutating operation; switch to `accelerator-deployment` for that workflow.
+Use the enabled stage; never default to production without confirmation.
 
-## Backup Status
+## Evidence order
 
-```bash
-php artisan vps:backup-status                # human-readable table
-php artisan vps:backup-status --json         # JSON pretty
-php artisan vps:backup-status --json --compact  # JSON single-line for piping
-```
+1. configured local deploy/runtime state;
+2. active `current` symlink and matching immutable env;
+3. scoped Supervisor programs and expected listeners;
+4. Nginx syntax/vhost and `/up` through Nginx;
+5. matching application/service logs;
+6. backup and telemetry summaries.
 
-JSON shape:
+Do not dump secrets, full environment files, unrelated process lists, or unrelated vhosts.
 
-```json
-{
-  "status": "OK",
-  "disk": "local",
-  "app_name": "WSS - Local",
-  "physical_path": "...",
-  "summary": {
-    "total_files": 14,
-    "total_size_bytes": 1234567890,
-    "total_size_human": "1.15 GB",
-    "last_backup_at": "2026-05-19T03:00:12+00:00",
-    "last_file": "2026-05-19-03-00-12.zip"
-  },
-  "files": [...]
-}
-```
+## Runtime notes
 
-The command uses `$disk->files()` (top-level) by design — Spatie zips are flat in `{APP_NAME}/`. No deep traversal.
+- FPM releases use distinct realpaths; do not globally reset OPcache.
+- Octane deploys restart only their scoped process group.
+- Static package JavaScript 404s may be caused by an Nginx static location intercepting a Laravel route.
+- Nightwatch/Reverb/Octane ports must match stage config and be distinct.
+- Backup restoration is manual and database-specific; status is not restore authorization.
 
-## Pre-Deploy Backup
+## Insider direction
 
-Pre-deploy DB backups land in a separate Spatie profile:
+Treat browser diagnostics as bounded read-only summaries. Do not expose full session dumps or synthetic session mutation. Prefer compact JSON/CLI for deep operational detail.
 
-```bash
-ls storage/app/private/{APP_NAME}-predeploy/
-```
-
-Filename prefix: `predeploy-`. Aggressive retention (2 days). Notifications disabled. To restore manually:
-
-```bash
-unzip -p storage/app/private/{APP_NAME}-predeploy/2026-05-19-...zip db-dumps/database.sql | mysql -u {user} -p{pwd} {db}
-```
-
-Adjust extraction path / db client per environment. There is no automated `db-restore` task by design.
-
-## Comprehensive Audit
-
-```bash
-php artisan agent:audit                      # 7-section table
-php artisan agent:audit --json --compact     # JSON for AI / CI
-```
-
-Sections: PHP Core, Resource Limits, Extensions, Performance (OPCache + JIT), Build Tools, Accelerator Integration, Environment.
-
-When `App\Models\User` or `App\Providers\Filament\AdminPanelProvider` is missing, the audit emits an actionable warning telling the operator to run `accelerator:install --component=filament-core`.
-
-## Server Checks (SSH)
-
-Scope every command to the configured root, domain, supervisor group:
-
-```bash
-readlink -f {root}/current
-sudo nginx -t
-sudo supervisorctl status {group}:*
-ss -ltnp
-curl -I -L https://{domain}
-# HTTP_RUNTIME=octane only:
-curl -s -o /dev/null -w "%{http_code}" -H "Host: {domain}" http://127.0.0.1:{octane_port}/up
-# HTTP_RUNTIME=fpm:
-curl -s -o /dev/null -w "%{http_code}" -L https://{domain}/up
-```
-
-Use the health command matching `OPS_DEPLOY_{STAGE}_HTTP_RUNTIME`. Envoy always checks `/up` through the rendered Nginx vhost so the public routing boundary and selected backend are both exercised.
-
-## Reaudit After Cleanup
-
-```bash
-sudo supervisorctl status | grep '{group}'
-sudo grep -RIl '{domain}\|{root}\|{group}' /etc/nginx /etc/supervisor
-find {root} -maxdepth 2 -mindepth 1 -print
-find {root}/releases -mindepth 1 -maxdepth 1 -type d | wc -l
-```
-
-Expected clean state:
-
-- one current release unless rollback history is intentionally kept
-- `{root}/current` points inside `{root}/releases`
-- `{root}/archive` contains only deliberate snapshots, not old app trees
-- no `{root}/html`
-- no deploy runner folders
-- no stale env backup files in `{root}/shared`
-- no generic or cross-project Supervisor names
-- Nginx references only `{root}/current/public`
-
-## OPcache
-
-- PHP-FPM releases use distinct real paths, so new code receives distinct OPcache keys without reloading a shared FPM service.
-- Octane deploys restart only the configured stage Supervisor group, replacing that process-owned cache state.
-- Do not use global `opcache_reset()` as a deploy default; OPcache may be shared with unrelated PHP applications.
-- Healthy runtime state has `restart_pending=false` after deployment settles.
-
-## Nightwatch
-
-- Opt-in. `NIGHTWATCH_ENABLED=true` renders the managed `nightwatch:agent` process; use explicit per-stage port configuration in `.env.envoy`.
-- Runtime `.env.staging` / `.env.production` must set `NIGHTWATCH_ENABLED=true` and `NIGHTWATCH_INGEST_URI` to the matching listener.
-- Do not assume the Nightwatch port is free — check listeners before enabling.
-
-## Static Asset 404s
-
-For Livewire, Filament, or dynamic package JavaScript 404s behind Nginx, check whether a static asset location is intercepting `.js` requests before Laravel/Octane can handle route-backed assets.
-
-## Out Of Scope
-
-Do not use this skill for:
-
-- Shield regeneration; use the Filament/security workflow that is changing permissions.
-- Model relationship/cast/schema review; use `accelerator-model-context`.
-- Filament resource gates; use `accelerator-filament`.
-- Deployment mutation; use `accelerator-deployment`.
+Use `accelerator-deployment` before any server mutation and `accelerator-env-config` before changing local configuration.
