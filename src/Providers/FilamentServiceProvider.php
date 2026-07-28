@@ -83,6 +83,11 @@ final class FilamentServiceProvider extends ServiceProvider
     private function registerRenderHooks(): void
     {
         FilamentView::registerRenderHook(
+            PanelsRenderHook::HEAD_END,
+            static fn (): View => view('accelerator::filament.density'),
+        );
+
+        FilamentView::registerRenderHook(
             PanelsRenderHook::BODY_END,
             static fn (): View => view(
                 'accelerator::filament.business-exception-handler',

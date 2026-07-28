@@ -92,6 +92,16 @@ php artisan accelerator:configure environment --stage=production
 
 The command reads real env files, validates a complete draft, redacts secrets, asks before writing, and prints the next action. It never SSHes, migrates, deploys, or restarts a service.
 
+### UI density
+
+Accelerator supports only `compact` and `default` density:
+
+```dotenv
+ACCELERATOR_UI_DENSITY=compact
+```
+
+`compact` applies the Accelerator spacing gate to the modern sidebar and accepted Filament resources. `default` keeps the same sidebar structure and behavior while using Filament's default component spacing.
+
 ## Deployment
 
 Onboarding can generate a production-only or staging-plus-production setup:

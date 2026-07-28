@@ -504,6 +504,7 @@ final class Installer
             'ACCELERATOR_FEATURE_HORIZON' => $this->boolean($this->hasFeature('horizon')),
             'ACCELERATOR_OAUTH_MODE' => $this->hasFeature('oauth') ? 'existing_only' : 'disabled',
             'ACCELERATOR_UPLOAD_MAX_MB' => '100',
+            'ACCELERATOR_UI_DENSITY' => 'compact',
             'GOOGLE_REDIRECT_URI' => rtrim($this->plan->appUrl, '/').'/auth/google/callback',
             'VITE_APP_NAME' => '"'.addcslashes($this->plan->appName, '"\\').'"',
         ];

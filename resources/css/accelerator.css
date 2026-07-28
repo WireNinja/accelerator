@@ -1,9 +1,9 @@
-@import './dense.css';
+@import './compact.css';
 
 @source '../views/**/*.blade.php';
 
 :root {
-    --accelerator-topbar-height: 3rem;
+    --accelerator-topbar-height: 4rem;
 }
 
 .fi-layout {
@@ -31,31 +31,31 @@
 }
 
 .accelerator-brand-link {
-    @apply flex h-full min-w-0 flex-1 items-center px-3 outline-hidden;
+    @apply flex h-full min-w-0 flex-1 items-center px-4 outline-hidden;
 }
 
 .accelerator-brand-expanded {
-    @apply flex min-w-0 items-center gap-2;
+    @apply flex min-w-0 items-center gap-3;
 }
 
 .accelerator-brand-expanded .fi-logo {
-    @apply max-h-6 min-w-0 text-base font-bold text-gray-950;
+    @apply max-h-8 min-w-0 text-lg font-bold text-gray-950;
 }
 
 .accelerator-brand-name {
-    @apply truncate text-sm font-semibold text-gray-950;
+    @apply truncate text-base font-semibold text-gray-950;
 }
 
 .accelerator-brand-compact {
-    @apply mx-auto flex size-8 items-center justify-center overflow-hidden rounded-md text-xs font-bold text-gray-950;
+    @apply mx-auto flex size-10 items-center justify-center overflow-hidden rounded-lg text-sm font-bold text-gray-950;
 }
 
 .accelerator-brand-compact .fi-logo {
-    @apply size-6 object-contain;
+    @apply size-8 object-contain;
 }
 
 .accelerator-topbar-main {
-    @apply flex min-w-0 flex-1 items-center gap-2 px-3;
+    @apply flex min-w-0 flex-1 items-center gap-3 px-4;
 }
 
 .accelerator-topbar-search {
@@ -67,19 +67,19 @@
 }
 
 .accelerator-topbar-end {
-    @apply ms-auto flex shrink-0 items-center gap-2;
+    @apply ms-auto flex shrink-0 items-center gap-4;
 }
 
 .accelerator-topbar-end .fi-topbar-database-notifications-btn {
-    @apply size-8 rounded-md border border-gray-200 bg-white shadow-xs hover:bg-gray-50 focus-visible:ring-2 focus-visible:ring-gray-300;
+    @apply size-10 rounded-lg border border-gray-200 bg-white shadow-xs hover:bg-gray-50 focus-visible:ring-2 focus-visible:ring-gray-300;
 }
 
 .accelerator-user-menu {
-    @apply relative flex items-center gap-1.5 rounded-md p-0.5 transition-colors hover:bg-gray-50;
+    @apply relative flex items-center gap-2 rounded-lg p-1 transition-colors hover:bg-gray-50;
 }
 
 .accelerator-user-menu .fi-user-avatar {
-    @apply size-7;
+    @apply size-8;
 }
 
 .accelerator-user-menu .fi-user-menu-trigger::before {
@@ -88,7 +88,7 @@
 }
 
 .accelerator-user-identity {
-    @apply hidden max-w-44 min-w-0 px-1 text-end sm:block;
+    @apply hidden max-w-44 min-w-0 px-1.5 text-end sm:block;
 }
 
 .accelerator-user-identity > span,
@@ -97,27 +97,27 @@
 }
 
 .accelerator-user-identity > span {
-    @apply text-xs font-semibold text-gray-950;
+    @apply text-sm font-semibold text-gray-950;
 }
 
 .accelerator-user-identity > small {
-    @apply text-[0.625rem] leading-3 text-gray-500;
+    @apply text-xs leading-4 text-gray-500;
 }
 
 .accelerator-mobile-sidebar-open {
-    @apply size-8 lg:hidden;
+    @apply size-10 lg:hidden;
 }
 
 .accelerator-desktop-sidebar-open,
 .accelerator-desktop-sidebar-close {
-    @apply hidden size-8 lg:flex;
+    @apply hidden size-10 lg:flex;
 }
 
 .accelerator-mobile-sidebar-open > .fi-icon,
 .accelerator-desktop-sidebar-open > .fi-icon,
 .accelerator-desktop-sidebar-close > .fi-icon,
 .accelerator-topbar-end .fi-topbar-database-notifications-btn > .fi-icon {
-    @apply size-4;
+    @apply size-5;
 }
 
 .accelerator-sidebar {
@@ -145,20 +145,20 @@
 }
 
 .accelerator-panel-rail-body {
-    @apply flex min-h-0 flex-1 flex-col items-center overflow-y-auto py-2;
+    @apply flex min-h-0 flex-1 flex-col items-center overflow-y-auto py-3;
 }
 
 .accelerator-panel-list,
 .accelerator-launcher-list {
-    @apply flex w-full flex-col items-center gap-1;
+    @apply flex w-full flex-col items-center gap-2;
 }
 
 .accelerator-launcher-list {
-    @apply mt-auto border-t border-gray-200 pt-2;
+    @apply mt-auto border-t border-gray-200 pt-3;
 }
 
 .accelerator-panel-link {
-    @apply relative flex size-8 shrink-0 items-center justify-center rounded-md text-gray-500 outline-hidden transition-colors hover:bg-gray-200 hover:text-gray-950 focus-visible:ring-2 focus-visible:ring-indigo-500;
+    @apply relative flex size-10 shrink-0 items-center justify-center rounded-lg text-gray-500 outline-hidden transition-colors hover:bg-gray-200 hover:text-gray-950 focus-visible:ring-2 focus-visible:ring-indigo-500;
 }
 
 .accelerator-panel-link-active {
@@ -171,17 +171,17 @@
 }
 
 .accelerator-panel-icon {
-    @apply size-4.5;
+    @apply size-5;
 }
 
 .accelerator-panel-rail-footer {
-    min-height: calc(3rem + env(safe-area-inset-bottom));
+    min-height: calc(4rem + env(safe-area-inset-bottom));
     padding-bottom: env(safe-area-inset-bottom);
     @apply hidden shrink-0 items-center justify-center border-t border-gray-200 lg:hidden;
 }
 
 .accelerator-mobile-rail-close {
-    @apply size-8 rounded-md;
+    @apply size-10 rounded-lg;
 }
 
 .accelerator-sidebar-navigation {
@@ -189,31 +189,31 @@
 }
 
 .accelerator-sidebar-nav {
-    @apply h-full gap-y-3 px-2 py-3;
+    @apply h-full gap-y-7 px-6 py-8;
 }
 
 .accelerator-sidebar-nav .fi-sidebar-nav-groups {
-    @apply mx-0 gap-y-3;
+    @apply mx-0 gap-y-7;
 }
 
 .accelerator-sidebar-nav .fi-sidebar-group-btn {
-    @apply px-1.5 py-0.5;
+    @apply p-2;
 }
 
 .accelerator-sidebar-nav .fi-sidebar-group-label {
-    @apply text-[0.625rem] leading-4 font-semibold tracking-wider text-gray-400 uppercase;
+    @apply text-sm leading-6 font-medium tracking-normal text-gray-500 normal-case;
 }
 
 .accelerator-sidebar-nav .fi-sidebar-group-items {
-    @apply gap-y-0.5;
+    @apply gap-y-1;
 }
 
 .accelerator-sidebar-nav .fi-sidebar-item-btn {
-    @apply min-h-7 gap-x-2 rounded-md px-2 py-1.5;
+    @apply min-h-10 gap-x-3 rounded-lg p-2;
 }
 
 .accelerator-sidebar-nav .fi-sidebar-item-btn > .fi-icon {
-    @apply size-4;
+    @apply size-6;
 }
 
 .accelerator-sidebar-nav .fi-sidebar-item.fi-active > .fi-sidebar-item-btn {
@@ -226,7 +226,7 @@
 }
 
 .accelerator-sidebar-nav .fi-sidebar-item-label {
-    @apply text-xs leading-4 font-medium;
+    @apply text-sm leading-6 font-medium;
 }
 
 .accelerator-sidebar-resize-handle {
@@ -249,14 +249,14 @@
 }
 
 .accelerator-sidebar-tenant-menu {
-    @apply border-b border-gray-200 p-3;
+    @apply border-b border-gray-200 p-4;
 
     & .fi-tenant-menu {
         @apply mx-0 mt-0;
     }
 
     & .fi-tenant-menu-trigger {
-        @apply flex w-full items-center gap-3 rounded-lg bg-gray-50 px-2 py-2 text-sm ring-1 ring-gray-950/5 outline-hidden transition-colors hover:bg-gray-100 focus-visible:bg-gray-100;
+        @apply flex w-full items-center gap-3 rounded-lg bg-gray-50 px-3 py-2.5 text-sm ring-1 ring-gray-950/5 outline-hidden transition-colors hover:bg-gray-100 focus-visible:bg-gray-100;
     }
 }
 
@@ -271,7 +271,7 @@
     }
 
     .accelerator-brand-link {
-        @apply flex-none px-3 pe-0;
+        @apply flex-none px-4 pe-0;
     }
 
     .accelerator-brand-expanded {
@@ -288,7 +288,7 @@
     }
 
     .accelerator-topbar-main {
-        @apply flex-none px-3;
+        @apply flex-none px-4;
     }
 
     .accelerator-topbar-search {

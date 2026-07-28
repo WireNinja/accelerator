@@ -54,6 +54,7 @@ return [
     ],
 
     'ui' => [
+        'density' => env('ACCELERATOR_UI_DENSITY', 'compact'),
         'sidebar' => [
             'default_width' => 336,
             'min_width' => 288,

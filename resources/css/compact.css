@@ -1,12 +1,12 @@
 /*
- * Accelerator dense interface.
+ * Accelerator compact interface.
  *
  * Keep each rollout scoped to an accepted Filament resource. This first slice
  * targets the User list, create, and edit pages through Filament's stable
  * `.fi-resource-users` page class.
  */
 
-.fi-main:has(.fi-resource-users) {
+.accelerator-density-compact .fi-main:has(.fi-resource-users) {
     padding-inline: 0.75rem !important;
     padding-top: 0.5rem;
 
@@ -15,7 +15,7 @@
     }
 }
 
-.fi-resource-users {
+.accelerator-density-compact .fi-resource-users {
     & .fi-page-header-main-ctn {
         @apply gap-2 pt-0 pb-2;
     }
@@ -325,7 +325,7 @@
 }
 
 @media (width < 40rem) {
-    .fi-resource-users {
+    .accelerator-density-compact .fi-resource-users {
         & .fi-header {
             @apply items-center;
         }
@@ -344,6 +344,160 @@
 
         & .fi-input {
             font-size: 1rem;
+        }
+    }
+}
+
+html.accelerator-density-compact {
+    --accelerator-topbar-height: 3rem;
+
+    & .accelerator-brand-link {
+        @apply px-3;
+    }
+
+    & .accelerator-brand-expanded {
+        @apply gap-2;
+    }
+
+    & .accelerator-brand-expanded .fi-logo {
+        @apply max-h-6 text-base;
+    }
+
+    & .accelerator-brand-name {
+        @apply text-sm;
+    }
+
+    & .accelerator-brand-compact {
+        @apply size-8 rounded-md text-xs;
+    }
+
+    & .accelerator-brand-compact .fi-logo {
+        @apply size-6;
+    }
+
+    & .accelerator-topbar-main {
+        @apply gap-2 px-3;
+    }
+
+    & .accelerator-topbar-end {
+        @apply gap-2;
+    }
+
+    & .accelerator-topbar-end .fi-topbar-database-notifications-btn {
+        @apply size-8 rounded-md;
+    }
+
+    & .accelerator-user-menu {
+        @apply gap-1.5 rounded-md p-0.5;
+    }
+
+    & .accelerator-user-menu .fi-user-avatar {
+        @apply size-7;
+    }
+
+    & .accelerator-user-identity {
+        @apply px-1;
+    }
+
+    & .accelerator-user-identity > span {
+        @apply text-xs;
+    }
+
+    & .accelerator-user-identity > small {
+        @apply text-[0.625rem] leading-3;
+    }
+
+    & .accelerator-mobile-sidebar-open,
+    & .accelerator-desktop-sidebar-open,
+    & .accelerator-desktop-sidebar-close {
+        @apply size-8;
+    }
+
+    & .accelerator-mobile-sidebar-open > .fi-icon,
+    & .accelerator-desktop-sidebar-open > .fi-icon,
+    & .accelerator-desktop-sidebar-close > .fi-icon,
+    & .accelerator-topbar-end .fi-topbar-database-notifications-btn > .fi-icon {
+        @apply size-4;
+    }
+
+    & .accelerator-panel-rail-body {
+        @apply py-2;
+    }
+
+    & .accelerator-panel-list,
+    & .accelerator-launcher-list {
+        @apply gap-1;
+    }
+
+    & .accelerator-launcher-list {
+        @apply pt-2;
+    }
+
+    & .accelerator-panel-link {
+        @apply size-8 rounded-md;
+    }
+
+    & .accelerator-panel-icon {
+        @apply size-4.5;
+    }
+
+    & .accelerator-panel-rail-footer {
+        min-height: calc(3rem + env(safe-area-inset-bottom));
+    }
+
+    & .accelerator-mobile-rail-close {
+        @apply size-8 rounded-md;
+    }
+
+    & .accelerator-sidebar-nav {
+        @apply gap-y-3 px-2 py-3;
+    }
+
+    & .accelerator-sidebar-nav .fi-sidebar-nav-groups {
+        @apply gap-y-3;
+    }
+
+    & .accelerator-sidebar-nav .fi-sidebar-group-btn {
+        @apply px-1.5 py-0.5;
+    }
+
+    & .accelerator-sidebar-nav .fi-sidebar-group-label {
+        @apply text-[0.625rem] leading-4;
+    }
+
+    & .accelerator-sidebar-nav .fi-sidebar-group-items {
+        @apply gap-y-0.5;
+    }
+
+    & .accelerator-sidebar-nav .fi-sidebar-item-btn {
+        @apply min-h-7 gap-x-2 rounded-md px-2 py-1.5;
+    }
+
+    & .accelerator-sidebar-nav .fi-sidebar-item-btn > .fi-icon {
+        @apply size-4;
+    }
+
+    & .accelerator-sidebar-nav .fi-sidebar-item-label {
+        @apply text-xs leading-4;
+    }
+
+    & .accelerator-sidebar-tenant-menu {
+        @apply p-3;
+    }
+
+    & .accelerator-sidebar-tenant-menu .fi-tenant-menu-trigger {
+        @apply gap-3 rounded-lg px-2 py-2 text-sm;
+    }
+}
+
+@media (width < 64rem) {
+    html.accelerator-density-compact {
+        & .accelerator-brand-link {
+            @apply px-3 pe-0;
+        }
+
+        & .accelerator-topbar-main {
+            @apply px-3;
         }
     }
 }
