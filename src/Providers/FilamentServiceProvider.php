@@ -83,10 +83,6 @@ final class FilamentServiceProvider extends ServiceProvider
     private function registerRenderHooks(): void
     {
         FilamentView::registerRenderHook(
-            PanelsRenderHook::PAGE_START,
-            static fn (): View => view('accelerator::filament.sidebar.topbar'),
-        );
-        FilamentView::registerRenderHook(
             PanelsRenderHook::BODY_END,
             static fn (): View => view(
                 'accelerator::filament.business-exception-handler',

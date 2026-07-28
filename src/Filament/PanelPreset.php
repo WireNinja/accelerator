@@ -27,6 +27,7 @@ use WireNinja\Accelerator\Filament\AvatarProviders\DiceBearAvatarProvider;
 use WireNinja\Accelerator\Filament\Pages\Auth\Login;
 use WireNinja\Accelerator\Filament\Pages\ManageProfile;
 use WireNinja\Accelerator\Livewire\Sidebar;
+use WireNinja\Accelerator\Livewire\Topbar;
 use WireNinja\Accelerator\Settings\SystemSettings;
 use WireNinja\Accelerator\Support\BuiltinExceptions;
 
@@ -77,7 +78,9 @@ final class PanelPreset
             ])
             ->maxContentWidth(Width::Full)
             ->sidebarLivewireComponent(Sidebar::class)
-            ->sidebarWidth('25rem')
+            ->topbarLivewireComponent(Topbar::class)
+            ->sidebarWidth('17.5rem')
+            ->collapsedSidebarWidth('3.5rem')
             ->discoverResources(in: "{$panelDirectory}/Resources", for: "{$panelNamespace}\\Resources")
             ->discoverPages(in: "{$panelDirectory}/Pages", for: "{$panelNamespace}\\Pages")
             ->pages([
@@ -101,12 +104,11 @@ final class PanelPreset
             ->databaseNotifications()
             ->broadcasting(static fn (): bool => config('broadcasting.default') === 'reverb')
             ->spa()
-            ->topbar(false)
-            ->globalSearch(false)
+            ->globalSearchKeyBindings(['command+k', 'ctrl+k'])
             ->darkMode(false)
             ->defaultThemeMode(ThemeMode::Light)
             ->collapsibleNavigationGroups()
-            ->sidebarFullyCollapsibleOnDesktop()
+            ->sidebarCollapsibleOnDesktop()
             ->databaseTransactions()
             ->unsavedChangesAlerts(static fn (): bool => app()->isProduction())
             ->strictAuthorization(static fn (): bool => app()->isLocal())

@@ -1,0 +1,13 @@
+<?php
+
+namespace WireNinja\Accelerator\Livewire;
+
+use Illuminate\Contracts\View\View;
+
+class Topbar extends \Filament\Livewire\Topbar
+{
+    public function render(): View
+    {
+        return view('accelerator::livewire.topbar');
+    }
+}

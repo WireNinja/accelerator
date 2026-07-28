@@ -78,17 +78,17 @@ final readonly class EnvironmentStore
                 throw new RuntimeException("Invalid environment value for [{$key}].");
             }
 
-            $line = $key.'='.$this->quote($value);
-            $pattern = '/^(?:#\s*)?'.preg_quote($key, '/').'=.*$/m';
+            $line = $key . '=' . $this->quote($value);
+            $pattern = '/^(?:#\s*)?' . preg_quote($key, '/') . '=.*$/m';
 
             if (preg_match($pattern, $contents) === 1) {
                 $contents = (string) preg_replace($pattern, $line, $contents, 1);
             } else {
-                $contents = rtrim($contents).PHP_EOL.$line.PHP_EOL;
+                $contents = rtrim($contents) . PHP_EOL . $line . PHP_EOL;
             }
         }
 
-        $this->write($relativePath, rtrim($contents).PHP_EOL);
+        $this->write($relativePath, rtrim($contents) . PHP_EOL);
     }
 
     public function write(string $relativePath, string $contents): void
@@ -107,9 +107,11 @@ final readonly class EnvironmentStore
         }
 
         try {
-            if (file_put_contents($temporaryPath, $contents, LOCK_EX) === false
+            if (
+                file_put_contents($temporaryPath, $contents, LOCK_EX) === false
                 || ! chmod($temporaryPath, 0600)
-                || ! rename($temporaryPath, $path)) {
+                || ! rename($temporaryPath, $path)
+            ) {
                 throw new RuntimeException("Unable to atomically write [{$relativePath}].");
             }
         } finally {
@@ -129,10 +131,10 @@ final readonly class EnvironmentStore
                 throw new RuntimeException("Invalid environment value for [{$key}].");
             }
 
-            $lines[] = $key.'='.$this->quote($value);
+            $lines[] = $key . '=' . $this->quote($value);
         }
 
-        $this->write($relativePath, implode(PHP_EOL, $lines).PHP_EOL);
+        $this->write($relativePath, implode(PHP_EOL, $lines) . PHP_EOL);
     }
 
     private function path(string $relativePath): string
@@ -141,7 +143,7 @@ final readonly class EnvironmentStore
             throw new RuntimeException("Unsafe environment path [{$relativePath}].");
         }
 
-        return rtrim($this->projectRoot, '/').'/'.$relativePath;
+        return rtrim($this->projectRoot, '/') . '/' . $relativePath;
     }
 
     private function quote(string $value): string
@@ -154,7 +156,7 @@ final readonly class EnvironmentStore
             return $value;
         }
 
-        return '"'.str_replace(['\\', '"'], ['\\\\', '\\"'], $value).'"';
+        return '"' . str_replace(['\\', '"'], ['\\\\', '\\"'], $value) . '"';
     }
 
     private function unquote(string $value): string

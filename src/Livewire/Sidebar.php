@@ -3,26 +3,13 @@
 namespace WireNinja\Accelerator\Livewire;
 
 use BackedEnum;
-use Filament\Actions\Action;
-use Filament\Actions\Concerns\InteractsWithActions;
-use Filament\Actions\Contracts\HasActions;
 use Filament\Facades\Filament;
-use Filament\Livewire\Concerns\HasTenantMenu;
-use Filament\Livewire\Concerns\HasUserMenu;
-use Filament\Schemas\Concerns\InteractsWithSchemas;
-use Filament\Schemas\Contracts\HasSchemas;
-use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Contracts\View\View;
 use Livewire\Attributes\On;
 use Livewire\Component;
 
-class Sidebar extends Component implements HasActions, HasSchemas
+class Sidebar extends Component
 {
-    use HasTenantMenu;
-    use HasUserMenu;
-    use InteractsWithActions;
-    use InteractsWithSchemas;
-
     #[On('refresh-sidebar')]
     public function refresh(): void {}
 
@@ -55,37 +42,7 @@ class Sidebar extends Component implements HasActions, HasSchemas
     }
 
     /**
-     * @return array<Action>
-     */
-    public function getAcceleratorUserMenuItems(): array
-    {
-        return $this->getUserMenuItems();
-    }
-
-    public function getUserDescription(?Authenticatable $user): string
-    {
-        if ($user === null) {
-            return '';
-        }
-
-        $role = $user->getRoleNames()->first();
-
-        if (is_string($role) && filled($role)) {
-            return str($role)->replace(['_', '-'], ' ')->headline()->toString();
-        }
-
-        $username = data_get($user, 'username');
-        $email = data_get($user, 'email');
-
-        if (is_string($username) && filled($username)) {
-            return '@'.$username;
-        }
-
-        return is_string($email) ? $email : '';
-    }
-
-    /**
-     * @return array<mixed>
+     * @return array<BackedEnum>
      */
     public function getLaunchers(): array
     {
@@ -94,10 +51,10 @@ class Sidebar extends Component implements HasActions, HasSchemas
             return [];
         }
 
-        /** @var array<mixed> $cases */
-        $cases = $launcherEnum::cases();
-
-        return $cases;
+        return array_values(array_filter(
+            $launcherEnum::cases(),
+            static fn (mixed $launcher): bool => $launcher instanceof BackedEnum,
+        ));
     }
 
     public function render(): View
