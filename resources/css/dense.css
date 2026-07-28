@@ -1,0 +1,253 @@
+/*
+ * Accelerator dense interface.
+ *
+ * Keep each rollout scoped to an accepted Filament resource. This first slice
+ * targets the User list, create, and edit pages through Filament's stable
+ * `.fi-resource-users` page class.
+ */
+
+.fi-main:has(.fi-resource-users) {
+    padding-inline: 0.75rem !important;
+    padding-top: 0.5rem;
+
+    @media (width >= 40rem) {
+        padding-inline: 1rem !important;
+    }
+}
+
+.fi-resource-users {
+    & .fi-page-header-main-ctn {
+        @apply gap-2 pt-0 pb-2;
+    }
+
+    & .fi-page-content {
+        @apply gap-y-3;
+    }
+
+    & .fi-header {
+        @apply gap-2;
+    }
+
+    & .fi-header-heading {
+        @apply text-xl leading-7 sm:text-[1.375rem];
+    }
+
+    & .fi-header-subheading {
+        @apply mt-1 text-xs;
+    }
+
+    & .fi-header-actions-ctn {
+        @apply gap-2;
+    }
+
+    & .fi-header-actions-ctn .fi-btn {
+        @apply min-h-8 rounded-md px-2.5 py-1.5 text-xs;
+    }
+
+    & .fi-breadcrumbs {
+        @apply mb-1;
+    }
+
+    & .fi-breadcrumbs-item,
+    & .fi-breadcrumbs-item-label {
+        @apply text-xs;
+    }
+
+    & .fi-wi {
+        @apply gap-3;
+    }
+
+    & .fi-wi-stats-overview .fi-section-content.fi-sc-has-gap {
+        @apply gap-3;
+    }
+
+    & .fi-wi-stats-overview-stat {
+        @apply rounded-lg p-3;
+    }
+
+    & .fi-wi-stats-overview-stat-content {
+        @apply gap-y-1;
+    }
+
+    & .fi-wi-stats-overview-stat-label,
+    & .fi-wi-stats-overview-stat-description {
+        @apply text-xs;
+    }
+
+    & .fi-wi-stats-overview-stat-value {
+        @apply text-xl leading-7;
+    }
+
+    & .fi-ta-ctn {
+        @apply rounded-lg;
+    }
+
+    & .fi-ta-header {
+        @apply gap-2 p-3 sm:px-4;
+    }
+
+    & .fi-ta-header-toolbar {
+        @apply gap-2 px-2.5 py-1.5 sm:px-3;
+    }
+
+    & .fi-ta-header-toolbar > * {
+        @apply min-h-8 gap-x-2;
+    }
+
+    & .fi-ta-header-toolbar .fi-input-wrp {
+        @apply min-h-8 rounded-md;
+    }
+
+    & .fi-ta-header-toolbar .fi-input {
+        @apply py-1 ps-2.5 pe-2.5 text-sm leading-5;
+    }
+
+    & .fi-ta-header-cell {
+        @apply px-2.5 py-2 text-xs sm:first-of-type:ps-4 sm:last-of-type:pe-4;
+    }
+
+    & .fi-ta-cell {
+        @apply p-0;
+    }
+
+    & .fi-ta-text:not(.fi-inline) {
+        @apply px-2.5 py-1.5;
+    }
+
+    & .fi-ta-text-item.fi-size-sm {
+        @apply text-[0.8125rem] leading-5;
+    }
+
+    & .fi-ta-text-description {
+        @apply text-xs leading-4;
+    }
+
+    & .fi-ta-image:not(.fi-inline) {
+        @apply p-0;
+    }
+
+    & .fi-ta-cell:has(.fi-ta-image),
+    & .fi-ta-cell:has(.fi-ta-actions),
+    & .fi-ta-cell.fi-ta-selection-cell {
+        @apply px-2.5 py-1.5 first-of-type:ps-3 last-of-type:pe-3 sm:first-of-type:ps-4 sm:last-of-type:pe-4;
+    }
+
+    & .fi-ta-table.fi-ta-table-stacked-on-mobile > tbody > tr {
+        @apply py-1;
+    }
+
+    & .fi-ta-table.fi-ta-table-stacked-on-mobile > tbody > tr > .fi-ta-cell:not(.fi-ta-selection-cell) {
+        @apply px-3 sm:px-0;
+    }
+
+    & .fi-ta-table.fi-ta-table-stacked-on-mobile > tbody > tr > .fi-ta-cell > .fi-ta-cell-label {
+        @apply pt-1 text-xs leading-5;
+    }
+
+    & .fi-ta-pagination {
+        @apply px-3 py-2;
+    }
+
+    & .fi-pagination {
+        @apply gap-x-2;
+    }
+
+    & .fi-pagination-item-btn {
+        @apply p-1.5;
+    }
+
+    & .fi-sc-form,
+    & .fi-sc.fi-sc-has-gap {
+        @apply gap-4;
+    }
+
+    & .fi-section:not(.fi-section-not-contained):not(.fi-aside) {
+        @apply rounded-lg;
+    }
+
+    & .fi-section:not(.fi-section-not-contained):not(.fi-aside) > .fi-section-header {
+        @apply gap-2 px-4 py-2.5;
+    }
+
+    & .fi-section:not(.fi-section-not-contained):not(.fi-divided) > .fi-section-content-ctn > .fi-section-content {
+        @apply gap-3 p-4;
+    }
+
+    & .fi-section > .fi-section-header .fi-section-header-heading {
+        @apply text-sm;
+    }
+
+    & .fi-section > .fi-section-header .fi-section-header-description {
+        @apply text-xs;
+    }
+
+    & .fi-fo-field {
+        @apply gap-y-1.5;
+    }
+
+    & .fi-fo-field-label-content,
+    & .fi-fo-field-helper-text {
+        @apply text-xs;
+    }
+
+    & .fi-input-wrp {
+        @apply rounded-md;
+    }
+
+    & .fi-input {
+        @apply px-2.5 py-1 text-sm leading-5;
+    }
+
+    & .accelerator-vertical-wizard-canvas {
+        @apply gap-3 rounded-lg p-3 md:gap-4 lg:p-4;
+    }
+
+    & .accelerator-vertical-wizard-nav-intro {
+        @apply mb-3 px-1;
+    }
+
+    & .accelerator-vertical-wizard-nav-item {
+        @apply min-h-8 rounded-lg px-2 py-1.5;
+    }
+
+    & .accelerator-vertical-wizard-nav-item-icon {
+        @apply me-2;
+    }
+
+    & .accelerator-vertical-wizard-progress {
+        @apply mt-4 px-1;
+    }
+
+    & .accelerator-vertical-wizard-content {
+        @apply gap-4;
+    }
+
+    & .accelerator-vertical-wizard-footer,
+    & .accelerator-vertical-wizard-footer > div {
+        @apply gap-2;
+    }
+}
+
+@media (width < 40rem) {
+    .fi-resource-users {
+        & .fi-header {
+            @apply items-center;
+        }
+
+        & .fi-header-heading {
+            @apply text-xl leading-7;
+        }
+
+        & .fi-wi-stats-overview .fi-section-content.fi-sc-has-gap {
+            @apply gap-2.5;
+        }
+
+        & .fi-wi-stats-overview-stat {
+            @apply p-3;
+        }
+
+        & .fi-input {
+            font-size: 1rem;
+        }
+    }
+}

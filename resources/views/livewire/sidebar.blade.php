@@ -74,73 +74,77 @@
 
         <div class="accelerator-sidebar-body">
             <nav aria-label="Panel" class="accelerator-panel-rail">
-                <div class="accelerator-panel-list">
-                    @foreach ($panels as $panel)
-                        @php
-                            $isActive = $currentPanelId === $panel->value;
-                        @endphp
+                <div class="accelerator-panel-rail-body">
+                    <div class="accelerator-panel-list">
+                        @foreach ($panels as $panel)
+                            @php
+                                $isActive = $currentPanelId === $panel->value;
+                            @endphp
 
-                        <a
-                            wire:key="accelerator-panel-{{ $panel->value }}"
-                            href="{{ $panel->getUrl() }}"
-                            aria-label="{{ $panel->getLabel() }}"
-                            @if ($isActive) aria-current="page" @endif
-                            x-data="{ tooltip: false }"
-                            x-effect="
-                                tooltip = window.matchMedia('(min-width: 1024px)').matches
-                                    ? {
-                                          content: @js($panel->getLabel()),
-                                          placement: document.dir === 'rtl' ? 'left' : 'right',
-                                          theme: $store.theme,
-                                      }
-                                    : false
-                            "
-                            x-tooltip.html="tooltip"
-                            @class([
-                                'accelerator-panel-link',
-                                'accelerator-panel-link-active' => $isActive,
-                            ])
-                        >
-                            <x-filament::icon :icon="$panel->getIcon()" class="accelerator-panel-icon" />
-                        </a>
-                    @endforeach
-                </div>
-
-                @if ($launchers !== [])
-                    <div class="accelerator-launcher-list">
-                        @foreach ($launchers as $launcher)
                             <a
-                                wire:key="accelerator-launcher-{{ $launcher->value }}"
-                                href="{{ $launcher->getUrl() }}"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                aria-label="{{ $launcher->getLabel() }}"
+                                wire:key="accelerator-panel-{{ $panel->value }}"
+                                href="{{ $panel->getUrl() }}"
+                                aria-label="{{ $panel->getLabel() }}"
+                                @if ($isActive) aria-current="page" @endif
                                 x-data="{ tooltip: false }"
                                 x-effect="
                                     tooltip = window.matchMedia('(min-width: 1024px)').matches
                                         ? {
-                                              content: @js($launcher->getLabel()),
+                                              content: @js($panel->getLabel()),
                                               placement: document.dir === 'rtl' ? 'left' : 'right',
                                               theme: $store.theme,
                                           }
                                         : false
                                 "
                                 x-tooltip.html="tooltip"
-                                class="accelerator-panel-link"
+                                @class([
+                                    'accelerator-panel-link',
+                                    'accelerator-panel-link-active' => $isActive,
+                                ])
                             >
-                                <x-filament::icon :icon="$launcher->getIcon()" class="accelerator-panel-icon" />
+                                <x-filament::icon :icon="$panel->getIcon()" class="accelerator-panel-icon" />
                             </a>
                         @endforeach
                     </div>
-                @endif
 
-                <x-filament::icon-button
-                    color="gray"
-                    icon="lucide-x"
-                    :label="__('filament-panels::layout.actions.sidebar.collapse.label')"
-                    x-on:click="$store.sidebar.close()"
-                    class="accelerator-mobile-rail-close"
-                />
+                    @if ($launchers !== [])
+                        <div class="accelerator-launcher-list">
+                            @foreach ($launchers as $launcher)
+                                <a
+                                    wire:key="accelerator-launcher-{{ $launcher->value }}"
+                                    href="{{ $launcher->getUrl() }}"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    aria-label="{{ $launcher->getLabel() }}"
+                                    x-data="{ tooltip: false }"
+                                    x-effect="
+                                        tooltip = window.matchMedia('(min-width: 1024px)').matches
+                                            ? {
+                                                  content: @js($launcher->getLabel()),
+                                                  placement: document.dir === 'rtl' ? 'left' : 'right',
+                                                  theme: $store.theme,
+                                              }
+                                            : false
+                                    "
+                                    x-tooltip.html="tooltip"
+                                    class="accelerator-panel-link"
+                                >
+                                    <x-filament::icon :icon="$launcher->getIcon()" class="accelerator-panel-icon" />
+                                </a>
+                            @endforeach
+                        </div>
+                    @endif
+                </div>
+
+                <div class="accelerator-panel-rail-footer">
+                    <x-filament::icon-button
+                        color="gray"
+                        icon="lucide-x"
+                        :label="__('filament-panels::layout.actions.sidebar.collapse.label')"
+                        x-on:click="$store.sidebar.close()"
+                        class="accelerator-mobile-rail-close"
+                    />
+                </div>
             </nav>
 
             <div

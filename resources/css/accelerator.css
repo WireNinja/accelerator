@@ -1,3 +1,5 @@
+@import './dense.css';
+
 @source '../views/**/*.blade.php';
 
 :root {
@@ -10,47 +12,6 @@
 
 .fi-body-has-topbar .fi-main-ctn {
     min-height: calc(100dvh - var(--accelerator-topbar-height));
-}
-
-.fi-main {
-    padding-inline: 1rem !important;
-    padding-top: 0.75rem;
-
-    @media (width >= 40rem) {
-        padding-inline: 1.25rem !important;
-    }
-
-    @media (width >= 64rem) {
-        padding-inline: 1.5rem !important;
-    }
-}
-
-.fi-page-header-main-ctn {
-    @apply gap-3 pt-0 pb-3;
-}
-
-.fi-page-content {
-    @apply gap-y-5;
-}
-
-.fi-header {
-    @apply gap-3;
-}
-
-.fi-header-heading {
-    @apply text-xl sm:text-2xl;
-}
-
-.fi-header-subheading {
-    @apply mt-1 text-sm;
-}
-
-.fi-header-actions-ctn {
-    @apply gap-2;
-}
-
-.fi-header-actions-ctn .fi-btn {
-    @apply rounded-md px-2.5 py-1.5 text-xs;
 }
 
 .accelerator-topbar-ctn {
@@ -180,16 +141,16 @@
 
 .accelerator-panel-rail {
     width: var(--collapsed-sidebar-width);
-    @apply flex h-full shrink-0 flex-col items-center border-e border-gray-200 bg-gray-50 py-2;
+    @apply flex h-full min-h-0 shrink-0 flex-col border-e border-gray-200 bg-gray-50;
+}
+
+.accelerator-panel-rail-body {
+    @apply flex min-h-0 flex-1 flex-col items-center overflow-y-auto py-2;
 }
 
 .accelerator-panel-list,
 .accelerator-launcher-list {
-    @apply flex w-full min-h-0 flex-col items-center gap-1;
-}
-
-.accelerator-panel-list {
-    @apply flex-1 overflow-y-auto;
+    @apply flex w-full flex-col items-center gap-1;
 }
 
 .accelerator-launcher-list {
@@ -213,8 +174,14 @@
     @apply size-4.5;
 }
 
+.accelerator-panel-rail-footer {
+    min-height: calc(3rem + env(safe-area-inset-bottom));
+    padding-bottom: env(safe-area-inset-bottom);
+    @apply hidden shrink-0 items-center justify-center border-t border-gray-200 lg:hidden;
+}
+
 .accelerator-mobile-rail-close {
-    @apply mt-2 shrink-0 border-t border-gray-200 pt-2 lg:hidden;
+    @apply size-8 rounded-md;
 }
 
 .accelerator-sidebar-navigation {
@@ -293,54 +260,8 @@
     }
 }
 
-.fi-wi {
-    @apply gap-4;
-}
-
-.fi-wi-stats-overview .fi-section-content.fi-sc-has-gap {
-    @apply gap-4;
-}
-
-.fi-wi-stats-overview-stat {
-    @apply rounded-lg p-4;
-}
-
-.fi-wi-stats-overview-stat .fi-wi-stats-overview-stat-content {
-    @apply gap-y-1.5;
-}
-
-.fi-wi-stats-overview-stat .fi-wi-stats-overview-stat-label,
-.fi-wi-stats-overview-stat .fi-wi-stats-overview-stat-description {
-    @apply text-xs;
-}
-
-.fi-wi-stats-overview-stat .fi-wi-stats-overview-stat-value {
-    @apply text-2xl;
-}
-
-.fi-ta-ctn {
-    @apply rounded-lg;
-}
-
-.fi-ta-ctn .fi-ta-header-toolbar {
-    @apply gap-2 px-3 py-2;
-}
-
-.fi-ta-ctn .fi-ta-header-toolbar > * {
-    @apply min-h-8 gap-x-2;
-}
-
 .fi-layout-sidebar-toggle-btn-ctn {
     display: none !important;
-}
-
-.fi-ta-cell,
-.fi-ta-text-item,
-.fi-ta-icon,
-.fi-ta-image,
-.fi-ta-text-has-descriptions,
-.fi-ta-text {
-    @apply py-1.5;
 }
 
 @media (width < 64rem) {
@@ -376,5 +297,9 @@
 
     .accelerator-user-identity {
         @apply hidden;
+    }
+
+    .accelerator-panel-rail-footer {
+        @apply flex;
     }
 }
