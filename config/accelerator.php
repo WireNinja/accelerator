@@ -58,7 +58,7 @@ return [
             'default_width' => 336,
             'min_width' => 288,
             'max_width' => 480,
-            'rail_width' => 56,
+            'rail_width' => 48,
         ],
     ],
 

@@ -6,7 +6,7 @@
 
 .fi-main {
     padding-inline: 1.25rem !important;
-    padding-top: 1.5rem;
+    padding-top: 0.75rem;
 
     @media (width >= 40rem) {
         padding-inline: 1.5rem !important;
@@ -14,7 +14,7 @@
 }
 
 .fi-page-header-main-ctn {
-    @apply gap-4 pt-4 pb-6;
+    @apply gap-3 pt-0 pb-4;
 }
 
 .accelerator-topbar-ctn {
@@ -31,31 +31,31 @@
 }
 
 .accelerator-brand-link {
-    @apply flex h-full min-w-0 flex-1 items-center px-4 outline-hidden;
+    @apply flex h-full min-w-0 flex-1 items-center px-3 outline-hidden;
 }
 
 .accelerator-brand-expanded {
-    @apply flex min-w-0 items-center gap-2.5;
+    @apply flex min-w-0 items-center gap-2;
 }
 
 .accelerator-brand-expanded .fi-logo {
-    @apply max-h-8 min-w-0 text-lg font-bold text-gray-950;
+    @apply max-h-7 min-w-0 text-base font-bold text-gray-950;
 }
 
 .accelerator-brand-name {
-    @apply truncate text-base font-semibold text-gray-950;
+    @apply truncate text-sm font-semibold text-gray-950;
 }
 
 .accelerator-brand-compact {
-    @apply mx-auto flex size-9 items-center justify-center overflow-hidden rounded-lg text-sm font-bold text-gray-950;
+    @apply mx-auto flex size-8 items-center justify-center overflow-hidden rounded-md text-xs font-bold text-gray-950;
 }
 
 .accelerator-brand-compact .fi-logo {
-    @apply size-7 object-contain;
+    @apply size-6 object-contain;
 }
 
 .accelerator-topbar-main {
-    @apply flex min-w-0 flex-1 items-center gap-3 px-4;
+    @apply flex min-w-0 flex-1 items-center gap-2 px-3;
 }
 
 .accelerator-topbar-search {
@@ -67,15 +67,19 @@
 }
 
 .accelerator-topbar-end {
-    @apply ms-auto flex shrink-0 items-center gap-3;
+    @apply ms-auto flex shrink-0 items-center gap-2;
 }
 
 .accelerator-topbar-end .fi-topbar-database-notifications-btn {
-    @apply size-9 rounded-lg border border-gray-200 bg-white shadow-xs hover:bg-gray-50 focus-visible:ring-2 focus-visible:ring-gray-300;
+    @apply size-8 rounded-md border border-gray-200 bg-white shadow-xs hover:bg-gray-50 focus-visible:ring-2 focus-visible:ring-gray-300;
 }
 
 .accelerator-user-menu {
-    @apply relative flex items-center gap-2 rounded-lg p-1 transition-colors hover:bg-gray-50;
+    @apply relative flex items-center gap-1.5 rounded-md p-0.5 transition-colors hover:bg-gray-50;
+}
+
+.accelerator-user-menu .fi-user-avatar {
+    @apply size-7;
 }
 
 .accelerator-user-menu .fi-user-menu-trigger::before {
@@ -93,23 +97,31 @@
 }
 
 .accelerator-user-identity > span {
-    @apply text-sm font-semibold text-gray-950;
+    @apply text-xs font-semibold text-gray-950;
 }
 
 .accelerator-user-identity > small {
-    @apply text-xs text-gray-500;
+    @apply text-[0.625rem] leading-3 text-gray-500;
 }
 
 .accelerator-mobile-sidebar-open {
-    @apply lg:hidden;
+    @apply size-8 lg:hidden;
 }
 
 .accelerator-desktop-sidebar-open,
 .accelerator-desktop-sidebar-close {
-    @apply hidden lg:flex;
+    @apply hidden size-8 lg:flex;
+}
+
+.accelerator-mobile-sidebar-open > .fi-icon,
+.accelerator-desktop-sidebar-open > .fi-icon,
+.accelerator-desktop-sidebar-close > .fi-icon,
+.accelerator-topbar-end .fi-topbar-database-notifications-btn > .fi-icon {
+    @apply size-4;
 }
 
 .accelerator-sidebar {
+    top: 0;
     @apply relative border-e border-gray-200 bg-white shadow-none ring-0 lg:bg-white;
 }
 
@@ -122,7 +134,8 @@
 }
 
 .accelerator-panel-rail {
-    @apply flex h-full w-14 shrink-0 flex-col items-center border-e border-gray-200 bg-gray-50 py-2;
+    width: var(--collapsed-sidebar-width);
+    @apply flex h-full shrink-0 flex-col items-center border-e border-gray-200 bg-gray-50 py-2;
 }
 
 .accelerator-panel-list,
@@ -148,7 +161,7 @@
 
 .accelerator-panel-link-active::before {
     content: '';
-    @apply absolute inset-y-auto -start-3 h-5 w-0.5 rounded-full bg-indigo-600;
+    @apply absolute inset-y-auto -start-2 h-5 w-0.5 rounded-full bg-indigo-600;
 }
 
 .accelerator-panel-icon {
