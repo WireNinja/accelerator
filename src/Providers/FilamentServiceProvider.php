@@ -125,6 +125,7 @@ final class FilamentServiceProvider extends ServiceProvider
                 ->deferLoading()
                 ->deferFilters()
                 ->deferColumnManager()
+                ->stackedOnMobile()
                 ->defaultCurrency('IDR')
                 ->defaultDateDisplayFormat('j F Y')
                 ->defaultTimeDisplayFormat('H:i:s')
