@@ -79,8 +79,8 @@ final class PanelPreset
             ->maxContentWidth(Width::Full)
             ->sidebarLivewireComponent(Sidebar::class)
             ->topbarLivewireComponent(Topbar::class)
-            ->sidebarWidth('17.5rem')
-            ->collapsedSidebarWidth('3.5rem')
+            ->sidebarWidth(sprintf('%dpx', (int) config('accelerator.ui.sidebar.default_width', 336)))
+            ->collapsedSidebarWidth(sprintf('%dpx', (int) config('accelerator.ui.sidebar.rail_width', 56)))
             ->discoverResources(in: "{$panelDirectory}/Resources", for: "{$panelNamespace}\\Resources")
             ->discoverPages(in: "{$panelDirectory}/Pages", for: "{$panelNamespace}\\Pages")
             ->pages([

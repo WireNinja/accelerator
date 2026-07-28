@@ -53,6 +53,15 @@ return [
         'max_megabytes' => env('ACCELERATOR_UPLOAD_MAX_MB', 100),
     ],
 
+    'ui' => [
+        'sidebar' => [
+            'default_width' => 336,
+            'min_width' => 288,
+            'max_width' => 480,
+            'rail_width' => 56,
+        ],
+    ],
+
     'support' => [
         'whatsapp' => env('ACCELERATOR_SUPPORT_WHATSAPP'),
         'telegram' => env('ACCELERATOR_SUPPORT_TELEGRAM'),

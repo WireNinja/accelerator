@@ -1,9 +1,13 @@
 <div>
     @php
         $navigation = filament()->getNavigation();
+        $isRtl = __('filament-panels::layout.direction') === 'rtl';
         $currentPanelId = $this->getCurrentPanelId();
         $panels = $this->getPanels();
         $launchers = $this->getLaunchers();
+        $defaultSidebarWidth = (int) config('accelerator.ui.sidebar.default_width', 336);
+        $minSidebarWidth = (int) config('accelerator.ui.sidebar.min_width', 288);
+        $maxSidebarWidth = (int) config('accelerator.ui.sidebar.max_width', 480);
         $currentTenant = filament()->getTenant();
         $shouldRenderTenantMenu = filament()->hasTenancy()
             && filament()->hasTenantMenu()
@@ -14,8 +18,56 @@
         id="fi-main-sidebar"
         aria-label="{{ __('filament-panels::layout.navigation.label') }}"
         x-cloak
-        x-data="{}"
+        x-data="{
+            width: @js($defaultSidebarWidth),
+            minWidth: @js($minSidebarWidth),
+            maxWidth: @js($maxSidebarWidth),
+            isRtl: @js($isRtl),
+            isResizing: false,
+            initialize() {
+                const storedWidth = Number(localStorage.getItem('accelerator.sidebar.width'))
+
+                if (Number.isFinite(storedWidth) && storedWidth > 0) {
+                    this.width = storedWidth
+                }
+
+                this.width = this.clamp(this.width)
+                this.applyWidth()
+            },
+            clamp(width) {
+                return Math.min(this.maxWidth, Math.max(this.minWidth, Math.round(width)))
+            },
+            applyWidth() {
+                document.documentElement.style.setProperty('--sidebar-width', `${this.width}px`)
+            },
+            resize(event) {
+                if (! this.isResizing || window.innerWidth < 1024) {
+                    return
+                }
+
+                this.width = this.clamp(this.isRtl ? window.innerWidth - event.clientX : event.clientX)
+                this.applyWidth()
+            },
+            stopResize() {
+                if (! this.isResizing) {
+                    return
+                }
+
+                this.isResizing = false
+                document.body.classList.remove('accelerator-sidebar-is-resizing')
+                localStorage.setItem('accelerator.sidebar.width', String(this.width))
+            },
+            resizeBy(amount) {
+                this.width = this.clamp(this.width + amount)
+                this.applyWidth()
+                localStorage.setItem('accelerator.sidebar.width', String(this.width))
+            },
+        }"
+        x-init="initialize()"
         x-bind:class="{ 'fi-sidebar-open': $store.sidebar.isOpen }"
+        x-on:pointermove.window="resize($event)"
+        x-on:pointerup.window="stopResize()"
+        x-on:pointercancel.window="stopResize()"
         class="fi-sidebar fi-main-sidebar accelerator-sidebar"
     >
         {{ \Filament\Support\Facades\FilamentView::renderHook(\Filament\View\PanelsRenderHook::SIDEBAR_START) }}
@@ -155,6 +207,26 @@
                     {{ \Filament\Support\Facades\FilamentView::renderHook('accelerator::sidebar.support') }}
                 </nav>
             </div>
+        </div>
+
+        <div
+            role="separator"
+            aria-label="Ubah lebar sidebar"
+            aria-orientation="vertical"
+            tabindex="0"
+            x-show="$store.sidebar.isOpen"
+            x-bind:aria-valuemin="minWidth"
+            x-bind:aria-valuemax="maxWidth"
+            x-bind:aria-valuenow="width"
+            x-on:pointerdown.prevent="
+                isResizing = true
+                document.body.classList.add('accelerator-sidebar-is-resizing')
+            "
+            x-on:keydown.left.prevent="resizeBy(isRtl ? 16 : -16)"
+            x-on:keydown.right.prevent="resizeBy(isRtl ? -16 : 16)"
+            class="accelerator-sidebar-resize-handle"
+        >
+            <span></span>
         </div>
 
         {{ \Filament\Support\Facades\FilamentView::renderHook(\Filament\View\PanelsRenderHook::SIDEBAR_FOOTER) }}

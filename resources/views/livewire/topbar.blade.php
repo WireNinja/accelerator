@@ -36,12 +36,14 @@
                 </span>
 
                 <span x-show="! $store.sidebar.isOpen" class="accelerator-brand-compact">
-                    <x-filament::icon icon="lucide-zap" class="size-5" />
+                    @if (filled($brandLogo))
+                        <x-filament-panels::logo />
+                    @else
+                        <span aria-hidden="true">{{ str($brandName)->substr(0, 1)->upper() }}</span>
+                    @endif
                 </span>
             </a>
-        </div>
 
-        <div class="accelerator-topbar-main">
             @if ($hasNavigation)
                 <x-filament::icon-button
                     color="gray"
@@ -49,29 +51,16 @@
                     icon-size="lg"
                     :label="__('filament-panels::layout.actions.sidebar.expand.label')"
                     x-cloak
-                    x-data="{}"
                     aria-controls="fi-main-sidebar"
                     x-bind:aria-expanded="$store.sidebar.isOpen"
                     x-on:click="$store.sidebar.open()"
                     x-show="! $store.sidebar.isOpen"
                     class="accelerator-mobile-sidebar-open"
                 />
-
-                <x-filament::icon-button
-                    color="gray"
-                    icon="lucide-x"
-                    icon-size="lg"
-                    :label="__('filament-panels::layout.actions.sidebar.collapse.label')"
-                    x-cloak
-                    x-data="{}"
-                    aria-controls="fi-main-sidebar"
-                    x-bind:aria-expanded="$store.sidebar.isOpen"
-                    x-on:click="$store.sidebar.close()"
-                    x-show="$store.sidebar.isOpen"
-                    class="accelerator-mobile-sidebar-close"
-                />
             @endif
+        </div>
 
+        <div class="accelerator-topbar-main">
             @if ($isSidebarCollapsibleOnDesktop)
                 <x-filament::icon-button
                     color="gray"
@@ -131,13 +120,15 @@
                         ])
                     @endif
 
-                    <div class="accelerator-user-identity">
-                        <span>{{ filament()->getUserName($user) }}</span>
-                        <small>{{ str(filament()->getCurrentPanel()?->getId())->headline() }}</small>
-                    </div>
-
                     @if (filament()->hasUserMenu() && filament()->getUserMenuPosition() === \Filament\Enums\UserMenuPosition::Topbar)
-                        <x-filament-panels::user-menu />
+                        <div class="accelerator-user-menu">
+                            <div class="accelerator-user-identity">
+                                <span>{{ filament()->getUserName($user) }}</span>
+                                <small>{{ str(filament()->getCurrentPanel()?->getId())->headline() }}</small>
+                            </div>
+
+                            <x-filament-panels::user-menu />
+                        </div>
                     @endif
                 @endif
             </div>
