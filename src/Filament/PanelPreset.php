@@ -36,8 +36,8 @@ final class PanelPreset
     public static function configure(Panel $panel, string $id = 'admin'): Panel
     {
         $panelSegment = $id === 'admin' ? null : Str::studly($id);
-        $panelDirectory = app_path('Filament'.($panelSegment ? "/{$panelSegment}" : ''));
-        $panelNamespace = 'App\\Filament'.($panelSegment ? "\\{$panelSegment}" : '');
+        $panelDirectory = app_path('Filament' . ($panelSegment ? "/{$panelSegment}" : ''));
+        $panelNamespace = 'App\\Filament' . ($panelSegment ? "\\{$panelSegment}" : '');
 
         return $panel
             ->id($id)
@@ -102,7 +102,7 @@ final class PanelPreset
                 Authenticate::class,
             ])
             ->databaseNotifications()
-            ->broadcasting(static fn (): bool => config('broadcasting.default') === 'reverb')
+            ->broadcasting(static fn(): bool => config('broadcasting.default') === 'reverb')
             ->spa()
             ->globalSearchKeyBindings(['command+k', 'ctrl+k'])
             ->darkMode(false)
@@ -110,8 +110,8 @@ final class PanelPreset
             ->collapsibleNavigationGroups()
             ->sidebarCollapsibleOnDesktop()
             ->databaseTransactions()
-            ->unsavedChangesAlerts(static fn (): bool => app()->isProduction())
-            ->strictAuthorization(static fn (): bool => app()->isLocal())
+            ->unsavedChangesAlerts(static fn(): bool => app()->isProduction())
+            ->strictAuthorization(static fn(): bool => app()->isLocal())
             ->profile(ManageProfile::class, isSimple: true)
             ->revealablePasswords()
             ->resourceCreatePageRedirect('index')

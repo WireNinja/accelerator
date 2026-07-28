@@ -99,7 +99,7 @@
     }
 
     & .fi-ta-header-toolbar .fi-input {
-        @apply py-1 ps-2.5 pe-2.5 text-sm leading-5;
+        @apply py-1.5 ps-2.5 pe-2.5 text-sm leading-5;
     }
 
     & .fi-ta-header-cell {
@@ -144,16 +144,35 @@
         @apply pt-1 text-xs leading-5;
     }
 
-    & .fi-ta-pagination {
-        @apply px-3 py-2;
+    & .fi-ta-filters-before-content-ctn > .fi-ta-filters,
+    & .fi-ta-filters-after-content-ctn > .fi-ta-filters,
+    & .fi-ta-filters-dropdown .fi-ta-filters {
+        @apply gap-y-3 p-3;
+    }
+
+    & .fi-ta-filters-heading {
+        @apply text-sm leading-5;
+    }
+
+    & .fi-ta-filters-actions-ctn {
+        @apply gap-2;
+    }
+
+    & .fi-ta-filters .fi-btn {
+        @apply min-h-8 rounded-md px-2.5 py-1.5 text-xs;
     }
 
     & .fi-pagination {
-        @apply gap-x-2;
+        @apply gap-x-2 px-3 py-1.5;
     }
 
     & .fi-pagination-item-btn {
         @apply p-1.5;
+    }
+
+    & .fi-pagination-records-per-page-select-ctn,
+    & .fi-pagination-records-per-page-select {
+        @apply min-h-8;
     }
 
     & .fi-sc-form,
@@ -191,11 +210,88 @@
     }
 
     & .fi-input-wrp {
-        @apply rounded-md;
+        @apply min-h-8 rounded-md;
     }
 
     & .fi-input {
-        @apply px-2.5 py-1 text-sm leading-5;
+        @apply px-2.5 py-1.5 text-sm leading-5;
+    }
+
+    & .fi-input-wrp-prefix {
+        @apply ps-2.5;
+    }
+
+    & .fi-input-wrp-prefix:not(.fi-inline) {
+        @apply pe-2.5;
+    }
+
+    & .fi-input-wrp-suffix {
+        @apply pe-2.5;
+    }
+
+    & .fi-input-wrp-suffix:not(.fi-inline) {
+        @apply ps-2.5;
+    }
+
+    & select.fi-select-input {
+        @apply py-1 ps-2.5 pe-8 text-sm leading-6;
+    }
+
+    & .fi-select-input div[x-ref='select'],
+    & .fi-select-input-btn {
+        @apply min-h-8;
+    }
+
+    & .fi-select-input-btn {
+        @apply rounded-md py-1 ps-2.5 pe-8 text-sm leading-6;
+    }
+
+    & .fi-fo-date-time-picker-trigger {
+        @apply min-h-8;
+    }
+
+    & .fi-fo-date-time-picker-display-text-input {
+        @apply px-2.5 py-1.5 text-sm leading-5;
+    }
+
+    & .fi-fo-checkbox-list-search-input-wrp {
+        @apply mb-2;
+    }
+
+    & .fi-fo-checkbox-list-actions {
+        @apply mb-1.5;
+    }
+
+    & .fi-fo-checkbox-list-options {
+        @apply gap-2;
+    }
+
+    & .fi-fo-checkbox-list-option {
+        @apply gap-x-2 rounded-md p-2.5;
+    }
+
+    & .fi-fo-checkbox-list-option-text {
+        @apply text-[0.8125rem] leading-5;
+    }
+
+    & .fi-fo-radio {
+        @apply gap-2;
+    }
+
+    & .fi-fo-radio-label {
+        @apply gap-x-2;
+    }
+
+    & .fi-fo-boolean-card-option {
+        @apply rounded-lg p-3;
+    }
+
+    & .fi-fo-boolean-card-option > div {
+        @apply gap-x-3;
+    }
+
+    & .fi-fo-boolean-card-description {
+        @apply mt-0.5 text-xs leading-5;
     }
 
     & .accelerator-vertical-wizard-canvas {
