@@ -1,12 +1,11 @@
 /*
  * Accelerator compact interface.
  *
- * Keep each rollout scoped to an accepted Filament resource. This first slice
- * targets the User list, create, and edit pages through Filament's stable
- * `.fi-resource-users` page class.
+ * These rules target Filament's shared page structure so every resource and
+ * custom page receives the same density without resource-slug selectors.
  */
 
-.accelerator-density-compact .fi-main:has(.fi-resource-users) {
+.accelerator-density-compact .fi-main:has(.fi-page) {
     padding-inline: 0.75rem !important;
     padding-top: 0.5rem;
 
@@ -15,7 +14,7 @@
     }
 }
 
-.accelerator-density-compact .fi-resource-users {
+.accelerator-density-compact .fi-page {
     & .fi-page-header-main-ctn {
         @apply gap-2 pt-0 pb-2;
     }
@@ -325,7 +324,7 @@
 }
 
 @media (width < 40rem) {
-    .accelerator-density-compact .fi-resource-users {
+    .accelerator-density-compact .fi-page {
         & .fi-header {
             @apply items-center;
         }
@@ -450,7 +449,7 @@ html.accelerator-density-compact {
     }
 
     & .accelerator-sidebar-nav {
-        @apply gap-y-3 px-2 py-3;
+        @apply gap-y-3 px-1.5 py-3;
     }
 
     & .accelerator-sidebar-nav .fi-sidebar-nav-groups {
@@ -458,7 +457,7 @@ html.accelerator-density-compact {
     }
 
     & .accelerator-sidebar-nav .fi-sidebar-group-btn {
-        @apply px-1.5 py-0.5;
+        @apply px-1 py-0.5;
     }
 
     & .accelerator-sidebar-nav .fi-sidebar-group-label {
@@ -470,7 +469,7 @@ html.accelerator-density-compact {
     }
 
     & .accelerator-sidebar-nav .fi-sidebar-item-btn {
-        @apply min-h-7 gap-x-2 rounded-md px-2 py-1.5;
+        @apply min-h-7 gap-x-2 rounded-md px-1.5 py-1.5;
     }
 
     & .accelerator-sidebar-nav .fi-sidebar-item-btn > .fi-icon {
