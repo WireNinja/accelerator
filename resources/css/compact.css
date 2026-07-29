@@ -6,11 +6,13 @@
  */
 
 .accelerator-density-compact .fi-main:has(.fi-page) {
-    padding-inline: 0.75rem !important;
+    --accelerator-page-inline-gutter: 0.75rem;
+
+    padding-inline: var(--accelerator-page-inline-gutter) !important;
     padding-top: 0.5rem;
 
     @media (width >= 40rem) {
-        padding-inline: 1rem !important;
+        --accelerator-page-inline-gutter: 1rem;
     }
 }
 
@@ -126,16 +128,19 @@
     }
 
     & .fi-ta-cell:has(.fi-ta-image),
-    & .fi-ta-cell:has(.fi-ta-actions),
     & .fi-ta-cell.fi-ta-selection-cell {
         @apply px-2.5 py-1.5 first-of-type:ps-3 last-of-type:pe-3 sm:first-of-type:ps-4 sm:last-of-type:pe-4;
+    }
+
+    & .fi-ta-cell:has(.fi-ta-actions) {
+        @apply px-2 py-2 first-of-type:ps-3 last-of-type:pe-3 sm:first-of-type:ps-4 sm:last-of-type:pe-4;
     }
 
     & .fi-ta-table.fi-ta-table-stacked-on-mobile > tbody > tr {
         @apply py-1;
     }
 
-    & .fi-ta-table.fi-ta-table-stacked-on-mobile > tbody > tr > .fi-ta-cell:not(.fi-ta-selection-cell) {
+    & .fi-ta-table.fi-ta-table-stacked-on-mobile > tbody > tr > .fi-ta-cell:not(.fi-ta-selection-cell):not(:has(.fi-ta-actions)):not(:has(.fi-ta-image)) {
         @apply px-3 sm:px-0;
     }
 
@@ -320,6 +325,22 @@
     & .accelerator-vertical-wizard-footer,
     & .accelerator-vertical-wizard-footer > div {
         @apply gap-2;
+    }
+}
+
+.accelerator-density-compact .fi-resource-list-records-page {
+    & .fi-ta {
+        width: calc(100% + var(--accelerator-page-inline-gutter) + var(--accelerator-page-inline-gutter));
+        margin-inline: calc(0rem - var(--accelerator-page-inline-gutter));
+    }
+
+    & .fi-ta-ctn {
+        @apply rounded-none;
+    }
+
+    & .fi-ta-filters-before-content-ctn,
+    & .fi-ta-filters-after-content-ctn {
+        @apply rounded-none;
     }
 }
 

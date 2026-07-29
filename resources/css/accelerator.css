@@ -189,7 +189,7 @@
 }
 
 .accelerator-sidebar-nav {
-    @apply h-full gap-y-7 px-6 py-8;
+    @apply h-full gap-y-7 px-4 py-8;
 }
 
 .accelerator-sidebar-nav .fi-sidebar-nav-groups {
@@ -197,7 +197,7 @@
 }
 
 .accelerator-sidebar-nav .fi-sidebar-group-btn {
-    @apply p-2;
+    @apply px-1.5 py-2;
 }
 
 .accelerator-sidebar-nav .fi-sidebar-group-label {
@@ -209,7 +209,7 @@
 }
 
 .accelerator-sidebar-nav .fi-sidebar-item-btn {
-    @apply min-h-10 gap-x-3 rounded-lg p-2;
+    @apply min-h-10 gap-x-3 rounded-lg px-1.5 py-2;
 }
 
 .accelerator-sidebar-nav .fi-sidebar-item-btn > .fi-icon {

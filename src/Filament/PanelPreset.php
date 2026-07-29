@@ -38,6 +38,9 @@ final class PanelPreset
         $panelSegment = $id === 'admin' ? null : Str::studly($id);
         $panelDirectory = app_path('Filament' . ($panelSegment ? "/{$panelSegment}" : ''));
         $panelNamespace = 'App\\Filament' . ($panelSegment ? "\\{$panelSegment}" : '');
+        $railWidth = config('accelerator.ui.density') === 'compact'
+            ? config('accelerator.ui.sidebar.compact_rail_width', 52)
+            : config('accelerator.ui.sidebar.rail_width', 56);
 
         return $panel
             ->id($id)
@@ -80,7 +83,7 @@ final class PanelPreset
             ->sidebarLivewireComponent(Sidebar::class)
             ->topbarLivewireComponent(Topbar::class)
             ->sidebarWidth(sprintf('%dpx', (int) config('accelerator.ui.sidebar.default_width', 336)))
-            ->collapsedSidebarWidth(sprintf('%dpx', (int) config('accelerator.ui.sidebar.rail_width', 52)))
+            ->collapsedSidebarWidth(sprintf('%dpx', (int) $railWidth))
             ->discoverResources(in: "{$panelDirectory}/Resources", for: "{$panelNamespace}\\Resources")
             ->discoverPages(in: "{$panelDirectory}/Pages", for: "{$panelNamespace}\\Pages")
             ->pages([
