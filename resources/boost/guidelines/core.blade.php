@@ -1,48 +1,41 @@
 ## WireNinja Accelerator v2
 
-Accelerator is a batteries-included foundation for authenticated Laravel monoliths. Dependency breadth is intentional; runtime boot and service activation must remain explicit.
+Accelerator is a proprietary, batteries-included foundation for Laravel 13 Filament monoliths. Optimize for solo-developer DX, package maintainability, then deterministic AI operation.
 
 ### Skill routing
 
-Read the matching skill before acting:
-
-- fresh install/resume: `accelerator-installation`
-- v1/existing-app migration: `accelerator-breaking-changes`
-- env/features/configuration: `accelerator-env-config`
+- fresh install: `accelerator-installation`
+- existing-app migration: `accelerator-breaking-changes`
+- env/features/deploy topology: `accelerator-env-config`
 - Filament/Shield/resources/UI: `accelerator-filament`
-- models/casts/relationships/context: `accelerator-model-context`
+- models/schema/casts/relations: `accelerator-model-context`
 - audit logging: `accelerator-activity-log`
-- PWA/Vite assets: `accelerator-pwa-development`
-- telemetry: `accelerator-telemetry`
-- deploy/init/rollback/server mutation: `accelerator-deployment`
-- read-only runtime diagnosis: `accelerator-ops-observability`
+- PWA/Vite: `accelerator-pwa-development`
+- remote mutation: `accelerator-deployment`
+- read-only operations: `accelerator-ops-observability`
 
-Use framework/package skills too when the task crosses domains.
+### Fixed contract
 
-### Core contract
-
-- Fresh flow: `laravel new` → require Accelerator → package Bash installer.
-- Fresh installer may rewrite a pristine skeleton and `migrate:fresh --seed`; never run it on an existing app.
-- WSS and other existing apps migrate surgically.
-- Bun is the only frontend package manager.
-- Filament is core. Optional dependencies may remain installed while providers/routes/services stay gated.
-- Local URL defaults to `http://localhost:8000`.
-- `resources/svg/.gitkeep`, one discoverable theme, Super Admin, Shield, build, Pint, Boost skills, and doctor are installer invariants.
-- `Model::unguard()`, searchable/preloaded Selects, overrideable table defaults, and 100 MB uploads are intentional.
+- Fresh flow: `laravel new` → Composer require → `php artisan accelerator:install`.
+- Installer is fresh-only, resumable, and may run `migrate:fresh --seed`; existing apps migrate surgically.
+- Filament, System settings, Shield RBAC, activity log, custom sidebar/topbar, and Filament auth/MFA are core.
+- Root `/` is userland-owned.
+- pnpm is default; npm is fallback. Bun/Yarn and mixed lockfiles are unsupported.
+- Inertia, Vue, Wayfinder, Fortify, ticketing, custom telemetry, Insider, Envoy, and generated GitHub Actions are absent.
+- `Model::unguard()`, searchable/preloaded Selects, overrideable table defaults, image editing, 100 MB uploads, VerticalWizard, and LocationPicker are intentional.
+- Use native Laravel/Filament/package behavior before creating Accelerator abstractions.
 
 ### Configuration boundaries
 
-- Laravel runtime: root `.env`; read through `config()`, never `env()` outside config files.
-- Deployment: ignored `.accelerator/deploy.env` containing only `OPS_DEPLOY_*`.
-- Stage runtime: ignored `.accelerator/environments/{stage}.env` containing Laravel keys only.
-- Installation state: ignored `.accelerator/install-state.json`; resume/receipt only, never mutable config.
-- Do not create `.env.testing` unless the project explicitly needs it.
-- Feature changes require config/route cache rebuild.
+- `.env`: local Laravel runtime; application code reads `config()`.
+- `.accelerator/deploy.json`: committed non-secret topology.
+- `.accelerator/environments/{stage}.env`: ignored stage secrets.
+- `.accelerator/install-state.json`: ignored resume receipt only.
+- Deployment root is `/var/www/{domain}` with Deployer releases and `current` symlink.
 
-### Authority and safety
+### Safety
 
-- User chooses patch/minor/major/exact release; never tag or publish implicitly.
-- Confirm stage/domain/root/group before server mutation; never touch unrelated projects.
-- Never print/commit secrets, run `composer update` on the VPS, clear failed maintenance, or auto-rollback database migrations.
-- Context commands are navigation. Source, framework registry, policy, database, and runtime state are truth.
-- Custom sidebar/login/wizard refactors require explicit user taste approval.
+- Discover public workflows through Artisan `--help`.
+- Never print/commit secrets, run `composer update` on a VPS, mutate unrelated hosts, auto-rollback migrations, or infer release/tag/push authority.
+- Confirm stage/domain/root/host before remote mutation. Read-only diagnosis does not mutate.
+- PHPStan/Larastan level 5 is minimum; do not hide errors with baselines or ignores.

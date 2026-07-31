@@ -1,37 +1,30 @@
 <?php
 
 use App\Enums\System\LauncherEnum;
+use App\Enums\System\NavigationGroup;
 use App\Enums\System\PanelEnum;
 use App\Enums\System\RoleEnum;
 
 return [
     'features' => [
-        'filament' => env('ACCELERATOR_FEATURE_FILAMENT', false),
-        'fortify' => env('ACCELERATOR_FEATURE_FORTIFY', false),
         'oauth' => env('ACCELERATOR_FEATURE_OAUTH', false),
-        'insider' => env('ACCELERATOR_FEATURE_INSIDER', false),
         'pwa' => env('ACCELERATOR_FEATURE_PWA', false),
-        'settings' => env('ACCELERATOR_FEATURE_SETTINGS', false),
         'telegram' => env('ACCELERATOR_FEATURE_TELEGRAM', false),
-        'telemetry' => env('ACCELERATOR_FEATURE_TELEMETRY', false),
-        'ticketing' => env('ACCELERATOR_FEATURE_TICKETING', false),
         'horizon' => env('ACCELERATOR_FEATURE_HORIZON', false),
+        'reverb' => env('ACCELERATOR_FEATURE_REVERB', false),
+        'scout' => env('ACCELERATOR_FEATURE_SCOUT', false),
+        'nightwatch' => env('ACCELERATOR_FEATURE_NIGHTWATCH', false),
     ],
 
     'proxy' => [
         'trust_local' => env('ACCELERATOR_TRUST_LOCAL_PROXY', true),
     ],
 
-    'assets' => [
-        'iconify_url' => 'https://cdn.jsdelivr.net/npm/iconify-icon@3.0.2/dist/iconify-icon.min.js',
-        'leaflet_js_url' => 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
-        'leaflet_css_url' => 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
-    ],
-
     'enums' => [
         'role' => RoleEnum::class,
         'panel' => PanelEnum::class,
         'launcher' => enum_exists(LauncherEnum::class) ? LauncherEnum::class : null,
+        'navigation_group' => enum_exists(NavigationGroup::class) ? NavigationGroup::class : null,
     ],
 
     'horizon' => [
@@ -75,44 +68,4 @@ return [
         'style' => env('ACCELERATOR_DICEBEAR_STYLE', 'notionists'),
     ],
 
-    'telemetry' => [
-        'flush_interval' => env('ACCELERATOR_TELEMETRY_FLUSH_INTERVAL', 5),
-        'buffer_rows' => env('ACCELERATOR_TELEMETRY_BUFFER_ROWS', 128),
-        'buffer_bytes' => env('ACCELERATOR_TELEMETRY_BUFFER_BYTES', 65535),
-        'retention_days' => env('ACCELERATOR_TELEMETRY_RETENTION', 90),
-        'pruning_enabled' => env('ACCELERATOR_TELEMETRY_PRUNING', true),
-        'sample_rate' => env('ACCELERATOR_TELEMETRY_SAMPLE_RATE', 100),
-        'capture_headers' => env('ACCELERATOR_TELEMETRY_CAPTURE_HEADERS', false),
-        'capture_query' => env('ACCELERATOR_TELEMETRY_CAPTURE_QUERY', false),
-        'capture_payload' => env('ACCELERATOR_TELEMETRY_CAPTURE_PAYLOAD', false),
-        'notification_retry_seconds' => env('ACCELERATOR_TELEMETRY_NOTIFICATION_RETRY', 60),
-        'notification_attempts' => env('ACCELERATOR_TELEMETRY_NOTIFICATION_ATTEMPTS', 8),
-        'notifications_per_flush' => env('ACCELERATOR_TELEMETRY_NOTIFICATIONS_PER_FLUSH', 10),
-        'notify' => [
-            'discord_webhook' => env('ACCELERATOR_TELEMETRY_DISCORD_WEBHOOK'),
-            'telegram_chat_id' => env('ACCELERATOR_TELEMETRY_TELEGRAM_CHAT'),
-            'telegram_bot_token' => env('TELEGRAM_BOT_TOKEN'),
-            'telegram_base_uri' => env('TELEGRAM_API_BASE_URI', 'https://api.telegram.org'),
-        ],
-        'sensitive_params' => [
-            'password',
-            'password_confirmation',
-            'token',
-            'secret',
-            'authorization',
-            'cookie',
-            'session',
-            'api_key',
-            'credit_card',
-            'cvv',
-            'ssn',
-        ],
-        'sensitive_headers' => [
-            'Authorization',
-            'Cookie',
-            'Proxy-Authorization',
-            'X-CSRF-TOKEN',
-            'X-XSRF-TOKEN',
-        ],
-    ],
 ];

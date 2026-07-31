@@ -1,9 +1,6 @@
 import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import inertia from '@inertiajs/vite';
-import { wayfinder } from '@laravel/vite-plugin-wayfinder';
 import tailwindcss from '@tailwindcss/vite';
-import vue from '@vitejs/plugin-vue';
 import { laravelPwa } from '@wireninja/vite-plugin-laravel-pwa';
 import { defineConfig, loadEnv } from 'vite';
 import laravel from 'laravel-vite-plugin';
@@ -35,17 +32,7 @@ export default defineConfig(({ mode }) => {
             ],
             refresh: true,
         }),
-        inertia(),
         tailwindcss(),
-        vue({
-            template: {
-                transformAssetUrls: {
-                    base: null,
-                    includeAbsolute: false,
-                },
-            },
-        }),
-        wayfinder({ formVariants: true }),
     ];
 
     if (env.ACCELERATOR_FEATURE_PWA === 'true') {

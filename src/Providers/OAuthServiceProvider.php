@@ -25,7 +25,7 @@ final class OAuthServiceProvider extends ServiceProvider
 
         FilamentView::registerRenderHook(
             PanelsRenderHook::AUTH_LOGIN_FORM_AFTER,
-            static fn (): View => view('accelerator::filament.auth.google-login'),
+            static fn (): View => view()->file(__DIR__.'/../../resources/views/filament/auth/google-login.blade.php'),
         );
     }
 }

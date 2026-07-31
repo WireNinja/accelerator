@@ -23,35 +23,20 @@ final class Onboarding
      * @var array<string, string>
      */
     private const FEATURES = [
-        'filament' => 'Filament internal-app core (always enabled)',
-        'fortify' => 'Fortify authentication backend',
-        'settings' => 'Application settings UI',
-        'ticketing' => 'Internal ticketing',
         'oauth' => 'Google OAuth (existing users only)',
         'pwa' => 'Progressive Web App assets',
         'telegram' => 'Telegram notifications',
-        'telemetry' => 'Swoole exception telemetry',
-        'insider' => 'Authenticated diagnostics dashboard',
         'horizon' => 'Horizon queue dashboard and supervisor',
         'reverb' => 'Reverb real-time broadcasting',
         'scout' => 'Scout search with the database driver',
         'nightwatch' => 'Nightwatch observability collector',
-        'wayfinder' => 'Wayfinder typed frontend routes',
     ];
 
     /** @var list<string> */
     private const DEFAULT_FEATURES = [
-        'fortify',
-        'settings',
-        'ticketing',
         'pwa',
-        'insider',
         'scout',
-        'wayfinder',
     ];
-
-    /** @var list<string> */
-    private const CORE_FEATURES = ['filament'];
 
     public function __construct(
         private readonly string $projectRoot,
@@ -127,13 +112,13 @@ final class Onboarding
                 ? null
                 : 'Passwords do not match.',
         );
-        $primaryFrontend = select(
-            label: 'Primary landing frontend',
+        $packageManager = select(
+            label: 'Frontend package manager',
             options: [
-                'inertia' => 'Inertia v3 + Vue 3',
-                'livewire' => 'Livewire v4',
+                'pnpm' => 'pnpm (recommended)',
+                'npm' => 'npm',
             ],
-            default: 'inertia',
+            default: 'pnpm',
         );
         $database = select(
             label: 'Database',
@@ -151,9 +136,9 @@ final class Onboarding
         );
         $features = $this->resolveFeatures(multiselect(
             label: 'Activate optional runtime features',
-            options: array_diff_key(self::FEATURES, array_fill_keys(self::CORE_FEATURES, true)),
+            options: self::FEATURES,
             default: self::DEFAULT_FEATURES,
-            hint: 'Filament remains the internal-app core; dependencies stay installed when an optional feature is inactive.',
+            hint: 'Filament, settings, and RBAC are always installed. External-service integrations remain optional.',
             required: false,
         ));
         $deploy = confirm(
@@ -227,7 +212,7 @@ final class Onboarding
             adminUsername: strtolower(trim($adminUsername)),
             adminEmail: strtolower(trim($adminEmail)),
             adminPasswordHash: $this->hashPassword($adminPassword),
-            primaryFrontend: $primaryFrontend,
+            packageManager: $packageManager,
             database: $database,
             useRedis: $useRedis,
             features: $features,
@@ -309,7 +294,7 @@ final class Onboarding
             adminUsername: strtolower(trim($this->option($options, 'admin-username', 'superadmin'))),
             adminEmail: strtolower(trim($this->option($options, 'admin-email', 'admin@example.com'))),
             adminPasswordHash: $this->hashPassword($adminPassword),
-            primaryFrontend: $this->option($options, 'frontend', 'inertia'),
+            packageManager: $this->option($options, 'package-manager', 'pnpm'),
             database: $this->option($options, 'database', 'sqlite'),
             useRedis: isset($options['redis']),
             features: $features,
@@ -333,7 +318,7 @@ final class Onboarding
      */
     private function resolveFeatures(array $features): array
     {
-        $selected = array_fill_keys([...self::CORE_FEATURES, ...$features], true);
+        $selected = array_fill_keys($features, true);
 
         return array_values(array_filter(
             array_keys(self::FEATURES),

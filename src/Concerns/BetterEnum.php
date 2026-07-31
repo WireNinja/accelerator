@@ -18,9 +18,7 @@ trait BetterEnum
         return ! $this->is($candidate);
     }
 
-    /**
-     * @param  iterable<int, BackedEnum|string|int|null>  $candidates
-     */
+    /** @param iterable<int, BackedEnum|string|int|null> $candidates */
     public function isAny(iterable $candidates): bool
     {
         foreach ($candidates as $candidate) {
@@ -32,9 +30,7 @@ trait BetterEnum
         return false;
     }
 
-    /**
-     * @param  iterable<int, BackedEnum|string|int|null>  $candidates
-     */
+    /** @param iterable<int, BackedEnum|string|int|null> $candidates */
     public function isNone(iterable $candidates): bool
     {
         return ! $this->isAny($candidates);
@@ -51,11 +47,7 @@ trait BetterEnum
         }
 
         foreach (static::cases() as $case) {
-            if ($case->name === $candidate) {
-                return $case;
-            }
-
-            if ($case->value === $candidate) {
+            if ($case->name === $candidate || $case->value === $candidate) {
                 return $case;
             }
         }

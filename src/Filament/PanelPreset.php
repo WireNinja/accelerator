@@ -36,11 +36,12 @@ final class PanelPreset
     public static function configure(Panel $panel, string $id = 'admin'): Panel
     {
         $panelSegment = $id === 'admin' ? null : Str::studly($id);
-        $panelDirectory = app_path('Filament' . ($panelSegment ? "/{$panelSegment}" : ''));
-        $panelNamespace = 'App\\Filament' . ($panelSegment ? "\\{$panelSegment}" : '');
+        $panelDirectory = app_path('Filament'.($panelSegment ? "/{$panelSegment}" : ''));
+        $panelNamespace = 'App\\Filament'.($panelSegment ? "\\{$panelSegment}" : '');
         $railWidth = config('accelerator.ui.density') === 'compact'
             ? config('accelerator.ui.sidebar.compact_rail_width', 52)
             : config('accelerator.ui.sidebar.rail_width', 56);
+        $navigationGroupEnum = config('accelerator.enums.navigation_group');
 
         return $panel
             ->id($id)
@@ -105,16 +106,20 @@ final class PanelPreset
                 Authenticate::class,
             ])
             ->databaseNotifications()
-            ->broadcasting(static fn(): bool => config('broadcasting.default') === 'reverb')
+            ->broadcasting(static fn (): bool => config('broadcasting.default') === 'reverb')
             ->spa()
             ->globalSearchKeyBindings(['command+k', 'ctrl+k'])
             ->darkMode(false)
             ->defaultThemeMode(ThemeMode::Light)
+            ->when(
+                is_string($navigationGroupEnum) && enum_exists($navigationGroupEnum),
+                static fn (Panel $configuredPanel): Panel => $configuredPanel->navigationGroups($navigationGroupEnum),
+            )
             ->collapsibleNavigationGroups()
             ->sidebarCollapsibleOnDesktop()
             ->databaseTransactions()
-            ->unsavedChangesAlerts(static fn(): bool => app()->isProduction())
-            ->strictAuthorization(static fn(): bool => app()->isLocal())
+            ->unsavedChangesAlerts(static fn (): bool => app()->isProduction())
+            ->strictAuthorization(static fn (): bool => app()->isLocal())
             ->profile(ManageProfile::class, isSimple: true)
             ->revealablePasswords()
             ->resourceCreatePageRedirect('index')
@@ -123,10 +128,6 @@ final class PanelPreset
             ->hiddenErrorNotification(BuiltinExceptions::getFilamentBusinessExceptionStatusCode())
             ->lazyLoadedDatabaseNotifications()
             ->bootUsing(static function (Panel $panel): void {
-                if (! config('accelerator.features.settings')) {
-                    return;
-                }
-
                 $settings = resolve(SystemSettings::class);
                 $whatsapp = preg_replace('/\D+/', '', (string) config('accelerator.support.whatsapp'));
                 $telegram = ltrim((string) config('accelerator.support.telegram'), '@');

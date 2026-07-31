@@ -4,20 +4,12 @@ declare(strict_types=1);
 
 namespace WireNinja\Accelerator\Model\Concerns;
 
-use Illuminate\Database\Eloquent\Relations\MorphMany;
-use Spatie\Activitylog\Models\Activity;
-use Spatie\Activitylog\Models\Concerns\LogsActivity;
+use Spatie\Activitylog\Models\Concerns\HasActivity;
 
 trait LogsConfiguredActivity
 {
     use BuildsConfiguredActivityOptions;
-    use LogsActivity {
-        BuildsConfiguredActivityOptions::getActivitylogOptions insteadof LogsActivity;
-    }
-
-    /** @return MorphMany<Activity, $this> */
-    public function activities(): MorphMany
-    {
-        return $this->activitiesAsSubject();
+    use HasActivity {
+        BuildsConfiguredActivityOptions::getActivitylogOptions insteadof HasActivity;
     }
 }

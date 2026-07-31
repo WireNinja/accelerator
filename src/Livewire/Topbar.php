@@ -8,6 +8,6 @@ class Topbar extends \Filament\Livewire\Topbar
 {
     public function render(): View
     {
-        return view('accelerator::livewire.topbar');
+        return view()->file(__DIR__.'/../../resources/views/livewire/topbar.blade.php');
     }
 }

@@ -1,13 +1,10 @@
-import { defineConfigWithVueTs, vueTsConfigs } from '@vue/eslint-config-typescript';
 import prettier from 'eslint-config-prettier/flat';
-import vue from 'eslint-plugin-vue';
+import tseslint from 'typescript-eslint';
 
-export default defineConfigWithVueTs(
-    vue.configs['flat/essential'],
-    vueTsConfigs.recommended,
+export default tseslint.config(
+    ...tseslint.configs.recommended,
     {
         rules: {
-            'vue/multi-word-component-names': 'off',
             '@typescript-eslint/consistent-type-imports': [
                 'error',
                 {
@@ -24,11 +21,9 @@ export default defineConfigWithVueTs(
             'bootstrap/ssr/**',
             'node_modules/**',
             'public/**',
+            'resources/vendor/**',
             'storage/**',
             'vendor/**',
-            'resources/js/actions/**',
-            'resources/js/routes/**',
-            'resources/js/wayfinder/**',
         ],
     },
     prettier,

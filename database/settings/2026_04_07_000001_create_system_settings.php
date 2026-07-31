@@ -10,12 +10,7 @@ return new class extends SettingsMigration
         $this->migrator->add('system.brand_logo', null);
         $this->migrator->add('system.brand_favicon', null);
         $this->migrator->add('system.support_enabled', true);
-        $this->migrator->add('system.telegram_bot_token', null);
-        $this->migrator->add('system.telegram_api_base_uri', null);
         $this->migrator->add('system.google_font', 'Poppins');
         $this->migrator->add('system.app_notice', null);
-        $this->migrator->add('system.app_version', '1.0.0');
-        $this->migrator->add('system.simple_page_image', 'login-side-image.jpg');
-        $this->migrator->add('system.simple_page_layout', 'left_reveal');
     }
 };

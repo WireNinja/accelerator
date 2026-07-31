@@ -4,9 +4,12 @@ namespace WireNinja\Accelerator\Enums;
 
 use Filament\Support\Contracts\HasDescription;
 use Filament\Support\Contracts\HasLabel;
+use WireNinja\Accelerator\Concerns\BetterEnum;
 
 enum GoogleFontEnum: string implements HasDescription, HasLabel
 {
+    use BetterEnum;
+
     // --- Sans-Serif ---
     case Poppins = 'Poppins';
     case PlusJakartaSans = 'Plus Jakarta Sans';

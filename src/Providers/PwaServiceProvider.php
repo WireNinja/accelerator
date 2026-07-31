@@ -17,7 +17,7 @@ final class PwaServiceProvider extends ServiceProvider
 
         FilamentView::registerRenderHook(
             PanelsRenderHook::HEAD_END,
-            static fn (): View => view('accelerator::partials.pwa.head'),
+            static fn (): View => view()->file(__DIR__.'/../../resources/views/partials/pwa/head.blade.php'),
         );
     }
 }

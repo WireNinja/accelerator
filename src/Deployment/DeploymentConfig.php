@@ -5,14 +5,15 @@ declare(strict_types=1);
 namespace WireNinja\Accelerator\Deployment;
 
 use InvalidArgumentException;
+use JsonException;
 use RuntimeException;
 
 final readonly class DeploymentConfig
 {
-    /** @var list<string> */
-    private const STAGES = ['staging', 'production'];
-
-    public function __construct(
+    /**
+     * @param  array<string, mixed>  $document
+     */
+    private function __construct(
         public string $projectRoot,
         public string $stage,
         public string $project,
@@ -22,14 +23,9 @@ final readonly class DeploymentConfig
         public int $keepReleases,
         public string $phpVersion,
         public string $phpBinary,
-        public string $bunBinary,
+        public string $packageManager,
         public string $runUser,
         public string $sslEmail,
-        public bool $initialAdminEnabled,
-        public string $adminName,
-        public string $adminUsername,
-        public string $adminEmail,
-        public string $adminPasswordHash,
         public string $domain,
         public string $deployRoot,
         public string $group,
@@ -51,129 +47,104 @@ final readonly class DeploymentConfig
         public bool $schedulerEnabled,
         public bool $nightwatchEnabled,
         public int $nightwatchPort,
+        public string $healthPath,
+        public array $document,
     ) {}
 
+    /** @throws JsonException */
     public static function load(string $projectRoot, ?string $requestedStage = null): self
     {
         $projectRoot = rtrim($projectRoot, '/');
         self::assertNoLegacyFiles($projectRoot);
-        $values = self::parse($projectRoot.'/.accelerator/deploy.env');
-        self::rejectUnknownKeys($values);
-        self::validateEnabledStageIsolation($values);
+        $path = $projectRoot.'/.accelerator/deploy.json';
+        $contents = @file_get_contents($path);
 
-        $stage = $requestedStage ?: self::required($values, 'OPS_DEPLOY_DEFAULT_STAGE');
-
-        if (! in_array($stage, self::STAGES, true)) {
-            throw new InvalidArgumentException("Unsupported deploy stage [{$stage}]. Expected staging or production.");
+        if (! is_string($contents)) {
+            throw new RuntimeException('Deployment is not configured. Run: php artisan accelerator:configure deployment');
         }
 
-        $stageKey = strtoupper($stage);
+        $document = json_decode($contents, true, flags: JSON_THROW_ON_ERROR);
 
-        if (! self::boolean($values, "OPS_DEPLOY_{$stageKey}_ENABLED")) {
-            throw new RuntimeException("Deploy stage [{$stage}] is disabled in .accelerator/deploy.env.");
+        if (! is_array($document) || ($document['schema'] ?? null) !== 1) {
+            throw new RuntimeException('deploy.json must use Accelerator deployment schema 1.');
         }
 
-        $project = self::required($values, 'OPS_DEPLOY_PROJECT');
-        $sshHost = self::required($values, 'OPS_DEPLOY_SSH_HOST');
-        $repository = self::required($values, 'OPS_DEPLOY_REPO');
-        $branch = self::required($values, 'OPS_DEPLOY_BRANCH');
-        $keepReleases = self::integer($values, 'OPS_DEPLOY_KEEP_RELEASES', 2, 50);
-        $phpVersion = self::required($values, 'OPS_DEPLOY_PHP_VERSION');
-        $phpBinary = self::value($values, 'OPS_DEPLOY_PHP_BIN', "php{$phpVersion}");
-        $bunBinary = self::value($values, 'OPS_DEPLOY_BUN_BIN', 'bun');
-        $runUser = self::value($values, 'OPS_DEPLOY_RUN_USER', 'www-data');
-        $sslEmail = self::required($values, 'OPS_DEPLOY_SSL_EMAIL');
-        $initialAdminEnabled = self::boolean($values, 'OPS_DEPLOY_INITIAL_ADMIN_ENABLED');
-        $adminName = self::value($values, 'OPS_DEPLOY_INITIAL_ADMIN_NAME');
-        $adminUsername = self::value($values, 'OPS_DEPLOY_INITIAL_ADMIN_USERNAME');
-        $adminEmail = self::value($values, 'OPS_DEPLOY_INITIAL_ADMIN_EMAIL');
-        $adminPasswordHash = self::value($values, 'OPS_DEPLOY_INITIAL_ADMIN_PASSWORD_HASH');
-        $domain = self::required($values, "OPS_DEPLOY_{$stageKey}_DOMAIN");
-        $deployRoot = rtrim(self::required($values, "OPS_DEPLOY_{$stageKey}_ROOT"), '/');
-        $group = self::required($values, "OPS_DEPLOY_{$stageKey}_GROUP");
-        $dnsDirect = self::boolean($values, "OPS_DEPLOY_{$stageKey}_DNS_DIRECT");
-        $httpRuntime = self::value($values, "OPS_DEPLOY_{$stageKey}_HTTP_RUNTIME", 'fpm');
-        $fpmPool = self::value($values, "OPS_DEPLOY_{$stageKey}_FPM_POOL");
-        $fpmSocket = self::value(
-            $values,
-            "OPS_DEPLOY_{$stageKey}_FPM_SOCKET",
-            $fpmPool === '' ? "/run/php/php{$phpVersion}-fpm.sock" : "/run/php/php{$phpVersion}-fpm-{$fpmPool}.sock",
+        $stage = $requestedStage ?: self::string($document, 'default_stage');
+        $stages = $document['stages'] ?? null;
+        $stageConfig = is_array($stages) ? ($stages[$stage] ?? null) : null;
+
+        if (! in_array($stage, ['staging', 'production'], true) || ! is_array($stageConfig) || ($stageConfig['enabled'] ?? false) !== true) {
+            throw new RuntimeException("Deployment stage [{$stage}] is missing or disabled.");
+        }
+
+        $project = self::string($document, 'project');
+        $repository = self::string($document, 'repository');
+        $branch = self::string($document, 'branch');
+        $phpVersion = self::string($document, 'php_version', '8.5');
+        $packageManager = self::string($document, 'package_manager', 'pnpm');
+        $domain = self::string($stageConfig, 'domain');
+        $deployRoot = rtrim(self::string($stageConfig, 'root', "/var/www/{$domain}"), '/');
+        $httpRuntime = self::string($stageConfig, 'http_runtime', 'octane');
+        $horizonEnabled = self::bool($stageConfig, 'horizon');
+        $queueWorkerEnabled = self::bool($stageConfig, 'queue_worker', ! $horizonEnabled);
+
+        self::validateInstallerTargets(
+            project: $project,
+            sshHost: self::string($stageConfig, 'ssh_host'),
+            repository: $repository,
+            branch: $branch,
+            productionDomain: $domain,
+            productionRoot: $deployRoot,
         );
-        $fpmService = self::value($values, "OPS_DEPLOY_{$stageKey}_FPM_SERVICE", "php{$phpVersion}-fpm.service");
-        $octaneServer = self::value($values, "OPS_DEPLOY_{$stageKey}_OCTANE_SERVER", 'swoole');
-        $octanePort = self::integer($values, "OPS_DEPLOY_{$stageKey}_OCTANE_PORT", 1, 65535);
-        $octaneWorkers = self::integer($values, "OPS_DEPLOY_{$stageKey}_OCTANE_WORKERS", 1, 512);
-        $octaneTaskWorkers = self::integer($values, "OPS_DEPLOY_{$stageKey}_OCTANE_TASK_WORKERS", 1, 512);
-        $horizonEnabled = self::boolean($values, "OPS_DEPLOY_{$stageKey}_HORIZON_ENABLED");
-        $queueWorkerEnabled = self::boolean($values, "OPS_DEPLOY_{$stageKey}_QUEUE_WORKER_ENABLED");
-        $queueWorkerConnection = self::value($values, "OPS_DEPLOY_{$stageKey}_QUEUE_WORKER_CONNECTION", 'database');
-        $queueWorkerQueue = self::value($values, "OPS_DEPLOY_{$stageKey}_QUEUE_WORKER_QUEUE", 'default');
-        $queueWorkerProcesses = self::integer($values, "OPS_DEPLOY_{$stageKey}_QUEUE_WORKER_PROCESSES", 1, 128);
-        $reverbEnabled = self::boolean($values, "OPS_DEPLOY_{$stageKey}_REVERB_ENABLED");
-        $reverbPort = self::integer($values, "OPS_DEPLOY_{$stageKey}_REVERB_PORT", 1, 65535);
-        $schedulerEnabled = self::boolean($values, "OPS_DEPLOY_{$stageKey}_SCHEDULER_ENABLED");
-        $nightwatchEnabled = self::boolean($values, "OPS_DEPLOY_{$stageKey}_NIGHTWATCH_ENABLED");
-        $nightwatchPort = self::integer($values, "OPS_DEPLOY_{$stageKey}_NIGHTWATCH_PORT", 1, 65535);
 
-        self::validateIdentifier($project, 'project');
-        self::validateSshHost($sshHost);
-        self::validateRepository($repository);
-        self::validateBranch($branch);
-        self::validateVersion($phpVersion);
-        self::validateCommand($phpBinary, 'PHP binary');
-        self::validateCommand($bunBinary, 'Bun binary');
-        self::validateIdentifier($runUser, 'runtime user');
-        self::validateEmail($sslEmail, 'SSL email');
-        if ($initialAdminEnabled) {
-            self::validateAdmin($adminName, $adminUsername, $adminEmail, $adminPasswordHash);
+        if (! in_array($packageManager, ['pnpm', 'npm'], true)) {
+            throw new InvalidArgumentException('package_manager must be pnpm or npm.');
         }
-        self::validateDomain($domain);
-        self::validateDeployRoot($deployRoot);
-        self::validateIdentifier($group, 'Supervisor group');
-        self::validateRuntime($httpRuntime, $octaneServer);
-        self::validateFpm($fpmPool, $fpmSocket, $fpmService);
-        self::validateQueue($horizonEnabled, $queueWorkerEnabled, $queueWorkerConnection, $queueWorkerQueue);
-        self::validatePorts($httpRuntime, $octanePort, $reverbEnabled, $reverbPort, $nightwatchEnabled, $nightwatchPort);
+
+        if (! in_array($httpRuntime, ['fpm', 'octane'], true)) {
+            throw new InvalidArgumentException('http_runtime must be fpm or octane.');
+        }
+
+        if ($horizonEnabled && $queueWorkerEnabled) {
+            throw new InvalidArgumentException('Horizon and the plain queue worker are mutually exclusive.');
+        }
 
         return new self(
             projectRoot: $projectRoot,
             stage: $stage,
             project: $project,
-            sshHost: $sshHost,
+            sshHost: self::string($stageConfig, 'ssh_host'),
             repository: $repository,
             branch: $branch,
-            keepReleases: $keepReleases,
+            keepReleases: self::integer($document, 'keep_releases', 5),
             phpVersion: $phpVersion,
-            phpBinary: $phpBinary,
-            bunBinary: $bunBinary,
-            runUser: $runUser,
-            sslEmail: $sslEmail,
-            initialAdminEnabled: $initialAdminEnabled,
-            adminName: $adminName,
-            adminUsername: $adminUsername,
-            adminEmail: $adminEmail,
-            adminPasswordHash: $adminPasswordHash,
+            phpBinary: self::string($document, 'php_binary', "php{$phpVersion}"),
+            packageManager: $packageManager,
+            runUser: self::string($document, 'run_user', 'www-data'),
+            sslEmail: self::string($document, 'ssl_email'),
             domain: $domain,
             deployRoot: $deployRoot,
-            group: $group,
-            dnsDirect: $dnsDirect,
+            group: self::string($stageConfig, 'service_group', str_replace(['.', '-'], '_', $domain)),
+            dnsDirect: self::bool($stageConfig, 'dns_direct', true),
             httpRuntime: $httpRuntime,
-            fpmSocket: $fpmSocket,
-            fpmService: $fpmService,
-            octaneServer: $octaneServer,
-            octanePort: $octanePort,
-            octaneWorkers: $octaneWorkers,
-            octaneTaskWorkers: $octaneTaskWorkers,
+            fpmSocket: self::string($stageConfig, 'fpm_socket', "/run/php/php{$phpVersion}-fpm.sock"),
+            fpmService: self::string($stageConfig, 'fpm_service', "php{$phpVersion}-fpm.service"),
+            octaneServer: self::string($stageConfig, 'octane_server', 'swoole'),
+            octanePort: self::integer($stageConfig, 'octane_port', $stage === 'production' ? 8000 : 8100),
+            octaneWorkers: self::integer($stageConfig, 'octane_workers', 4),
+            octaneTaskWorkers: self::integer($stageConfig, 'octane_task_workers', 2),
             horizonEnabled: $horizonEnabled,
             queueWorkerEnabled: $queueWorkerEnabled,
-            queueWorkerConnection: $queueWorkerConnection,
-            queueWorkerQueue: $queueWorkerQueue,
-            queueWorkerProcesses: $queueWorkerProcesses,
-            reverbEnabled: $reverbEnabled,
-            reverbPort: $reverbPort,
-            schedulerEnabled: $schedulerEnabled,
-            nightwatchEnabled: $nightwatchEnabled,
-            nightwatchPort: $nightwatchPort,
+            queueWorkerConnection: self::string($stageConfig, 'queue_connection', 'database'),
+            queueWorkerQueue: self::string($stageConfig, 'queue', 'default'),
+            queueWorkerProcesses: self::integer($stageConfig, 'queue_processes', 1),
+            reverbEnabled: self::bool($stageConfig, 'reverb'),
+            reverbPort: self::integer($stageConfig, 'reverb_port', $stage === 'production' ? 8080 : 8180),
+            schedulerEnabled: self::bool($stageConfig, 'scheduler', true),
+            nightwatchEnabled: self::bool($stageConfig, 'nightwatch'),
+            nightwatchPort: self::integer($stageConfig, 'nightwatch_port', $stage === 'production' ? 2407 : 2507),
+            healthPath: self::string($stageConfig, 'health_path', '/up'),
+            document: $document,
         );
     }
 
@@ -187,16 +158,6 @@ final readonly class DeploymentConfig
         return $this->deployRoot.'/shared';
     }
 
-    public function releasesPath(): string
-    {
-        return $this->deployRoot.'/releases';
-    }
-
-    public function archivePath(): string
-    {
-        return $this->deployRoot.'/archive';
-    }
-
     public function currentPath(): string
     {
         return $this->deployRoot.'/current';
@@ -204,12 +165,8 @@ final readonly class DeploymentConfig
 
     public function hasSupervisorPrograms(): bool
     {
-        return $this->httpRuntime === 'octane'
-            || $this->horizonEnabled
-            || $this->queueWorkerEnabled
-            || $this->reverbEnabled
-            || $this->schedulerEnabled
-            || $this->nightwatchEnabled;
+        return $this->httpRuntime === 'octane' || $this->horizonEnabled || $this->queueWorkerEnabled
+            || $this->reverbEnabled || $this->schedulerEnabled || $this->nightwatchEnabled;
     }
 
     public static function validateInstallerTargets(
@@ -222,402 +179,72 @@ final readonly class DeploymentConfig
         ?string $stagingDomain = null,
         ?string $stagingRoot = null,
     ): void {
-        self::validateIdentifier($project, 'project');
-        self::validateSshHost($sshHost);
-        self::validateRepository($repository);
-        self::validateBranch($branch);
-        self::validateDomain($productionDomain);
-        self::validateDeployRoot($productionRoot);
-
-        if ($stagingDomain === null || $stagingRoot === null) {
-            return;
+        if (preg_match('/^[a-z0-9][a-z0-9._-]*$/i', $project) !== 1) {
+            throw new InvalidArgumentException('Deployment project key is invalid.');
         }
 
-        self::validateDomain($stagingDomain);
-        self::validateDeployRoot($stagingRoot);
-
-        if ($stagingDomain === $productionDomain || $stagingRoot === $productionRoot) {
-            throw new InvalidArgumentException('Staging and production must use distinct domains and deployment roots.');
-        }
-    }
-
-    /**
-     * @return array<string, string>
-     */
-    private static function parse(string $path): array
-    {
-        if (! is_file($path)) {
-            throw new RuntimeException('Deployment is not configured. Run: php artisan accelerator:configure deployment');
+        if (preg_match('/^[a-z0-9][a-z0-9._-]*$/i', $sshHost) !== 1) {
+            throw new InvalidArgumentException('SSH host must be an alias from ~/.ssh/config.');
         }
 
-        $lines = file($path, FILE_IGNORE_NEW_LINES);
-
-        if (! is_array($lines)) {
-            throw new RuntimeException('Unable to read .accelerator/deploy.env.');
+        if ($repository === '' || preg_match('/\s/', $repository) === 1 || $branch === '' || preg_match('/\s/', $branch) === 1) {
+            throw new InvalidArgumentException('Repository and branch are required and cannot contain whitespace.');
         }
 
-        $values = [];
+        self::validateDomainRoot($productionDomain, $productionRoot);
 
-        foreach ($lines as $number => $rawLine) {
-            $line = trim($rawLine);
+        if ($stagingDomain !== null && $stagingRoot !== null) {
+            self::validateDomainRoot($stagingDomain, $stagingRoot);
 
-            if ($line === '' || str_starts_with($line, '#')) {
-                continue;
+            if ($stagingDomain === $productionDomain || $stagingRoot === $productionRoot) {
+                throw new InvalidArgumentException('Staging and production must use distinct domains and roots.');
             }
-
-            if (! str_contains($line, '=')) {
-                throw new RuntimeException(sprintf('Invalid .accelerator/deploy.env line %d: expected KEY=VALUE.', $number + 1));
-            }
-
-            [$key, $value] = array_map(trim(...), explode('=', $line, 2));
-
-            if (preg_match('/^[A-Z][A-Z0-9_]*$/', $key) !== 1) {
-                throw new RuntimeException(sprintf('Invalid .accelerator/deploy.env key on line %d.', $number + 1));
-            }
-
-            if (array_key_exists($key, $values)) {
-                throw new RuntimeException("Duplicate .accelerator/deploy.env key [{$key}].");
-            }
-
-            if (strlen($value) >= 2 && (($value[0] === '"' && str_ends_with($value, '"')) || ($value[0] === "'" && str_ends_with($value, "'")))) {
-                $value = substr($value, 1, -1);
-            }
-
-            $values[$key] = $value;
         }
-
-        return $values;
     }
 
     public static function assertNoLegacyFiles(string $projectRoot): void
     {
-        $legacy = array_values(array_filter([
-            is_file($projectRoot.'/.env.envoy') ? '.env.envoy' : null,
-            is_file($projectRoot.'/.env.staging') ? '.env.staging' : null,
-            is_file($projectRoot.'/.env.production') ? '.env.production' : null,
-        ]));
+        $legacy = array_filter([
+            is_file($projectRoot.'/.accelerator/deploy.env') ? '.accelerator/deploy.env' : null,
+        ]);
 
         if ($legacy !== []) {
-            throw new RuntimeException(
-                'Legacy deployment files detected: '.implode(', ', $legacy)
-                .'. Move them deliberately into .accelerator/ before using Envoy.',
-            );
+            throw new RuntimeException('Legacy deployment files detected: '.implode(', ', $legacy).'. Remove them after migrating to deploy.json.');
         }
     }
 
-    /**
-     * @param  array<string, string>  $values
-     */
-    private static function rejectUnknownKeys(array $values): void
+    /** @param array<string, mixed> $values */
+    private static function string(array $values, string $key, string $default = ''): string
     {
-        $allowed = [
-            'OPS_DEPLOY_DEFAULT_STAGE',
-            'OPS_DEPLOY_PROJECT',
-            'OPS_DEPLOY_SSH_HOST',
-            'OPS_DEPLOY_REPO',
-            'OPS_DEPLOY_BRANCH',
-            'OPS_DEPLOY_KEEP_RELEASES',
-            'OPS_DEPLOY_PHP_VERSION',
-            'OPS_DEPLOY_PHP_BIN',
-            'OPS_DEPLOY_BUN_BIN',
-            'OPS_DEPLOY_RUN_USER',
-            'OPS_DEPLOY_SSL_EMAIL',
-            'OPS_DEPLOY_INITIAL_ADMIN_ENABLED',
-            'OPS_DEPLOY_INITIAL_ADMIN_NAME',
-            'OPS_DEPLOY_INITIAL_ADMIN_USERNAME',
-            'OPS_DEPLOY_INITIAL_ADMIN_EMAIL',
-            'OPS_DEPLOY_INITIAL_ADMIN_PASSWORD_HASH',
-        ];
-        $stageSuffixes = [
-            'ENABLED',
-            'DOMAIN',
-            'ROOT',
-            'GROUP',
-            'DNS_DIRECT',
-            'HTTP_RUNTIME',
-            'FPM_POOL',
-            'FPM_SOCKET',
-            'FPM_SERVICE',
-            'OCTANE_SERVER',
-            'OCTANE_PORT',
-            'OCTANE_WORKERS',
-            'OCTANE_TASK_WORKERS',
-            'HORIZON_ENABLED',
-            'QUEUE_WORKER_ENABLED',
-            'QUEUE_WORKER_CONNECTION',
-            'QUEUE_WORKER_QUEUE',
-            'QUEUE_WORKER_PROCESSES',
-            'REVERB_ENABLED',
-            'REVERB_PORT',
-            'SCHEDULER_ENABLED',
-            'NIGHTWATCH_ENABLED',
-            'NIGHTWATCH_PORT',
-        ];
-
-        foreach (self::STAGES as $stage) {
-            foreach ($stageSuffixes as $suffix) {
-                $allowed[] = 'OPS_DEPLOY_'.strtoupper($stage).'_'.$suffix;
-            }
-        }
-
-        $unknown = array_values(array_diff(array_keys($values), $allowed));
-
-        if ($unknown !== []) {
-            throw new RuntimeException('Unknown or legacy .accelerator/deploy.env keys: '.implode(', ', $unknown));
-        }
+        return is_string($values[$key] ?? null) ? trim($values[$key]) : $default;
     }
 
-    /**
-     * @param  array<string, string>  $values
-     */
-    private static function validateEnabledStageIsolation(array $values): void
+    /** @param array<string, mixed> $values */
+    private static function bool(array $values, string $key, bool $default = false): bool
     {
-        $identities = [
-            'domain' => [],
-            'root' => [],
-            'group' => [],
-        ];
-        $ports = [];
-
-        foreach (self::STAGES as $stage) {
-            $prefix = 'OPS_DEPLOY_'.strtoupper($stage).'_';
-
-            if (! self::boolean($values, $prefix.'ENABLED')) {
-                continue;
-            }
-
-            foreach (['DOMAIN' => 'domain', 'ROOT' => 'root', 'GROUP' => 'group'] as $suffix => $identity) {
-                $value = rtrim(self::required($values, $prefix.$suffix), '/');
-
-                if (isset($identities[$identity][$value])) {
-                    throw new InvalidArgumentException("Enabled stages must use distinct {$identity} values.");
-                }
-
-                $identities[$identity][$value] = true;
-            }
-
-            $runtime = self::value($values, $prefix.'HTTP_RUNTIME', 'fpm');
-            $stagePorts = [];
-
-            if ($runtime === 'octane') {
-                $stagePorts[] = self::integer($values, $prefix.'OCTANE_PORT', 1, 65535);
-            }
-
-            if (self::boolean($values, $prefix.'REVERB_ENABLED')) {
-                $stagePorts[] = self::integer($values, $prefix.'REVERB_PORT', 1, 65535);
-            }
-
-            if (self::boolean($values, $prefix.'NIGHTWATCH_ENABLED')) {
-                $stagePorts[] = self::integer($values, $prefix.'NIGHTWATCH_PORT', 1, 65535);
-            }
-
-            foreach ($stagePorts as $port) {
-                if (isset($ports[$port])) {
-                    throw new InvalidArgumentException("Enabled stages and services must use distinct local port [{$port}].");
-                }
-
-                $ports[$port] = true;
-            }
-        }
+        return is_bool($values[$key] ?? null) ? $values[$key] : $default;
     }
 
-    /** @param array<string, string> $values */
-    private static function required(array $values, string $key): string
+    /** @param array<string, mixed> $values */
+    private static function integer(array $values, string $key, int $default): int
     {
-        $value = self::value($values, $key);
+        $value = $values[$key] ?? $default;
 
-        if ($value === '') {
-            throw new RuntimeException("Missing required .accelerator/deploy.env key [{$key}].");
+        if (! is_int($value) || $value < 1) {
+            throw new InvalidArgumentException("{$key} must be a positive integer.");
         }
 
         return $value;
     }
 
-    /** @param array<string, string> $values */
-    private static function value(array $values, string $key, string $default = ''): string
+    private static function validateDomainRoot(string $domain, string $root): void
     {
-        return array_key_exists($key, $values) && $values[$key] !== '' ? $values[$key] : $default;
-    }
-
-    /** @param array<string, string> $values */
-    private static function boolean(array $values, string $key): bool
-    {
-        return match (strtolower(self::required($values, $key))) {
-            '1', 'true', 'yes', 'on' => true,
-            '0', 'false', 'no', 'off' => false,
-            default => throw new InvalidArgumentException("Invalid boolean value for [{$key}]."),
-        };
-    }
-
-    /** @param array<string, string> $values */
-    private static function integer(array $values, string $key, int $minimum, int $maximum): int
-    {
-        $value = self::required($values, $key);
-
-        if (filter_var($value, FILTER_VALIDATE_INT) === false) {
-            throw new InvalidArgumentException("Invalid integer value for [{$key}].");
+        if (preg_match('/^(?=.{1,253}$)(?!-)[a-z0-9.-]+(?<!-)$/i', $domain) !== 1) {
+            throw new InvalidArgumentException("Invalid deployment domain [{$domain}].");
         }
 
-        $integer = (int) $value;
-
-        if ($integer < $minimum || $integer > $maximum) {
-            throw new InvalidArgumentException("[{$key}] must be between {$minimum} and {$maximum}.");
-        }
-
-        return $integer;
-    }
-
-    private static function validateIdentifier(string $value, string $label): void
-    {
-        if (preg_match('/^[A-Za-z0-9_.-]+$/', $value) !== 1 || str_starts_with($value, '-')) {
-            throw new InvalidArgumentException("Invalid {$label} [{$value}].");
-        }
-    }
-
-    private static function validateSshHost(string $value): void
-    {
-        if (preg_match('/^[A-Za-z0-9_.@-]+$/', $value) !== 1 || str_starts_with($value, '-')) {
-            throw new InvalidArgumentException("Invalid SSH host [{$value}].");
-        }
-    }
-
-    private static function validateRepository(string $value): void
-    {
-        if (preg_match('/[\s\x00-\x1F\x7F]/', $value) === 1 || str_starts_with($value, '-')) {
-            throw new InvalidArgumentException('The deploy repository URL is invalid.');
-        }
-    }
-
-    private static function validateBranch(string $value): void
-    {
-        if (preg_match('/^[A-Za-z0-9._\/-]+$/', $value) !== 1 || str_starts_with($value, '-') || str_contains($value, '..')) {
-            throw new InvalidArgumentException("Invalid deploy branch [{$value}].");
-        }
-    }
-
-    private static function validateVersion(string $value): void
-    {
-        if (preg_match('/^\d+\.\d+$/', $value) !== 1) {
-            throw new InvalidArgumentException("Invalid PHP version [{$value}].");
-        }
-    }
-
-    private static function validateCommand(string $value, string $label): void
-    {
-        if (preg_match('#^(?:[A-Za-z0-9_.-]+|/[A-Za-z0-9_./-]+)$#', $value) !== 1 || str_contains($value, '..')) {
-            throw new InvalidArgumentException("Invalid {$label} [{$value}].");
-        }
-    }
-
-    private static function validateEmail(string $value, string $label): void
-    {
-        if (filter_var($value, FILTER_VALIDATE_EMAIL) === false) {
-            throw new InvalidArgumentException("Invalid {$label} [{$value}].");
-        }
-    }
-
-    private static function validateAdmin(string $name, string $username, string $email, string $passwordHash): void
-    {
-        if (trim($name) === '' || preg_match('/[\x00-\x1F\x7F]/', $name) === 1 || strlen($name) > 100) {
-            throw new InvalidArgumentException('Invalid initial administrator name.');
-        }
-
-        if (preg_match('/^[a-z0-9._-]+$/', $username) !== 1) {
-            throw new InvalidArgumentException('Invalid initial administrator username.');
-        }
-
-        self::validateEmail($email, 'initial administrator email');
-
-        if (! password_get_info($passwordHash)['algo']) {
-            throw new InvalidArgumentException('Invalid initial administrator password hash.');
-        }
-    }
-
-    private static function validateDomain(string $value): void
-    {
-        if (
-            preg_match('/^(?=.{1,253}$)(?!-)[A-Za-z0-9.-]+(?<!-)$/', $value) !== 1
-            || ! str_contains($value, '.')
-            || str_starts_with($value, '.')
-            || str_contains($value, '..')
-        ) {
-            throw new InvalidArgumentException("Invalid deploy domain [{$value}].");
-        }
-    }
-
-    private static function validateDeployRoot(string $value): void
-    {
-        if (
-            in_array($value, ['/', '/home', '/srv', '/var', '/var/www'], true)
-            || preg_match('#^/[A-Za-z0-9_./-]+$#', $value) !== 1
-            || str_contains($value, '..')
-            || str_contains($value, '//')
-        ) {
-            throw new InvalidArgumentException("Unsafe deploy root [{$value}].");
-        }
-    }
-
-    private static function validateRuntime(string $httpRuntime, string $octaneServer): void
-    {
-        if (! in_array($httpRuntime, ['fpm', 'octane'], true)) {
-            throw new InvalidArgumentException("Invalid HTTP runtime [{$httpRuntime}].");
-        }
-
-        if (! in_array($octaneServer, ['swoole', 'roadrunner', 'frankenphp'], true)) {
-            throw new InvalidArgumentException("Invalid Octane server [{$octaneServer}].");
-        }
-    }
-
-    private static function validateFpm(string $pool, string $socket, string $service): void
-    {
-        if ($pool !== '') {
-            self::validateIdentifier($pool, 'FPM pool');
-        }
-
-        if (preg_match('#^/[A-Za-z0-9_./-]+\.sock$#', $socket) !== 1 || str_contains($socket, '..')) {
-            throw new InvalidArgumentException("Invalid FPM socket [{$socket}].");
-        }
-
-        if (preg_match('/^[A-Za-z0-9_.@-]+\.service$/', $service) !== 1) {
-            throw new InvalidArgumentException("Invalid FPM service [{$service}].");
-        }
-    }
-
-    private static function validateQueue(bool $horizon, bool $worker, string $connection, string $queue): void
-    {
-        if ($horizon && $worker) {
-            throw new InvalidArgumentException('Horizon and the plain queue worker cannot both be enabled.');
-        }
-
-        if (preg_match('/^[A-Za-z0-9_.-]+$/', $connection) !== 1 || preg_match('/^[A-Za-z0-9_,.-]+$/', $queue) !== 1) {
-            throw new InvalidArgumentException('Invalid queue worker connection or queue list.');
-        }
-    }
-
-    private static function validatePorts(
-        string $httpRuntime,
-        int $octanePort,
-        bool $reverbEnabled,
-        int $reverbPort,
-        bool $nightwatchEnabled,
-        int $nightwatchPort,
-    ): void {
-        $ports = [];
-
-        if ($httpRuntime === 'octane') {
-            $ports[] = $octanePort;
-        }
-
-        if ($reverbEnabled) {
-            $ports[] = $reverbPort;
-        }
-
-        if ($nightwatchEnabled) {
-            $ports[] = $nightwatchPort;
-        }
-
-        if (count($ports) !== count(array_unique($ports))) {
-            throw new InvalidArgumentException('Enabled deployment services must use distinct ports.');
+        if ($root !== "/var/www/{$domain}") {
+            throw new InvalidArgumentException("Deployment root must be /var/www/{$domain}.");
         }
     }
 }

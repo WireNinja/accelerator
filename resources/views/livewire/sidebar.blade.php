@@ -208,7 +208,6 @@
                     </script>
 
                     {{ \Filament\Support\Facades\FilamentView::renderHook(\Filament\View\PanelsRenderHook::SIDEBAR_NAV_END) }}
-                    {{ \Filament\Support\Facades\FilamentView::renderHook('accelerator::sidebar.support') }}
                 </nav>
             </div>
         </div>

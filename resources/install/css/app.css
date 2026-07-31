@@ -2,7 +2,6 @@
 
 @source '../../app/**/*.php';
 @source '../**/*.blade.php';
-@source '../**/*.vue';
 @source '../../vendor/wireninja/accelerator/resources/views/**/*.blade.php';
 
 @theme {

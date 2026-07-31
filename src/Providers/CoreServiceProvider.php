@@ -21,7 +21,14 @@ use SessionHandlerInterface;
 use WireNinja\Accelerator\Console\Agent\DoctorCommand;
 use WireNinja\Accelerator\Console\ConfigureCommand;
 use WireNinja\Accelerator\Console\ContextCommand;
+use WireNinja\Accelerator\Console\Deployment\DeployCommand;
+use WireNinja\Accelerator\Console\Deployment\DeployInitCommand;
+use WireNinja\Accelerator\Console\Deployment\DeployRelocateCommand;
+use WireNinja\Accelerator\Console\Deployment\DeployRollbackCommand;
+use WireNinja\Accelerator\Console\Deployment\DeployStatusCommand;
+use WireNinja\Accelerator\Console\Deployment\DeployUnlockCommand;
 use WireNinja\Accelerator\Console\EnvCommand;
+use WireNinja\Accelerator\Console\InstallCommand;
 use WireNinja\Accelerator\Console\ProvisionAdminCommand;
 use WireNinja\Accelerator\Console\Vps\BackupStatusCommand;
 use WireNinja\Accelerator\Contracts\AcceleratorUser;
@@ -66,7 +73,14 @@ final class CoreServiceProvider extends ServiceProvider
             DoctorCommand::class,
             ConfigureCommand::class,
             ContextCommand::class,
+            DeployCommand::class,
+            DeployInitCommand::class,
+            DeployRelocateCommand::class,
+            DeployRollbackCommand::class,
+            DeployStatusCommand::class,
+            DeployUnlockCommand::class,
             EnvCommand::class,
+            InstallCommand::class,
             ProvisionAdminCommand::class,
             BackupStatusCommand::class,
         ]);

@@ -8,12 +8,10 @@ use Filament\Support\Contracts\HasColor;
 use Filament\Support\Contracts\HasDescription;
 use Filament\Support\Contracts\HasIcon;
 use Filament\Support\Contracts\HasLabel;
-use WireNinja\Accelerator\Concerns\BetterEnum;
 use WireNinja\Accelerator\Concerns\RoleEnumPermissions;
 
 enum RoleEnum: string implements HasColor, HasDescription, HasIcon, HasLabel
 {
-    use BetterEnum;
     use RoleEnumPermissions;
 
     case SuperAdmin = 'super_admin';
@@ -34,10 +32,10 @@ enum RoleEnum: string implements HasColor, HasDescription, HasIcon, HasLabel
     public function getDescription(): string
     {
         return match ($this) {
-            self::SuperAdmin => 'Akses penuh tanpa batas ke seluruh sistem.',
-            self::Admin => 'Kelola operasional harian dan pengguna.',
-            self::Manager => 'Akses terbatas untuk manajemen data spesifik.',
-            self::User => 'Akses dasar untuk fitur publik dan profil.',
+            self::SuperAdmin => 'Akses penuh melalui Gate bypass.',
+            self::Admin => 'Menerima seluruh permission yang dihasilkan Shield.',
+            self::Manager => 'Role kosong untuk dikonfigurasi sesuai domain proyek.',
+            self::User => 'Role kosong untuk dikonfigurasi sesuai domain proyek.',
         };
     }
 
@@ -51,83 +49,22 @@ enum RoleEnum: string implements HasColor, HasDescription, HasIcon, HasLabel
         };
     }
 
-    /**
-     * Default permissions for this role, assigned during seeding.
-     * Return an empty array to grant ALL generated permissions.
-     * SuperAdmin bypasses Gate entirely \u2014 never needs explicit permissions.
-     *
-     * Permission naming follows ticket policy conventions:
-     * Action:ModelName (e.g. ViewAny:Ticket, Create:TicketBoard)
-     *
-     * @return string[]
-     */
-    public function defaultPermissions(): array
+    public function getColor(): string
     {
         return match ($this) {
-            // SuperAdmin bypasses Gate \u2014 permissions are irrelevant.
-            self::SuperAdmin => [],
+            self::SuperAdmin => 'danger',
+            self::Admin => 'warning',
+            self::Manager => 'info',
+            self::User => 'gray',
+        };
+    }
 
-            // Admin: full access to everything (empty = all generated permissions).
-            self::Admin => [],
-
-            // Manager: can manage boards, tickets (all views, assign, status),
-            // comments, relations, and custom field definitions.
-            // Cannot hard-delete any resource in bulk.
-            self::Manager => [
-                // TicketBoard
-                'ViewAny:TicketBoard',
-                'View:TicketBoard',
-                'Create:TicketBoard',
-                'Update:TicketBoard',
-                'Delete:TicketBoard',
-
-                // Ticket \u2014 full view/create/update/assign/status, no bulk delete
-                'ViewAny:Ticket',
-                'ViewAll:Ticket',
-                'ViewOwn:Ticket',
-                'ViewAssigned:Ticket',
-                'View:Ticket',
-                'Create:Ticket',
-                'Update:Ticket',
-                'UpdateOwn:Ticket',
-                'UpdateAssigned:Ticket',
-                'Delete:Ticket',
-                'DeleteOwn:Ticket',
-                'Assign:Ticket',
-                'ChangeStatus:Ticket',
-
-                // TicketComment \u2014 piggy-backs on View:Ticket & Update:Ticket in policy
-                'ViewAny:Ticket',
-                'View:Ticket',
-                'Update:Ticket',
-
-                // TicketRelation \u2014 piggy-backs on View:Ticket & Update:Ticket
-
-                // TicketCustomFieldDefinition \u2014 read-only for managers
-                'ViewAny:TicketCustomFieldDefinition',
-                'View:TicketCustomFieldDefinition',
-            ],
-
-            // User (Pengguna Biasa): can submit tickets, view/update own & assigned tickets,
-            // and comment on tickets they have access to.
-            self::User => [
-                // TicketBoard \u2014 read-only
-                'ViewAny:TicketBoard',
-                'View:TicketBoard',
-
-                // Ticket \u2014 own/assigned scope only; watcher & is_public access
-                // is handled by the policy and scope without needing View:Ticket.
-                'ViewAny:Ticket',
-                'ViewOwn:Ticket',
-                'ViewAssigned:Ticket',
-                'Create:Ticket',
-                'UpdateOwn:Ticket',
-                'DeleteOwn:Ticket',
-
-                // TicketCustomFieldDefinition \u2014 read-only (needed for form rendering)
-                'ViewAny:TicketCustomFieldDefinition',
-                'View:TicketCustomFieldDefinition',
-            ],
+    /** @return list<string>|null */
+    public function defaultPermissions(): ?array
+    {
+        return match ($this) {
+            self::Admin => null,
+            self::SuperAdmin, self::Manager, self::User => [],
         };
     }
 }

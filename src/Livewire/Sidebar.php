@@ -59,6 +59,6 @@ class Sidebar extends Component
 
     public function render(): View
     {
-        return view('accelerator::livewire.sidebar');
+        return view()->file(__DIR__.'/../../resources/views/livewire/sidebar.blade.php');
     }
 }

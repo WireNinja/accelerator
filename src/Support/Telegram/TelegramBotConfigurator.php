@@ -5,14 +5,9 @@ declare(strict_types=1);
 namespace WireNinja\Accelerator\Support\Telegram;
 
 use NotificationChannels\Telegram\Telegram;
-use WireNinja\Accelerator\Settings\SystemSettings;
 
 final class TelegramBotConfigurator
 {
-    public function __construct(
-        private readonly SystemSettings $systemSettings,
-    ) {}
-
     public function configureClient(Telegram $telegram): Telegram
     {
         if ($botToken = $this->getBotToken()) {
@@ -28,16 +23,14 @@ final class TelegramBotConfigurator
 
     public function getBotToken(): ?string
     {
-        $botToken = $this->systemSettings->telegram_bot_token
-            ?? config('services.telegram.token');
+        $botToken = config('services.telegram.token');
 
         return filled($botToken) ? (string) $botToken : null;
     }
 
     public function getApiBaseUri(): ?string
     {
-        $apiBaseUri = $this->systemSettings->telegram_api_base_uri
-            ?? config('services.telegram.base_uri');
+        $apiBaseUri = config('services.telegram.base_uri');
 
         return filled($apiBaseUri) ? (string) $apiBaseUri : null;
     }

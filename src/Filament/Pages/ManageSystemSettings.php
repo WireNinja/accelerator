@@ -26,7 +26,6 @@ use Illuminate\Support\HtmlString;
 use Override;
 use UnitEnum;
 use WireNinja\Accelerator\Enums\GoogleFontEnum;
-use WireNinja\Accelerator\Enums\LoginLayoutEnum;
 use WireNinja\Accelerator\Filament\Schemas\Components\VerticalWizard;
 use WireNinja\Accelerator\Settings\SystemSettings;
 
@@ -65,13 +64,8 @@ class ManageSystemSettings extends Page implements HasForms
             'brand_logo' => blank($this->settings->brand_logo) ? null : $this->settings->brand_logo,
             'brand_favicon' => blank($this->settings->brand_favicon) ? null : $this->settings->brand_favicon,
             'support_enabled' => $this->settings->support_enabled,
-            'telegram_bot_token' => $this->settings->telegram_bot_token,
-            'telegram_api_base_uri' => $this->settings->telegram_api_base_uri,
             'google_font' => $this->settings->google_font->value,
             'app_notice' => $this->settings->app_notice,
-            'app_version' => $this->settings->app_version,
-            'simple_page_image' => $this->settings->simple_page_image,
-            'simple_page_layout' => $this->settings->simple_page_layout->value,
         ]);
     }
 
@@ -123,39 +117,13 @@ class ManageSystemSettings extends Page implements HasForms
                                         ->directory('app-settings/branding'),
                                 ]),
                         ]),
-                    Step::make('Notifikasi Telegram')
-                        ->icon('lucide-bot')
-                        ->schema([
-                            Section::make('Koneksi Telegram')
-                                ->description('Integrasi Telegram bot untuk keperluan log, notifikasi, dan alert sistem.')
-                                ->columns(1)
-                                ->schema([
-                                    TextInput::make('telegram_bot_token')
-                                        ->label('Telegram Bot Token')
-                                        ->password()
-                                        ->revealable()
-                                        ->placeholder('123456789:AA...')
-                                        ->helperText('Token bot dari BotFather untuk pengiriman notifikasi dan pesan uji Telegram.')
-                                        ->columnSpanFull(),
-                                    TextInput::make('telegram_api_base_uri')
-                                        ->label('Telegram API Base URI')
-                                        ->url()
-                                        ->placeholder('https://api.telegram.org')
-                                        ->helperText('Opsional. Isi jika memakai bridge atau self-hosted Telegram Bot API server.')
-                                        ->columnSpanFull(),
-                                ]),
-                        ]),
                     Step::make('Sistem & Pemberitahuan')
                         ->icon('lucide-cpu')
                         ->schema([
                             Section::make('Sistem')
-                                ->description('Atur versi aplikasi dan pengumuman global di sidebar.')
+                                ->description('Atur pengumuman global dan bantuan pengembang di sidebar.')
                                 ->columns(2)
                                 ->schema([
-                                    TextInput::make('app_version')
-                                        ->label('Versi Aplikasi')
-                                        ->required()
-                                        ->placeholder('1.0.0'),
                                     TextInput::make('app_notice')
                                         ->label('Pemberitahuan Global')
                                         ->placeholder('Contoh: Maintenance terjadwal besok...')
@@ -164,27 +132,6 @@ class ManageSystemSettings extends Page implements HasForms
                                     Toggle::make('support_enabled')
                                         ->label('Tampilkan Bantuan (Support)')
                                         ->helperText('Tampilkan kotak bantuan pengembang (Whatsapp & Telegram) di sidebar.')
-                                        ->columnSpanFull(),
-                                ]),
-                        ]),
-                    Step::make('Layar Login')
-                        ->icon('lucide-layout')
-                        ->schema([
-                            Section::make('Visual Halaman Autentikasi')
-                                ->description('Atur judul, subjudul, dan latar belakang visual layar login.')
-                                ->columns(1)
-                                ->schema([
-                                    Select::make('simple_page_layout')
-                                        ->label('Layout Layar Autentikasi')
-                                        ->default(LoginLayoutEnum::LeftReveal->value)
-                                        ->options(LoginLayoutEnum::class)
-                                        ->required()
-                                        ->columnSpanFull(),
-                                    FileUpload::make('simple_page_image')
-                                        ->label('Background Layar Autentikasi')
-                                        ->image()
-                                        ->disk('public')
-                                        ->helperText('Gambar untuk background halaman login dan autentikasi.')
                                         ->columnSpanFull(),
                                 ]),
                         ]),
@@ -224,16 +171,8 @@ class ManageSystemSettings extends Page implements HasForms
         $this->settings->brand_logo = $state['brand_logo'];
         $this->settings->brand_favicon = $state['brand_favicon'];
         $this->settings->support_enabled = $state['support_enabled'];
-        $this->settings->telegram_bot_token = blank($state['telegram_bot_token']) ? null : $state['telegram_bot_token'];
-        $this->settings->telegram_api_base_uri = blank($state['telegram_api_base_uri']) ? null : $state['telegram_api_base_uri'];
         $this->settings->google_font = self::resolveGoogleFontEnum($state['google_font']);
         $this->settings->app_notice = $state['app_notice'];
-        $this->settings->app_version = $state['app_version'];
-        $this->settings->simple_page_image = $state['simple_page_image'];
-        $layoutInput = $state['simple_page_layout'];
-        $this->settings->simple_page_layout = $layoutInput instanceof LoginLayoutEnum
-            ? $layoutInput
-            : (LoginLayoutEnum::tryFrom((string) $layoutInput) ?? LoginLayoutEnum::LeftReveal);
 
         $this->settings->save();
 

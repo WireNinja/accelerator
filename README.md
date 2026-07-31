@@ -1,165 +1,110 @@
 # WireNinja Accelerator
 
-An intentionally batteries-included Laravel 13 foundation for authenticated internal applications. It provides a complete Filament baseline, Inertia Vue and Livewire support, optional runtime integrations, deployment automation, development helpers, and Boost skills.
+Proprietary, batteries-included Laravel 13 foundation for a solo developer building authenticated Filament monoliths. Public source access grants no right to use, copy, modify, or redistribute the package; see `LICENSE`.
 
-## Fresh Installation
+## Fresh installation
 
 ```bash
 laravel new my-project --no-interaction
 cd my-project
 composer require wireninja/accelerator:^2.0@dev -W --no-interaction
-bash vendor/wireninja/accelerator/bin/install
+php artisan accelerator:install
 ```
 
-`@dev` is required while v2 has no stable tag. Remove it from this command only after an explicit stable v2 release.
+The installer is intentionally fresh-only. It may rewrite a verified pristine Laravel skeleton and run `migrate:fresh --seed`. Never run it on an existing application. Existing applications migrate surgically.
 
-The Laravel Prompts onboarding collects application identity, initial administrator, frontend, database, optional feature activation, and optional deployment topology. The installer then owns the scaffold, env files, migrations, frontend, Filament, Shield, Boost, Pint, production build, and verification.
-
-Do not delete Laravel files manually and do not install a starter kit first. The installer accepts only a pristine Laravel 13 skeleton, removes known default files safely, and resumes interrupted work from its ignored journal.
-
-The installer is intentionally destructive to a fresh local database because it finishes with `migrate:fresh --seed`. Never run it against an existing application. Existing v1 applications must migrate surgically.
-
-## How It Works
-
-Accelerator installs a broad toolset once, but activates runtime behavior explicitly. The package is not a starter repository and does not copy its PHP source into the application.
-
-```text
-laravel new
-    |
-    v
-composer require wireninja/accelerator
-    |  Composer installs the batteries; package discovery registers one entrypoint.
-    v
-bin/install
-    |
-    +--> Onboarding --> validated InstallPlan
-    +--> InstallJournal --> resumable phases
-    +--> scaffold --> env --> Composer --> Bun --> database --> quality gates
-    |
-    v
-Laravel application
-    |
-    +--> CoreServiceProvider                     always-safe foundation
-    +--> config('accelerator.features.*')
-            +--> Filament Admin + System         core internal UI
-            +--> Support panel                   only with ticketing
-            +--> OAuth / telemetry / PWA         only when enabled
-            +--> disabled feature                no provider, routes, or boot work
-
-Deployment is a separate boundary:
-
-.accelerator/deploy.env -------------------------+
-.accelerator/environments/{stage}.env -----------+--> Envoy preflight
-                                                       |
-                                                       +--> locked build + backup
-                                                       +--> immutable code/env pair
-                                                       +--> atomic current symlink
-                                                       +--> scoped Nginx/Supervisor
-                                                       +--> HTTPS /up
-```
-
-The Bash command is only an entrypoint. Laravel Prompts builds one plan, PHP owns all mutations, and the ignored install journal makes an interrupted run resumable. Envoy never edits the local scaffold; it builds exact committed releases on the server.
-
-## Non-Interactive Installation
+Interactive installation uses Laravel Prompts. Deterministic installation is discoverable through:
 
 ```bash
-export ACCELERATOR_ADMIN_PASSWORD='use-a-real-secret'
-
-bash vendor/wireninja/accelerator/bin/install \
-  --no-interaction \
-  --app-name='My Project' \
-  --app-url=http://localhost:8000 \
-  --frontend=inertia \
-  --database=sqlite \
-  --features=filament,fortify,settings,ticketing,pwa,insider,scout,wayfinder
+php artisan accelerator:install --help
 ```
 
-If `ACCELERATOR_ADMIN_PASSWORD` is absent, a secure generated password is printed once. Use Bun; npm, pnpm, Yarn, and legacy Bun lockfiles are not supported by v2.
+The default frontend package manager is pnpm 11+; npm 12+ is supported as a fallback. Bun and Yarn are unsupported. The generated project records the exact executable version, has exactly one lockfile, and enforces a seven-day minimum release age. pnpm also blocks exotic transitive sources, trust downgrades, and unapproved dependency builds. npm disables lifecycle scripts globally and explicitly rebuilds only Sharp. Narrow release-age exceptions and overrides exist only for reviewed security fixes.
 
-## Optional Features
+Accelerator never owns `/`. Laravel's welcome page, a landing page, or a redirect is entirely userland code.
 
-Dependencies remain installed by design. Feature selection controls runtime activation and integration, not Composer package presence.
+## Deliberate defaults
 
-Available features include Fortify, settings, ticketing, OAuth, PWA, Telegram, telemetry, Insider, Horizon, Reverb, Scout, Nightwatch, and Wayfinder. Filament, Admin, and System are core; Support exists only with ticketing.
+- Filament Admin and System panels, Shield RBAC, settings, activity log, media integration, custom sidebar/topbar, and native Filament authentication/MFA are core.
+- OAuth, PWA, Telegram, Horizon, Reverb, Scout, and Nightwatch are optional runtime integrations.
+- Inertia, Vue, Wayfinder, Fortify, ticketing, custom telemetry, Insider, Envoy, and generated GitHub Actions are not part of Accelerator.
+- `Model::unguard()` is intentional for schema-controlled Filament forms. A project may call `Model::reguard()` in its app provider.
+- Tables default to `id desc`, cursor pagination, deferred loading, compact filters, and Indonesian formatting.
+- Selects default to searchable/preloaded/non-native; use `->preload(false)` for high-cardinality relationships.
+- File uploads retain the image editor and a configurable 100 MB application limit.
+- `VerticalWizard`, Advanced Choice, and the package Location Picker remain supported primitives.
 
-Change state later through one local-only command:
+## Daily commands
 
 ```bash
+php artisan accelerator:doctor --json
+php artisan accelerator:context model User
+php artisan accelerator:context resource user
+php artisan accelerator:make-resource Product --panel=admin --group='Master Data' --icon=lucide-package --model --migration --factory --json
+php artisan accelerator:verify-resource product --compact
 php artisan accelerator:configure
-php artisan accelerator:configure deployment
-php artisan accelerator:configure environment --stage=production
+composer phpstan
+pnpm audit
+pnpm run build
 ```
 
-The command reads real env files, validates a complete draft, redacts secrets, asks before writing, and prints the next action. It never SSHes, migrates, deploys, or restarts a service.
+`accelerator:make-resource` delegates generation to Filament, applies only navigation metadata requested by the caller, regenerates Shield safely, and verifies registration/model/policy invariants. Resource labels, icons, policies, and panel placement remain readable in the resource itself. Navigation group label/icon/order is app-owned in `App\Enums\System\NavigationGroup`.
 
-### UI density
+## Configuration ownership
 
-Accelerator supports only `compact` and `default` density:
+| File | Authority |
+|---|---|
+| `.env` | Local Laravel runtime and feature state. |
+| `.env.example` | Public environment contract. |
+| `.accelerator/deploy.json` | Committed, mutable, non-secret deployment topology. |
+| `.accelerator/environments/{stage}.env` | Ignored Laravel runtime secrets for a stage. |
+| `.accelerator/install-state.json` | Ignored installation resume receipt; never mutable configuration. |
 
-```dotenv
-ACCELERATOR_UI_DENSITY=compact
-```
-
-`compact` applies the Accelerator spacing gate to the modern sidebar and accepted Filament resources. `default` keeps the same sidebar structure and behavior while using Filament's default component spacing.
+Read runtime values through `config()`, not `env()` outside config files. Telegram credentials, OAuth secrets, database passwords, app keys, and deployment runtime secrets never belong in database settings or `deploy.json`.
 
 ## Deployment
 
-Onboarding can generate a production-only or staging-plus-production setup:
+Deployer v8 is the atomic release engine behind public Artisan commands. The stable project root is `/var/www/{domain}` and releases live below it with a `current` symlink.
 
 ```bash
-bash vendor/wireninja/accelerator/bin/install \
-  --no-interaction \
-  --deploy \
-  --deployment-mode=single \
-  --project=my-project \
-  --ssh-host=my-vps \
-  --repo=git@github.com:example/my-project.git \
-  --branch=main \
-  --domain=app.example.com \
-  --deploy-root=/var/www/app.example.com \
-  --http-runtime=octane
+php artisan accelerator:configure deployment
+php artisan accelerator:configure environment --stage=production
+php artisan accelerator:deploy:status --stage=production --json
+php artisan accelerator:deploy:init --stage=production
+php artisan accelerator:deploy --stage=production
+php artisan accelerator:deploy:rollback --stage=production
+php artisan accelerator:deploy:unlock --stage=production
+php artisan accelerator:deploy:relocate --stage=production --old-root=/var/www/old.example.com
 ```
 
-Complete the generated local-only runtime seed, commit and push the application, then deploy:
+Configuration never SSHes. Remote mutators confirm stage, domain, root, and host; non-interactive mutation requires explicit force. Deployment uses committed Composer/pnpm/npm locks, installs rather than updates dependencies, backs up the database before migrations, switches releases atomically, restarts only configured services, and never auto-rolls back database migrations.
+
+Horizon and a plain queue worker are mutually exclusive. One VPS per stage is supported; clusters, containers, microservices, and CI orchestration are deliberately out of scope.
+
+## Package maintenance
 
 ```bash
-vendor/bin/envoy run preflight --stage=production
-vendor/bin/envoy run init --stage=production
-vendor/bin/envoy run deploy --stage=production
+composer validate --strict --no-check-publish
+composer audit --locked
+composer outdated --direct
+composer phpstan
+../../vendor/bin/pint --dirty --format agent
 ```
 
-Preflight is read-only. It rejects an unformatted, dirty, or unpushed local tree and an already-invalid global Nginx configuration before creating the remote stage layout.
+PHPStan/Larastan level 5 is the minimum. Do not add a baseline or suppress real errors. Do not create a release, tag, or push unless the owner explicitly chooses the version.
 
-Valid stages are `staging` and `production`. Envoy renders scoped Nginx and Supervisor configuration, initializes tracked Composer path-repository submodules, builds exact locked releases with Bun and Composer, keeps immutable per-release env files, backs up before continuous migrations, enforces maintenance in Nginx, checks `/up`, supports SSL repair and rollback, and never prunes the deployment archive.
+## AI skill routing
 
-## Local Verification
-
-```bash
-php artisan accelerator:doctor
-php artisan accelerator:context model User
-php artisan accelerator:context resource user
-php artisan accelerator:verify-resource user --compact
-composer analyse
-bun run build
-```
-
-See the installed Accelerator Boost skills for installation, configuration, Filament, telemetry, and deployment workflows.
-
-## AI Agent Skill Routing
-
-Accelerator installs task-specific Boost skills. An AI agent should match the requested work to the skill first, read that skill completely, and only then inspect or change code. Multiple concerns require multiple matching skills.
-
-| Intended work | Skill to load first |
+| Work | Skill |
 |---|---|
-| Fresh Laravel installation or installer failure | `accelerator-installation` |
-| Upgrade an existing v1 application | `accelerator-breaking-changes` |
-| Runtime env, feature flags, or preload middleware | `accelerator-env-config` |
-| Filament resource, form, table, policy, or custom field | `accelerator-filament` |
-| Model, relationship, cast, or schema investigation | `accelerator-model-context` |
-| Activity/audit logging | `accelerator-activity-log` |
-| PWA manifest, icons, service worker, or Vite integration | `accelerator-pwa-development` |
-| Exception telemetry, retention, or notifications | `accelerator-telemetry` |
-| Init, deploy, rollback, Nginx, or Supervisor mutation | `accelerator-deployment` |
-| Read-only runtime, logs, backup, or service diagnosis | `accelerator-ops-observability` |
+| Fresh install/resume | `accelerator-installation` |
+| Existing-app migration | `accelerator-breaking-changes` |
+| Env/features/deploy topology | `accelerator-env-config` |
+| Filament/Shield/resources/UI | `accelerator-filament` |
+| Models/schema/casts/relations | `accelerator-model-context` |
+| Activity logging | `accelerator-activity-log` |
+| PWA/Vite assets | `accelerator-pwa-development` |
+| Remote mutation | `accelerator-deployment` |
+| Read-only runtime diagnosis | `accelerator-ops-observability` |
 
-If no Accelerator skill matches, use the relevant framework/package skill and version-specific documentation. Do not force a nearby Accelerator skill onto unrelated work.
+Command `--help`, source/framework registry, policy, database, and runtime state are truth. Context output and skills are navigation aids.

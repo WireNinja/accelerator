@@ -5,13 +5,11 @@ declare(strict_types=1);
 namespace WireNinja\Accelerator\Support;
 
 use Illuminate\Foundation\Configuration\Middleware;
-use Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets;
 use Spatie\Permission\Middleware\PermissionMiddleware;
 use Spatie\Permission\Middleware\RoleMiddleware;
 use Spatie\Permission\Middleware\RoleOrPermissionMiddleware;
 use WireNinja\Accelerator\Http\Middleware\EnsureUserIsActive;
 use WireNinja\Accelerator\Http\Middleware\HandleAppearance;
-use WireNinja\Accelerator\Http\Middleware\HandleInertiaRequests;
 
 final class BuiltinMiddleware
 {
@@ -28,8 +26,6 @@ final class BuiltinMiddleware
             'role' => RoleMiddleware::class,
             'permission' => PermissionMiddleware::class,
             'role_or_permission' => RoleOrPermissionMiddleware::class,
-            'inertia' => HandleInertiaRequests::class,
-            'link_preload' => AddLinkHeadersForPreloadedAssets::class,
         ]);
     }
 }

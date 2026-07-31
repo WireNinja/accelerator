@@ -103,7 +103,7 @@ final class InstallJournal
             'receipt' => $this->finished ? [
                 'app_name' => $this->plan->appName,
                 'app_url' => $this->plan->appUrl,
-                'frontend' => $this->plan->primaryFrontend,
+                'package_manager' => $this->plan->packageManager,
                 'database' => $this->plan->database,
                 'features' => $this->plan->features,
                 'deployment_configured' => $this->plan->deploy,

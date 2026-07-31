@@ -20,9 +20,7 @@ class SystemPanelProvider extends PanelProvider
                     ->navigationGroup('System'),
             );
 
-        if (config('accelerator.features.settings')) {
-            $panel->pages([ManageSystemSettings::class]);
-        }
+        $panel->pages([ManageSystemSettings::class]);
 
         return $panel;
     }

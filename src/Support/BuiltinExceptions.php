@@ -2,21 +2,12 @@
 
 namespace WireNinja\Accelerator\Support;
 
-use Illuminate\Auth\Access\AuthorizationException;
-use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
-use Illuminate\Support\ViewErrorBag;
-use Illuminate\Validation\ValidationException;
-use Illuminate\View\ViewException;
 use Symfony\Component\HttpFoundation\Response;
-use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
-use Throwable;
 use WireNinja\Accelerator\Exceptions\BusinessException;
-use WireNinja\Accelerator\Telemetry\TelemetryBuffer;
-use WireNinja\Accelerator\Telemetry\TelemetryRecorder;
 
 final class BuiltinExceptions
 {
@@ -80,19 +71,6 @@ final class BuiltinExceptions
             return Auth::guest();
         });
 
-        // Authenticated Octane requests may copy bounded exception context into
-        // a Swoole table. Persistence and notification happen after the request.
-        $exceptions->report(function (Throwable $exception) {
-            if (! TelemetryBuffer::supported()) {
-                return false; // Let default reporting continue.
-            }
-
-            $request = rescue(fn () => request(), null, false);
-            rescue(fn () => app(TelemetryRecorder::class)->capture($exception, $request), report: false);
-
-            return false; // Do not stop default reporting chain.
-        });
-
         $exceptions->render(function (BusinessException $exception, Request $request): Response {
             if (self::isFilamentLivewireRequest($request)) {
                 return self::renderFilamentLivewireBusinessException($exception);
@@ -110,41 +88,6 @@ final class BuiltinExceptions
                 : response($exception->getMessage(), 409);
         });
 
-        // Laravel only renders custom error views for HttpExceptionInterface instances.
-        // A plain `throw new Exception` with APP_DEBUG=true triggers Ignition instead.
-        // This render callback intercepts all unhandled Throwables on web requests
-        // and returns the custom errors.500 view so our design is always visible.
-        $exceptions->render(function (Throwable $exception, Request $request): ?Response {
-            if (app()->hasDebugModeEnabled()) {
-                return null;
-            }
-
-            if ($request->expectsJson()) {
-                return null;
-            }
-
-            if (
-                $exception instanceof ViewException ||
-                $exception instanceof BusinessException ||
-                $exception instanceof AuthenticationException ||
-                $exception instanceof ValidationException ||
-                $exception instanceof AuthorizationException ||
-                $exception instanceof HttpExceptionInterface
-            ) {
-                return null;
-            }
-
-            $errorView = 'errors.500';
-
-            if (view()->exists($errorView)) {
-                return response()->view($errorView, [
-                    'exception' => $exception,
-                    'errors' => new ViewErrorBag,
-                ], 500);
-            }
-
-            return null;
-        });
     }
 
     /**

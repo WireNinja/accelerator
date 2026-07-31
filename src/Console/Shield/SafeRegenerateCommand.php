@@ -87,7 +87,7 @@ final class SafeRegenerateCommand extends Command
             }
 
             $defaults = $case->defaultPermissions();
-            $role->syncPermissions($defaults === []
+            $role->syncPermissions($defaults === null
                 ? $permissions->values()
                 : $permissions->only($defaults)->values());
             $count++;

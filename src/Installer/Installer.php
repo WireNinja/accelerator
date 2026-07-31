@@ -36,9 +36,7 @@ final class Installer
         'package.json' => '10a54d6736b26384ac68636e11f958360e6d18fb9c41e91e05707a918ad58622',
         'resources/css/app.css' => '02db84e827e06d8349293e9797eb8d81465e109e91976775964c4bf873b6fab5',
         'resources/js/app.js' => '101ead936a2281d53dcc064b7e2a2ab0d53b92ef3ef7b34b668673007895c860',
-        'resources/views/welcome.blade.php' => 'bdb9bb7d2eecceb3581e429545b6ec96014ccab6d0ae83d4c52930e9a15f7d65',
         'routes/console.php' => '9adccc33e7dd400683e434774077c7fdb2f299c5712cedf16a43fdf56f2850fa',
-        'routes/web.php' => '248c7eeeb43bb61ee4fb6603e52b44843c64f72a841d671bcd41871aab23f970',
         'vite.config.js' => 'f413e14379e2db8b200c63a6326b925f6d47cc0df458c77bfe188cfc23e8081f',
     ];
 
@@ -55,6 +53,7 @@ final class Installer
      * @var array<string, string>
      */
     private const RECIPE_FILES = [
+        'stubs/app/Enums/System/NavigationGroup.php' => 'app/Enums/System/NavigationGroup.php',
         'stubs/app/Enums/System/PanelEnum.php' => 'app/Enums/System/PanelEnum.php',
         'stubs/app/Enums/System/RoleEnum.php' => 'app/Enums/System/RoleEnum.php',
         'stubs/app/Models/User.php' => 'app/Models/User.php',
@@ -71,15 +70,10 @@ final class Installer
         'stubs/rector.php' => 'rector.php',
         'stubs/routes/console.php' => 'routes/console.php',
         'resources/install/routes/channels.php' => 'routes/channels.php',
-        'resources/install/routes/web.php.stub' => 'routes/web.php',
         'resources/install/css/app.css' => 'resources/css/app.css',
         'resources/install/css/filament-theme.css' => 'resources/css/filament/theme.css',
         'resources/install/js/app.ts' => 'resources/js/app.ts',
         'resources/install/js/env.d.ts' => 'resources/js/env.d.ts',
-        'resources/install/js/Pages/Home.vue' => 'resources/js/Pages/Home.vue',
-        'resources/install/views/app.blade.php' => 'resources/views/app.blade.php',
-        'resources/install/views/layouts/app.blade.php' => 'resources/views/layouts/app.blade.php',
-        'resources/install/views/pages/home.blade.php' => 'resources/views/pages/home.blade.php',
         'resources/install/package.json' => 'package.json',
         'resources/install/eslint.config.js' => 'eslint.config.js',
         'resources/install/.prettierignore' => '.prettierignore',
@@ -109,8 +103,14 @@ final class Installer
             return;
         }
 
-        $this->validateRecipeTargets();
-        $this->validateEnvironmentTargets();
+        if (! $journal->isCompleted('scaffold')) {
+            $this->validateRecipeTargets();
+        }
+
+        if (! $journal->isCompleted('environment')) {
+            $this->validateEnvironmentTargets();
+        }
+
         $journal->start();
 
         $this->step($journal, 'scaffold', function (): void {
@@ -127,15 +127,14 @@ final class Installer
             $this->installDeveloperDependencies();
         });
         $this->step($journal, 'frontend', function (): void {
-            foreach (['package-lock.json', 'pnpm-lock.yaml', 'yarn.lock', 'bun.lockb'] as $legacyLock) {
-                $path = $this->projectRoot.'/'.$legacyLock;
+            $this->configureFrontendPolicy();
+            $this->processRunner->run([$this->plan->packageManager, 'install'], $this->projectRoot);
 
-                if (is_file($path) && ! unlink($path)) {
-                    throw new RuntimeException("Unable to remove legacy frontend lock: {$legacyLock}");
-                }
+            if ($this->plan->packageManager === 'npm') {
+                $this->processRunner->run(['npm', 'rebuild', 'sharp', '--ignore-scripts=false'], $this->projectRoot);
             }
 
-            $this->processRunner->run(['bun', 'install'], $this->projectRoot);
+            $this->copyFrontendVendorAssets();
         });
         $this->step($journal, 'application', function (): void {
             $this->finalizeApplication();
@@ -168,12 +167,18 @@ final class Installer
             throw new RuntimeException('Accelerator v2 currently supports fresh Laravel 13 projects only.');
         }
 
-        foreach (['composer', 'bun'] as $command) {
+        foreach (['composer', $this->plan->packageManager] as $command) {
             if (! $this->processRunner->commandExists($command)) {
                 throw new RuntimeException("Required command is not available: {$command}");
             }
         }
 
+        $packageManagerVersion = $this->processRunner->capture([$this->plan->packageManager, '--version'], $this->projectRoot);
+        $minimumVersion = $this->plan->packageManager === 'npm' ? '12.0.0' : '11.0.0';
+
+        if (! version_compare($packageManagerVersion, $minimumVersion, '>=')) {
+            throw new RuntimeException("Accelerator requires {$this->plan->packageManager} {$minimumVersion} or newer; found {$packageManagerVersion}.");
+        }
     }
 
     private function installRecipe(): void
@@ -188,10 +193,7 @@ final class Installer
             $this->writeFile($destination, $this->render($contents));
         }
 
-        $legacyPaths = [
-            'resources/js/app.js',
-            'resources/views/welcome.blade.php',
-        ];
+        $legacyPaths = ['resources/js/app.js'];
 
         foreach ($legacyPaths as $legacyPath) {
             $path = $this->projectRoot.'/'.$legacyPath;
@@ -199,6 +201,90 @@ final class Installer
             if (is_file($path) && ! unlink($path)) {
                 throw new RuntimeException("Unable to remove replaced Laravel file: {$legacyPath}");
             }
+        }
+    }
+
+    private function configureFrontendPolicy(): void
+    {
+        $selectedLock = $this->plan->packageManager === 'pnpm' ? 'pnpm-lock.yaml' : 'package-lock.json';
+
+        foreach (['pnpm-lock.yaml', 'package-lock.json', 'yarn.lock'] as $lockFile) {
+            if ($lockFile === $selectedLock) {
+                continue;
+            }
+
+            $path = $this->projectRoot.'/'.$lockFile;
+
+            if (is_file($path) && ! unlink($path)) {
+                throw new RuntimeException("Unable to remove conflicting frontend lock: {$lockFile}");
+            }
+        }
+
+        if ($this->plan->packageManager === 'pnpm') {
+            $this->writeFile('pnpm-workspace.yaml', <<<'YAML'
+minimumReleaseAge: 10080
+minimumReleaseAgeExclude:
+  - concurrently
+  - filelist
+  - sharp
+minimumReleaseAgeIgnoreMissingTime: false
+overrides:
+  filelist: ^2.0.2
+  sharp: ^0.35.3
+strictDepBuilds: true
+allowBuilds:
+  'sharp@0.35.3': true
+blockExoticSubdeps: true
+trustPolicy: no-downgrade
+trustPolicyExclude:
+  - '@trickfilm400/rollup-plugin-off-main-thread@3.0.0-pre1'
+  - 'semver@6.3.1'
+YAML);
+
+            $npmConfig = $this->projectRoot.'/.npmrc';
+
+            if (is_file($npmConfig) && ! unlink($npmConfig)) {
+                throw new RuntimeException('Unable to remove npm-only policy file: .npmrc');
+            }
+
+            return;
+        }
+
+        $this->writeFile('.npmrc', <<<'NPMRC'
+min-release-age=7
+min-release-age-exclude[]=concurrently
+min-release-age-exclude[]=filelist
+min-release-age-exclude[]=sharp
+package-lock=true
+strict-peer-deps=true
+ignore-scripts=true
+NPMRC);
+
+        $pnpmConfig = $this->projectRoot.'/pnpm-workspace.yaml';
+
+        if (is_file($pnpmConfig) && ! unlink($pnpmConfig)) {
+            throw new RuntimeException('Unable to remove pnpm-only policy file: pnpm-workspace.yaml');
+        }
+    }
+
+    private function copyFrontendVendorAssets(): void
+    {
+        foreach ([
+            'dist/leaflet.js' => 'resources/vendor/accelerator/leaflet/leaflet.js',
+            'dist/leaflet.css' => 'resources/vendor/accelerator/leaflet/leaflet.css',
+            'dist/images/layers.png' => 'resources/vendor/accelerator/leaflet/images/layers.png',
+            'dist/images/layers-2x.png' => 'resources/vendor/accelerator/leaflet/images/layers-2x.png',
+            'dist/images/marker-icon.png' => 'resources/vendor/accelerator/leaflet/images/marker-icon.png',
+            'dist/images/marker-icon-2x.png' => 'resources/vendor/accelerator/leaflet/images/marker-icon-2x.png',
+            'dist/images/marker-shadow.png' => 'resources/vendor/accelerator/leaflet/images/marker-shadow.png',
+        ] as $source => $destination) {
+            $contents = file_get_contents($this->projectRoot.'/node_modules/leaflet/'.$source);
+
+            if (! is_string($contents)) {
+                throw new RuntimeException("Unable to read Leaflet asset: {$source}");
+            }
+
+            $this->writeFile($destination, $contents);
         }
     }
 
@@ -249,46 +335,47 @@ final class Installer
 
     private function writeDeploymentFiles(): void
     {
-        $bridge = "{{-- WireNinja Accelerator v2. Configure with: php artisan accelerator:configure deployment --}}\n"
-            ."@servers(['vps' => [\\WireNinja\\Accelerator\\Deployment\\DeploymentConfig::load(getcwd(), isset(\$stage) ? (string) \$stage : null)->sshHost], 'localhost' => '127.0.0.1'])\n\n"
-            ."@import('vendor/wireninja/accelerator/resources/envoy/Envoy.blade.php')\n";
-        $this->writeFile('Envoy.blade.php', $bridge);
-
         if (! $this->plan->deploy) {
             return;
         }
 
-        $template = file_get_contents($this->packageRoot.'/.base-env.envoy.example');
-
-        if (! is_string($template)) {
-            throw new RuntimeException('Unable to read Accelerator Envoy template.');
-        }
-
-        $replacements = [
-            '{{ default_stage }}' => $this->plan->deploymentMode === 'dual' ? 'staging' : 'production',
-            '{{ project }}' => $this->plan->project,
-            '{{ ssh_host }}' => $this->plan->sshHost,
-            '{{ repo }}' => $this->plan->repository,
-            '{{ branch }}' => $this->plan->repositoryBranch,
-            '{{ ssl_email }}' => $this->plan->adminEmail,
-            '{{ admin_name }}' => $this->plan->adminName,
-            '{{ admin_username }}' => $this->plan->adminUsername,
-            '{{ admin_email }}' => $this->plan->adminEmail,
-            '{{ admin_password_hash }}' => $this->plan->adminPasswordHash,
-            '{{ staging_enabled }}' => $this->boolean($this->plan->deploymentMode === 'dual'),
-            '{{ staging_domain }}' => $this->plan->stagingDomain,
-            '{{ staging_root }}' => $this->plan->stagingDeployRoot,
-            '{{ production_domain }}' => $this->plan->domain,
-            '{{ production_root }}' => $this->plan->deployRoot,
-            '{{ http_runtime }}' => $this->plan->httpRuntime,
-            '{{ horizon_enabled }}' => $this->boolean($this->hasFeature('horizon')),
-            '{{ queue_worker_enabled }}' => $this->boolean(! $this->hasFeature('horizon')),
-            '{{ queue_connection }}' => $this->plan->useRedis ? 'redis' : 'database',
-            '{{ reverb_enabled }}' => $this->boolean($this->hasFeature('reverb')),
-            '{{ nightwatch_enabled }}' => $this->boolean($this->hasFeature('nightwatch')),
+        $stage = fn (bool $enabled, string $domain, int $octanePort, int $reverbPort, int $nightwatchPort): array => [
+            'enabled' => $enabled,
+            'ssh_host' => $this->plan->sshHost,
+            'domain' => $domain,
+            'root' => $domain === '' ? '' : "/var/www/{$domain}",
+            'http_runtime' => $this->plan->httpRuntime,
+            'horizon' => $this->hasFeature('horizon'),
+            'queue_worker' => ! $this->hasFeature('horizon'),
+            'reverb' => $this->hasFeature('reverb'),
+            'nightwatch' => $this->hasFeature('nightwatch'),
+            'scheduler' => true,
+            'octane_port' => $octanePort,
+            'reverb_port' => $reverbPort,
+            'nightwatch_port' => $nightwatchPort,
+            'health_path' => '/up',
         ];
-
-        $this->writeFile('.accelerator/deploy.env', strtr($template, $replacements), 0600);
+        $document = [
+            'schema' => 1,
+            'default_stage' => $this->plan->deploymentMode === 'dual' ? 'staging' : 'production',
+            'project' => $this->plan->project,
+            'repository' => $this->plan->repository,
+            'branch' => $this->plan->repositoryBranch,
+            'keep_releases' => 5,
+            'php_version' => '8.5',
+            'php_binary' => 'php8.5',
+            'package_manager' => $this->plan->packageManager,
+            'run_user' => 'www-data',
+            'ssl_email' => $this->plan->adminEmail,
+            'stages' => [
+                'staging' => $stage($this->plan->deploymentMode === 'dual', $this->plan->stagingDomain, 8100, 8180, 2507),
+                'production' => $stage(true, $this->plan->domain, 8000, 8080, 2407),
+            ],
+        ];
+        $this->writeFile('.accelerator/deploy.json', json_encode(
+            $document,
+            JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
+        ).PHP_EOL);
 
         $runtime = file_get_contents($this->projectRoot.'/.env.example');
 
@@ -340,7 +427,6 @@ final class Installer
 
         $composer['extra']['laravel']['dont-discover'] = array_values(array_unique([
             ...$dontDiscover,
-            'laravel/fortify',
             'laravel/horizon',
         ]));
 
@@ -351,11 +437,12 @@ final class Installer
         ];
         $composer['scripts']['dev'] = [
             'Composer\\Config::disableProcessTimeout',
-            'bunx concurrently -c "#93c5fd,#c4b5fd,#fb7185,#fdba74" "php artisan serve" "php artisan queue:listen --tries=1 --timeout=0" "php artisan pail --timeout=0" "bun run dev" --names=server,queue,logs,vite --kill-others',
+            $this->packageBinaryCommand('concurrently').' -c "#93c5fd,#c4b5fd,#fb7185,#fdba74" "php artisan serve" "php artisan queue:listen --tries=1 --timeout=0" "php artisan pail --timeout=0" "'.$this->packageScriptCommand('dev').'" --names=server,queue,logs,vite --kill-others',
         ];
         $composer['scripts']['format'] = 'pint --format=json';
         $composer['scripts']['refactor'] = 'rector --output-format=json';
-        $composer['scripts']['analyse'] = 'phpstan analyse --memory-limit=2G --no-progress';
+        $composer['scripts']['phpstan'] = 'phpstan analyse --memory-limit=2G --no-progress';
+        unset($composer['scripts']['analyse']);
         $composer['config']['sort-packages'] = true;
         unset($composer['config']['allow-plugins']['wireninja/accelerator']);
 
@@ -370,8 +457,11 @@ final class Installer
             'require',
             '--dev',
             'laravel/boost:^2.0',
-            'laravel/envoy:^2.0',
+            'deployer/deployer:^8.0',
             'larastan/larastan:^3.0',
+            'pestphp/pest:^5.0',
+            'pestphp/pest-plugin-laravel:^5.0',
+            'phpunit/phpunit:^13.2',
             'rector/rector:^2.0',
             'phpstan/phpstan-deprecation-rules:^2.0',
             '--with-all-dependencies',
@@ -388,9 +478,7 @@ final class Installer
         $this->processRunner->run(['php', 'artisan', 'migrate:fresh', '--seed', '--force', '--no-interaction'], $this->projectRoot);
         $this->processRunner->run(['php', 'artisan', 'storage:link', '--force', '--no-interaction'], $this->projectRoot);
 
-        if ($this->hasFeature('filament')) {
-            $this->processRunner->run(['php', 'artisan', 'shield:safe-regenerate', '--no-interaction'], $this->projectRoot);
-        }
+        $this->processRunner->run(['php', 'artisan', 'shield:safe-regenerate', '--no-interaction'], $this->projectRoot);
 
         $this->processRunner->run([
             'php',
@@ -404,10 +492,10 @@ final class Installer
         ], $this->projectRoot);
 
         if ($this->hasFeature('pwa')) {
-            $this->processRunner->run(['bunx', 'laravel-pwa', 'icons'], $this->projectRoot);
+            $this->processRunner->run($this->packageBinaryArguments('laravel-pwa', 'icons'), $this->projectRoot);
         }
 
-        $this->processRunner->run(['bun', 'run', 'build'], $this->projectRoot);
+        $this->processRunner->run([$this->plan->packageManager, 'run', 'build'], $this->projectRoot);
     }
 
     private function runQualityTools(): void
@@ -422,10 +510,10 @@ final class Installer
         ], $this->projectRoot);
         $this->assertAcceleratorBoostResources();
         $this->processRunner->run(['vendor/bin/pint', '--format=agent'], $this->projectRoot);
-        $this->processRunner->run(['composer', 'analyse'], $this->projectRoot);
-        $this->processRunner->run(['bun', 'run', 'lint:check'], $this->projectRoot);
-        $this->processRunner->run(['bun', 'run', 'format:check'], $this->projectRoot);
-        $this->processRunner->run(['bun', 'run', 'types:check'], $this->projectRoot);
+        $this->processRunner->run(['composer', 'phpstan'], $this->projectRoot);
+        $this->processRunner->run([$this->plan->packageManager, 'run', 'lint:check'], $this->projectRoot);
+        $this->processRunner->run([$this->plan->packageManager, 'run', 'format:check'], $this->projectRoot);
+        $this->processRunner->run([$this->plan->packageManager, 'run', 'types:check'], $this->projectRoot);
         $this->processRunner->run(['php', 'artisan', 'accelerator:doctor'], $this->projectRoot);
     }
 
@@ -492,15 +580,9 @@ final class Installer
             'BROADCAST_CONNECTION' => $this->hasFeature('reverb') ? 'reverb' : 'log',
             'SCOUT_DRIVER' => $this->hasFeature('scout') ? 'database' : 'collection',
             'NIGHTWATCH_ENABLED' => $this->boolean($this->hasFeature('nightwatch')),
-            'ACCELERATOR_FEATURE_FILAMENT' => $this->boolean($this->hasFeature('filament')),
-            'ACCELERATOR_FEATURE_FORTIFY' => $this->boolean($this->hasFeature('fortify')),
             'ACCELERATOR_FEATURE_OAUTH' => $this->boolean($this->hasFeature('oauth')),
-            'ACCELERATOR_FEATURE_INSIDER' => $this->boolean($this->hasFeature('insider')),
             'ACCELERATOR_FEATURE_PWA' => $this->boolean($this->hasFeature('pwa')),
-            'ACCELERATOR_FEATURE_SETTINGS' => $this->boolean($this->hasFeature('settings')),
             'ACCELERATOR_FEATURE_TELEGRAM' => $this->boolean($this->hasFeature('telegram')),
-            'ACCELERATOR_FEATURE_TELEMETRY' => $this->boolean($this->hasFeature('telemetry')),
-            'ACCELERATOR_FEATURE_TICKETING' => $this->boolean($this->hasFeature('ticketing')),
             'ACCELERATOR_FEATURE_HORIZON' => $this->boolean($this->hasFeature('horizon')),
             'ACCELERATOR_OAUTH_MODE' => $this->hasFeature('oauth') ? 'existing_only' : 'disabled',
             'ACCELERATOR_UPLOAD_MAX_MB' => '100',
@@ -602,7 +684,7 @@ final class Installer
             throw new RuntimeException('Unable to read .gitignore.');
         }
 
-        foreach (['/.accelerator/'] as $entry) {
+        foreach (['/.accelerator/install-state.json', '/.accelerator/environments/'] as $entry) {
             if (! preg_match('/^'.preg_quote($entry, '/').'$/m', $contents)) {
                 $contents = rtrim($contents).PHP_EOL.$entry.PHP_EOL;
             }
@@ -613,7 +695,7 @@ final class Installer
 
     private function validateRecipeTargets(): void
     {
-        foreach (['resources/js/app.js', 'resources/views/welcome.blade.php'] as $legacyPath) {
+        foreach (['resources/js/app.js'] as $legacyPath) {
             $path = $this->projectRoot.'/'.$legacyPath;
 
             if (is_file($path) && hash_file('sha256', $path) !== self::PRISTINE_HASHES[$legacyPath]) {
@@ -657,8 +739,8 @@ final class Installer
     {
         $environment = $this->environmentFile('.env');
         $example = $this->environmentFile('.env.example');
-        $environmentIsAccelerated = str_contains($environment, 'ACCELERATOR_FEATURE_FILAMENT=');
-        $exampleIsAccelerated = str_contains($example, 'ACCELERATOR_FEATURE_FILAMENT=');
+        $environmentIsAccelerated = str_contains($environment, 'ACCELERATOR_UPLOAD_MAX_MB=');
+        $exampleIsAccelerated = str_contains($example, 'ACCELERATOR_UPLOAD_MAX_MB=');
 
         if ($environmentIsAccelerated || $exampleIsAccelerated) {
             if (! $environmentIsAccelerated || ! $exampleIsAccelerated) {
@@ -727,22 +809,47 @@ final class Installer
             'use App\\Providers\\AppServiceProvider;',
         ];
 
-        if ($this->hasFeature('filament')) {
-            $providerImports[] = 'use App\\Providers\\Filament\\AdminPanelProvider;';
-            $providers[] = '    AdminPanelProvider::class,';
-        }
-
-        $primaryRoute = $this->plan->primaryFrontend === 'inertia'
-            ? "Route::get('/', static fn () => Inertia::render('Home'))->middleware(['auth', 'verified', 'inertia'])->name('home');"
-            : "Route::redirect('/', '/livewire')->name('home');";
+        $providerImports[] = 'use App\\Providers\\Filament\\AdminPanelProvider;';
+        $providers[] = '    AdminPanelProvider::class,';
 
         return strtr($contents, [
             '{{ app_name }}' => $this->plan->appName,
-            '{{ primary_route }}' => $primaryRoute,
+            '{{ package_manager_spec }}' => $this->packageManagerSpecification(),
             '{{ provider_imports }}' => implode(PHP_EOL, $providerImports),
             '{{ providers }}' => implode(PHP_EOL, $providers),
             '{{ pwa_enabled }}' => $this->boolean($this->hasFeature('pwa')),
         ]);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function packageBinaryArguments(string ...$arguments): array
+    {
+        return $this->plan->packageManager === 'pnpm'
+            ? ['pnpm', 'exec', ...$arguments]
+            : ['npm', 'exec', '--', ...$arguments];
+    }
+
+    private function packageBinaryCommand(string $binary): string
+    {
+        return implode(' ', $this->packageBinaryArguments($binary));
+    }
+
+    private function packageScriptCommand(string $script): string
+    {
+        return "{$this->plan->packageManager} run {$script}";
+    }
+
+    private function packageManagerSpecification(): string
+    {
+        $version = $this->processRunner->capture([$this->plan->packageManager, '--version'], $this->projectRoot);
+
+        if (preg_match('/^\d+\.\d+\.\d+$/', $version) !== 1) {
+            throw new RuntimeException("Unable to resolve an exact {$this->plan->packageManager} version.");
+        }
+
+        return "{$this->plan->packageManager}@{$version}";
     }
 
     private function writeFile(string $relativePath, string $contents, int $permissions = 0644): void

@@ -32,6 +32,7 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 use Livewire\LivewireManager;
 use Spatie\Activitylog\Models\Activity;
+use WireNinja\Accelerator\Console\Filament\MakeResourceCommand;
 use WireNinja\Accelerator\Console\Filament\VerifyResourceCommand;
 use WireNinja\Accelerator\Console\Shield\SafeRegenerateCommand;
 use WireNinja\Accelerator\Policies\ActivityPolicy;
@@ -51,6 +52,7 @@ final class FilamentServiceProvider extends ServiceProvider
         if ($this->app->runningInConsole()) {
             $this->commands([
                 SafeRegenerateCommand::class,
+                MakeResourceCommand::class,
                 VerifyResourceCommand::class,
             ]);
         }
@@ -65,11 +67,16 @@ final class FilamentServiceProvider extends ServiceProvider
 
     private function registerAssets(): void
     {
-        FilamentAsset::register([
-            Js::make('iconify', (string) config('accelerator.assets.iconify_url'))->loadedOnRequest(),
-            Js::make('leaflet-js', (string) config('accelerator.assets.leaflet_js_url'))->loadedOnRequest(),
-            Css::make('leaflet-css', (string) config('accelerator.assets.leaflet_css_url'))->loadedOnRequest(),
-        ], package: 'wireninja/accelerator');
+        $assets = [];
+        $leafletJavaScript = resource_path('vendor/accelerator/leaflet/leaflet.js');
+        $leafletStylesheet = resource_path('vendor/accelerator/leaflet/leaflet.css');
+
+        if (is_file($leafletJavaScript) && is_file($leafletStylesheet)) {
+            $assets[] = Js::make('leaflet', $leafletJavaScript)->loadedOnRequest();
+            $assets[] = Css::make('leaflet', $leafletStylesheet)->loadedOnRequest();
+        }
+
+        FilamentAsset::register($assets, package: 'wireninja/accelerator');
     }
 
     private function registerLivewireNamespace(): void
@@ -84,28 +91,20 @@ final class FilamentServiceProvider extends ServiceProvider
     {
         FilamentView::registerRenderHook(
             PanelsRenderHook::HEAD_END,
-            static fn (): View => view('accelerator::filament.density'),
+            static fn (): View => view()->file(__DIR__.'/../../resources/views/filament/density.blade.php'),
         );
 
         FilamentView::registerRenderHook(
             PanelsRenderHook::BODY_END,
-            static fn (): View => view(
-                'accelerator::filament.business-exception-handler',
+            static fn (): View => view()->file(
+                __DIR__.'/../../resources/views/filament/business-exception-handler.blade.php',
                 BuiltinExceptions::getFilamentBusinessExceptionViewData(),
             ),
         );
 
-        if (! config('accelerator.features.settings')) {
-            return;
-        }
-
         FilamentView::registerRenderHook(
             PanelsRenderHook::SIDEBAR_NAV_START,
-            static fn (): View => view('accelerator::filament.sidebar.notice'),
-        );
-        FilamentView::registerRenderHook(
-            'accelerator::sidebar.support',
-            static fn (): View => view('accelerator::filament.sidebar.support'),
+            static fn (): View => view()->file(__DIR__.'/../../resources/views/filament/sidebar/notice.blade.php'),
         );
     }
 

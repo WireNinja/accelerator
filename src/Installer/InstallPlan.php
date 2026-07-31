@@ -11,20 +11,13 @@ final readonly class InstallPlan
 {
     /** @var list<string> */
     private const FEATURES = [
-        'filament',
-        'fortify',
-        'settings',
-        'ticketing',
         'oauth',
         'pwa',
         'telegram',
-        'telemetry',
-        'insider',
         'horizon',
         'reverb',
         'scout',
         'nightwatch',
-        'wayfinder',
     ];
 
     /**
@@ -37,7 +30,7 @@ final readonly class InstallPlan
         public string $adminUsername,
         public string $adminEmail,
         public string $adminPasswordHash,
-        public string $primaryFrontend,
+        public string $packageManager,
         public string $database,
         public bool $useRedis,
         public array $features,
@@ -53,8 +46,8 @@ final readonly class InstallPlan
         public string $stagingDeployRoot,
         public string $httpRuntime,
     ) {
-        if (! in_array($this->primaryFrontend, ['inertia', 'livewire'], true)) {
-            throw new InvalidArgumentException('Primary frontend must be inertia or livewire.');
+        if (! in_array($this->packageManager, ['pnpm', 'npm'], true)) {
+            throw new InvalidArgumentException('Package manager must be pnpm or npm.');
         }
 
         if (trim($this->appName) === '' || preg_match('/[\x00-\x1F\x7F]/', $this->appName) === 1) {
@@ -145,7 +138,7 @@ final readonly class InstallPlan
             adminUsername: self::string($data, 'adminUsername'),
             adminEmail: self::string($data, 'adminEmail'),
             adminPasswordHash: self::string($data, 'adminPasswordHash'),
-            primaryFrontend: self::string($data, 'primaryFrontend'),
+            packageManager: self::string($data, 'packageManager', 'pnpm'),
             database: self::string($data, 'database'),
             useRedis: (bool) ($data['useRedis'] ?? false),
             features: array_values(array_filter($data['features'] ?? [], is_string(...))),

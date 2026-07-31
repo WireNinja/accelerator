@@ -3,7 +3,6 @@
 namespace App\Models;
 
 use Carbon\CarbonImmutable;
-use Database\Factories\UserFactory;
 use Filament\Auth\MultiFactor\App\Concerns\InteractsWithAppAuthentication;
 use Filament\Auth\MultiFactor\App\Concerns\InteractsWithAppAuthenticationRecovery;
 use Filament\Auth\MultiFactor\App\Contracts\HasAppAuthentication;
@@ -20,11 +19,11 @@ use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
-use Laravel\Fortify\TwoFactorAuthenticatable;
 use NotificationChannels\WebPush\HasPushSubscriptions;
 use Spatie\Permission\Traits\HasRoles;
 use WireNinja\Accelerator\Contracts\AcceleratorUser;
 use WireNinja\Accelerator\Filament\AvatarProviders\DiceBearAvatarProvider;
+use WireNinja\Accelerator\Model\Concerns\LogsConfiguredActivity;
 
 /**
  * @property int $id
@@ -38,9 +37,6 @@ use WireNinja\Accelerator\Filament\AvatarProviders\DiceBearAvatarProvider;
  * @property CarbonImmutable|null $email_verified_at
  * @property string|null $password
  * @property string|null $avatar
- * @property string|null $two_factor_secret
- * @property string|null $two_factor_recovery_codes
- * @property CarbonImmutable|null $two_factor_confirmed_at
  * @property string|null $google_id
  * @property CarbonImmutable|null $suspended_at
  * @property int|null $suspended_by
@@ -49,19 +45,17 @@ use WireNinja\Accelerator\Filament\AvatarProviders\DiceBearAvatarProvider;
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
+#[Hidden(['password', 'app_authentication_secret', 'app_authentication_recovery_codes', 'remember_token'])]
 class User extends Authenticatable implements AcceleratorUser, HasAppAuthentication, HasAppAuthenticationRecovery, HasEmailAuthentication
 {
-    /** @use HasFactory<UserFactory> */
     use HasFactory;
-
     use HasPushSubscriptions;
     use HasRoles;
     use InteractsWithAppAuthentication;
     use InteractsWithAppAuthenticationRecovery;
     use InteractsWithEmailAuthentication;
+    use LogsConfiguredActivity;
     use Notifiable;
-    use TwoFactorAuthenticatable;
 
     /** @return array<string, string> */
     protected function casts(): array
@@ -70,7 +64,6 @@ class User extends Authenticatable implements AcceleratorUser, HasAppAuthenticat
             'email_verified_at' => 'immutable_datetime',
             'has_email_authentication' => 'boolean',
             'suspended_at' => 'immutable_datetime',
-            'two_factor_confirmed_at' => 'immutable_datetime',
         ];
     }
 

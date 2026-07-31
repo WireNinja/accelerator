@@ -1,4 +1,11 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+    - vendor/nesbot/carbon/extension.neon
+    - vendor/phpstan/phpstan-deprecation-rules/rules.neon
+
 parameters:
-    level: 1
+    level: 5
     paths:
         - src
+        - stubs/app/Enums/System/RoleEnum.php
+        - stubs/app/Models/User.php

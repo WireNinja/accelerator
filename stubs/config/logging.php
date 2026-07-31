@@ -2,7 +2,6 @@
 
 declare(strict_types=1);
 
-use Keepsuit\LaravelOpenTelemetry\Support\OpenTelemetryMonologHandler;
 use Monolog\Handler\NullHandler;
 use Monolog\Handler\StreamHandler;
 use Monolog\Handler\SyslogUdpHandler;
@@ -124,12 +123,6 @@ return [
         'null' => [
             'driver' => 'monolog',
             'handler' => NullHandler::class,
-        ],
-
-        'otlp' => [
-            'driver' => 'monolog',
-            'handler' => OpenTelemetryMonologHandler::class,
-            'level' => env('LOG_LEVEL', 'debug'),
         ],
 
         'emergency' => [

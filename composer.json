@@ -3,6 +3,7 @@
     "name": "wireninja/accelerator",
     "description": "A batteries-included Laravel foundation for solo developers.",
     "type": "library",
+    "license": "proprietary",
     "autoload": {
         "psr-4": {
             "WireNinja\\Accelerator\\": "src/"
@@ -19,8 +20,6 @@
         "blade-ui-kit/blade-icons": "^1.10",
         "mallardduck/blade-lucide-icons": "^1.26",
         "filament/filament": "^5.7",
-        "http-interop/http-factory-guzzle": "^1.2",
-        "jcupitt/vips": "^2.6",
         "laravel-lang/common": "^6.8",
         "laravel-notification-channels/webpush": "^11",
         "laravel/horizon": "^5.48",
@@ -30,7 +29,6 @@
         "laravel/scout": "^11.4",
         "laravel/socialite": "^5.29",
         "meilisearch/meilisearch-php": "^1.16",
-        "spatie/image": "^3.9.5",
         "spatie/laravel-activitylog": "^5.0.0",
         "spatie/laravel-backup": "^10.2",
         "spatie/laravel-pdf": "^2.4",
@@ -44,10 +42,15 @@
         "laravel-notification-channels/telegram": "^7.0",
         "laravel/prompts": "^0.3.21",
         "codewithdennis/filament-advanced-choice": "^2.1",
-        "inertiajs/inertia-laravel": "^3.1",
-        "laravel/fortify": "^1.37",
-        "laravel/wayfinder": "^0.1.20",
-        "phiki/phiki": "^2.2"
+        "codeat3/blade-simple-icons": "^8.12"
+    },
+    "require-dev": {
+        "larastan/larastan": "^3.10",
+        "orchestra/testbench": "^11.1",
+        "phpstan/phpstan-deprecation-rules": "^2.0"
+    },
+    "scripts": {
+        "phpstan": "phpstan analyse --memory-limit=2G --no-progress"
     },
     "extra": {
         "laravel": {

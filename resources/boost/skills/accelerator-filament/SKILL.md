@@ -17,7 +17,7 @@ Context output is navigation, not truth. Do not add UI code merely to satisfy a 
 
 ## Resource truth
 
-Filament's registered panel/resource is authoritative. Conventional paths are inferred; do not recreate duplicate resource enums, discovery attributes, or metadata traits.
+Filament's registered panel/resource is authoritative. Use `accelerator:make-resource` for deterministic scaffolding. Navigation groups come from app-owned `App\Enums\System\NavigationGroup`; keep each resource icon, label, policy, and panel placement in the resource itself. Do not recreate `BetterResource` or a resource registry enum.
 
 Custom Shield abilities belong in a permission-specific declaration, not navigation metadata. Super Admin bypass/access must remain valid after Shield regeneration.
 
@@ -43,6 +43,8 @@ Do not repeat package-wide configuration locally unless intentionally overriding
 
 Defaults are overrideable. A resource may use another key/sort/pagination explicitly.
 
+Use `->preload(false)` on high-cardinality relationship Selects. This is the intended local OOP override, not a reason to weaken the useful global default.
+
 ## Forms and tables
 
 - Use professional Bahasa Indonesia for user-facing copy.
@@ -54,6 +56,15 @@ Defaults are overrideable. A resource may use another key/sort/pagination explic
 - Use `Action::schema()`, current Filament namespaces, and non-deprecated APIs.
 
 For BigDecimal-cast attributes use `SeparatedNumberInput`, not `TextInput::numeric()`. Keep the package's separator convention unless the component implementation is redesigned as a whole.
+
+Use the package map primitive instead of copying a project-local field:
+
+```php
+use WireNinja\Accelerator\Filament\Forms\Components\LocationPicker;
+
+LocationPicker::make('latitude')
+    ->longitudeField('longitude');
+```
 
 ## Context and verification
 
@@ -69,4 +80,4 @@ Default context does not execute field closures or instantiate schemas with a nu
 
 ## Taste gate
 
-Do not refactor the custom sidebar, login layout, or VerticalWizard without explicit user approval. Visual cleanup is Phase 2 work and requires current-state comparison plus acceptance on real pages.
+Preserve the custom sidebar/topbar and VerticalWizard unless the owner explicitly changes product taste. Login uses Filament's native layout with the minimal Accelerator login class and OAuth render hook; do not recreate alternative login layouts.

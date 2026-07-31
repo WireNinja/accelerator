@@ -14,16 +14,6 @@ use SensitiveParameter;
 
 class Login extends BaseLogin
 {
-    public function getView(): string
-    {
-        return 'accelerator::filament.pages.auth.login';
-    }
-
-    public function getLayout(): string
-    {
-        return 'accelerator::components.filament.layout.login';
-    }
-
     /**
      * Dont remove this. This is required to make the rate limit works on the login page.
      * Why? Because we may use octane in the prod, and default rate limit key is too long for swoole table.
