@@ -5,10 +5,17 @@ namespace WireNinja\Accelerator\Providers;
 use Illuminate\Support\Facades\Gate;
 use Laravel\Horizon\Horizon;
 use Laravel\Horizon\HorizonApplicationServiceProvider;
+use Laravel\Horizon\HorizonServiceProvider as BaseHorizonServiceProvider;
 use Override;
 
 class HorizonServiceProvider extends HorizonApplicationServiceProvider
 {
+    #[Override]
+    public function register(): void
+    {
+        $this->app->register(BaseHorizonServiceProvider::class);
+    }
+
     /**
      * Bootstrap any application services.
      */
