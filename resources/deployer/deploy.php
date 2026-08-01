@@ -247,7 +247,7 @@ task('accelerator:provision', function () use ($config, $renderer): void {
     file_put_contents($temporary.'/nginx-secure.conf', $renderer->nginx(true));
     file_put_contents($temporary.'/supervisor.conf', $renderer->supervisor());
 
-    run('mkdir -p '.$config->deployRoot.'/shared/storage/logs '.$config->deployRoot.'/shared/database '.$config->deployRoot.'/shared/acme');
+    run('mkdir -p '.$config->deployRoot.'/shared/database '.$config->deployRoot.'/shared/acme');
     run('printf %s '.escapeshellarg($config->ownerToken('root')).' > '.escapeshellarg($config->deployRoot.'/.accelerator-owner'));
     upload($temporary.'/nginx.conf', '/tmp/'.$config->group.'-nginx.conf');
     upload($temporary.'/nginx-secure.conf', '/tmp/'.$config->group.'-nginx-secure.conf');
