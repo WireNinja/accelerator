@@ -12,7 +12,7 @@ final readonly class Preflight
     /** @var array<string, string> */
     private const PRISTINE_HASHES = [
         'app/Models/User.php' => '1dca1344e88308fe405ae050f02bd65081a649de65ec86f2ee2beabbb4706afa',
-        'bootstrap/app.php' => '75b4b9ffab2f26cc796548020402d0c217930f4494fcb8c870b8a1aa0070ff6',
+        'bootstrap/app.php' => '75b4b9ffab2f26cc796548020402d0c217930f4494fcb8c8700b8a1aa0070ff6',
         'bootstrap/providers.php' => 'f720e185207a343d4c19fc99dbb317a4187efbcd7d38a303a695bbdd77ffb943',
         'config/app.php' => '78dcd36b226fd7b24057cb95f567cb6e96561c2406653892d8aef6dcea8461e4',
         'config/auth.php' => 'c7e204e9785c9f596d66fb884b493f658f2327f157646bdb4088efd6b3a7773f',
@@ -87,8 +87,9 @@ final readonly class Preflight
 
             $currentHash = hash_file('sha256', $target);
             $targetHash = hash('sha256', $this->scaffolder->render($sourceContents));
+            $pristineHash = self::PRISTINE_HASHES[$relativePath] ?? self::PRISTINE_MIGRATIONS[$relativePath] ?? null;
 
-            if ($currentHash !== $targetHash && $currentHash !== (self::PRISTINE_HASHES[$relativePath] ?? null)) {
+            if ($currentHash !== $targetHash && $currentHash !== $pristineHash) {
                 throw new RuntimeException("Fresh-only installer refused modified file: {$relativePath}");
             }
         }

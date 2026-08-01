@@ -69,6 +69,10 @@ final class MakeResourceCommand extends Command
             $shield = $this->runArtisan(['shield:safe-regenerate', '--panel='.$panel, '--json', '--compact']);
             $verify = $this->runArtisan(['accelerator:verify-resource', $name, '--compact']);
             $status = $shield->isSuccessful() && $verify->isSuccessful() ? 'PASS' : 'FAIL';
+            $errors = array_values(array_filter([
+                $this->processFailure('Shield regeneration', $shield),
+                $this->processFailure('Resource verification', $verify),
+            ]));
 
             return $this->emit([
                 'status' => $status,
@@ -76,6 +80,7 @@ final class MakeResourceCommand extends Command
                 'path' => Str::after($resourcePath, base_path().DIRECTORY_SEPARATOR),
                 'shield_exit_code' => $shield->getExitCode(),
                 'verification' => json_decode(trim($verify->getOutput()), true),
+                'errors' => $errors,
             ], $status === 'PASS' ? self::SUCCESS : self::FAILURE);
         } catch (Throwable $throwable) {
             return $this->emit([
@@ -121,7 +126,7 @@ final class MakeResourceCommand extends Command
     {
         $panelDirectory = $panel === 'admin' ? '' : Str::studly($panel).DIRECTORY_SEPARATOR;
         $root = app_path('Filament'.DIRECTORY_SEPARATOR.$panelDirectory.'Resources');
-        $expected = Str::pluralStudly($name).'Resource.php';
+        $expected = $name.'Resource.php';
         $matches = array_values(array_filter(
             $files->allFiles($root),
             static fn (SplFileInfo $file): bool => $file->getFilename() === $expected,
@@ -141,27 +146,49 @@ final class MakeResourceCommand extends Command
         }
 
         $contents = $files->get($path);
-        $properties = [];
+        $metadata = [];
 
         if ($icon !== null) {
-            $properties[] = "    protected static string|\\BackedEnum|null \$navigationIcon = '{$icon}';";
+            $metadata['navigationIcon'] = "    #[\\Override]\n    protected static string|BackedEnum|null \$navigationIcon = '{$icon}';";
         }
 
         if ($label !== null) {
-            $properties[] = "    protected static ?string \$modelLabel = '".addslashes($label)."';";
+            $metadata['modelLabel'] = "    #[\\Override]\n    protected static ?string \$modelLabel = '".addslashes($label)."';";
         }
 
         if ($group !== null) {
-            $properties[] = sprintf(
-                '    protected static string|\\UnitEnum|null $navigationGroup = \\%s::%s;',
+            $metadata['navigationGroup'] = sprintf(
+                "    #[\\Override]\n    protected static string|\\UnitEnum|null \$navigationGroup = \\%s::%s;",
                 $group::class,
                 $group->name,
             );
         }
 
+        $missing = [];
+
+        foreach ($metadata as $property => $declaration) {
+            $pattern = '/(?:^[ \t]*#\[(?:\\\\)?Override\][ \t]*\R)?^[ \t]*protected static [^\n;]*\$'.preg_quote($property, '/').'\s*=\s*[^;]+;\R?/m';
+
+            if (preg_match($pattern, $contents) === 1) {
+                $contents = (string) preg_replace($pattern, $declaration."\n", $contents, 1);
+            } else {
+                $missing[] = $declaration;
+            }
+        }
+
+        if ($icon !== null && ! str_contains($contents, 'Heroicon::')) {
+            $contents = (string) preg_replace('/^use Filament\\\\Support\\\\Icons\\\\Heroicon;\R/m', '', $contents);
+        }
+
+        if ($missing === []) {
+            $files->put($path, $contents);
+
+            return;
+        }
+
         $updated = preg_replace(
             '/(class\s+\w+Resource\s+extends\s+Resource\s*\{)/',
-            "$1\n".implode("\n\n", $properties),
+            "$1\n".implode("\n\n", $missing)."\n",
             $contents,
             1,
             $count,
@@ -182,6 +209,17 @@ final class MakeResourceCommand extends Command
         $process->run();
 
         return $process;
+    }
+
+    private function processFailure(string $operation, Process $process): ?string
+    {
+        if ($process->isSuccessful()) {
+            return null;
+        }
+
+        $output = trim($process->getErrorOutput()."\n".$process->getOutput());
+
+        return $operation.' failed: '.Str::limit($output, 2000);
     }
 
     /** @param array<string, mixed> $payload */
