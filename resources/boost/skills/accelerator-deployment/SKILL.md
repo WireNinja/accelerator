@@ -23,6 +23,8 @@ Staging and production use separate `{project}_{stage}` Supervisor groups and se
 
 Stable root is `/var/www/{domain}`. Deployer owns lock, releases, shared dirs/files, vendors, writable paths, symlink switching, cleanup, and rollback. Accelerator owns env upload, frozen pnpm/npm build, pre-migration DB backup, Laravel ordering, Nginx/Supervisor rendering, service restart, and HTTPS health. A post-switch health failure may restore only the previous code symlink; it must report that database recovery remains manual.
 
+Runtime/deploy writable paths use inherited ACLs. A release is rollback-eligible only after its services pass the retried HTTPS health check; never target an unfinished, failed, or unmarked release.
+
 Certbot manages certificate material through Accelerator's ACME webroot and must not rewrite Nginx. Accelerator renders and owns the complete HTTP/HTTPS virtual host.
 
 Deployment clones the root repository and initializes only `packages/accelerator` before Composer. Never replace that scoped command with recursive or all-submodule initialization: unrelated gitlinks are outside Accelerator deployment scope.
