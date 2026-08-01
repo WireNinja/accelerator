@@ -70,11 +70,11 @@ task('accelerator:backup', function (): void {
 
 task('accelerator:services', function () use ($config): void {
     if ($config->hasSupervisorPrograms()) {
-        run('sudo -n supervisorctl restart '.$config->group.':*');
+        run('command sudo -n supervisorctl restart '.$config->group.':*');
     }
 
     if ($config->httpRuntime === 'fpm') {
-        run('sudo -n systemctl reload '.$config->fpmService);
+        run('command sudo -n systemctl reload '.$config->fpmService);
     }
 });
 
@@ -124,12 +124,12 @@ task('accelerator:preflight', function () use ($config, $nodeEnvironment): void 
         }
     }
 
-    if (trim(run('sudo -n true >/dev/null 2>&1 && echo yes || echo no')) !== 'yes') {
+    if (trim(run('command sudo -n true >/dev/null 2>&1 && echo yes || echo no')) !== 'yes') {
         throw new RuntimeException("Deployment preflight failed: passwordless sudo is unavailable on [{$config->sshHost}].");
     }
 
     foreach ($requiredSudoCommands as $command) {
-        $available = trim(run('sudo -n sh -c '.escapeshellarg('command -v '.escapeshellarg($command).' >/dev/null 2>&1').' && echo yes || echo no'));
+        $available = trim(run('command sudo -n sh -c '.escapeshellarg('command -v '.escapeshellarg($command).' >/dev/null 2>&1').' && echo yes || echo no'));
 
         if ($available !== 'yes') {
             throw new RuntimeException("Deployment preflight failed: required sudo command [{$command}] is unavailable on [{$config->sshHost}].");
@@ -160,7 +160,7 @@ task('accelerator:preflight', function () use ($config, $nodeEnvironment): void 
 
     $domainPattern = 'server_name[[:space:]]+'.preg_quote($config->domain, '/').'([[:space:];]|$)';
     $nginxMatches = trim(run(
-        'sudo -n grep -RslE '.escapeshellarg($domainPattern).' /etc/nginx/sites-enabled /etc/nginx/conf.d 2>/dev/null || true',
+        'command sudo -n grep -RslE '.escapeshellarg($domainPattern).' /etc/nginx/sites-enabled /etc/nginx/conf.d 2>/dev/null || true',
     ));
 
     foreach (preg_split('/\R/', $nginxMatches) ?: [] as $match) {
@@ -190,7 +190,7 @@ task('accelerator:preflight', function () use ($config, $nodeEnvironment): void 
 
         $groupPattern = '^\\[(group:'.preg_quote($config->group, '/').'|program:'.preg_quote($config->group, '/').'_).*\\]';
         $supervisorMatches = trim(run(
-            'sudo -n grep -RslE '.escapeshellarg($groupPattern).' /etc/supervisor/conf.d 2>/dev/null || true',
+            'command sudo -n grep -RslE '.escapeshellarg($groupPattern).' /etc/supervisor/conf.d 2>/dev/null || true',
         ));
 
         foreach (preg_split('/\R/', $supervisorMatches) ?: [] as $match) {
@@ -204,7 +204,7 @@ task('accelerator:preflight', function () use ($config, $nodeEnvironment): void 
 
     foreach ($config->listeningServices() as $service => $port) {
         $occupied = trim(run(
-            'sudo -n ss -H -ltn '.escapeshellarg("sport = :{$port}").' 2>/dev/null | grep -q . && echo yes || echo no',
+            'command sudo -n ss -H -ltn '.escapeshellarg("sport = :{$port}").' 2>/dev/null | grep -q . && echo yes || echo no',
         )) === 'yes';
 
         if (! $occupied) {
@@ -214,7 +214,7 @@ task('accelerator:preflight', function () use ($config, $nodeEnvironment): void 
         }
 
         $program = $config->group.'_'.$service;
-        $status = trim(run('sudo -n supervisorctl status '.escapeshellarg($program).' 2>/dev/null || true'));
+        $status = trim(run('command sudo -n supervisorctl status '.escapeshellarg($program).' 2>/dev/null || true'));
 
         if ($supervisorOwner !== 'owned' || ! str_contains($status, 'RUNNING')) {
             throw new RuntimeException("Deployment preflight failed: {$service} port [{$port}] is already in use by a process not owned by Supervisor program [{$program}].");
@@ -237,22 +237,26 @@ task('accelerator:provision', function () use ($config, $renderer): void {
     $temporary = sys_get_temp_dir().'/accelerator-deploy-'.bin2hex(random_bytes(8));
     mkdir($temporary, 0700, true);
     file_put_contents($temporary.'/nginx.conf', $renderer->nginx(false));
+    file_put_contents($temporary.'/nginx-secure.conf', $renderer->nginx(true));
     file_put_contents($temporary.'/supervisor.conf', $renderer->supervisor());
 
     run('mkdir -p '.$config->deployRoot.'/shared/storage/logs '.$config->deployRoot.'/shared/database '.$config->deployRoot.'/shared/acme');
     run('printf %s '.escapeshellarg($config->ownerToken('root')).' > '.escapeshellarg($config->deployRoot.'/.accelerator-owner'));
     upload($temporary.'/nginx.conf', '/tmp/'.$config->group.'-nginx.conf');
-    run('sudo -n install -m 0644 /tmp/'.$config->group.'-nginx.conf /etc/nginx/sites-available/'.$config->domain);
-    run('sudo -n ln -sfn /etc/nginx/sites-available/'.$config->domain.' /etc/nginx/sites-enabled/'.$config->domain);
+    upload($temporary.'/nginx-secure.conf', '/tmp/'.$config->group.'-nginx-secure.conf');
+    run('command sudo -n install -m 0644 /tmp/'.$config->group.'-nginx.conf /etc/nginx/sites-available/'.$config->domain);
+    run('command sudo -n ln -sfn /etc/nginx/sites-available/'.$config->domain.' /etc/nginx/sites-enabled/'.$config->domain);
 
     if ($config->hasSupervisorPrograms()) {
         upload($temporary.'/supervisor.conf', '/tmp/'.$config->group.'-supervisor.conf');
-        run('sudo -n install -m 0644 /tmp/'.$config->group.'-supervisor.conf /etc/supervisor/conf.d/'.$config->group.'.conf');
-        run('sudo -n supervisorctl reread && sudo -n supervisorctl update');
+        run('command sudo -n install -m 0644 /tmp/'.$config->group.'-supervisor.conf /etc/supervisor/conf.d/'.$config->group.'.conf');
+        run('command sudo -n supervisorctl reread && command sudo -n supervisorctl update');
     }
 
-    run('sudo -n nginx -t && sudo -n systemctl reload nginx');
-    run('sudo -n certbot --nginx --non-interactive --agree-tos --redirect --email '.$config->sslEmail.' -d '.$config->domain);
+    run('command sudo -n nginx -t && command sudo -n systemctl reload nginx');
+    run('command sudo -n certbot certonly --webroot --webroot-path='.escapeshellarg($config->sharedPath().'/acme').' --non-interactive --agree-tos --keep-until-expiring --email '.escapeshellarg($config->sslEmail).' -d '.escapeshellarg($config->domain));
+    run('command sudo -n install -m 0644 /tmp/'.$config->group.'-nginx-secure.conf /etc/nginx/sites-available/'.$config->domain);
+    run('command sudo -n nginx -t && command sudo -n systemctl reload nginx');
 });
 
 task('accelerator:status', function () use ($config): void {
@@ -277,8 +281,8 @@ task('accelerator:relocate', function () use ($config): void {
     invoke('deploy:lock');
 
     try {
-        run('sudo -n mkdir -p '.$config->deployRoot);
-        run('sudo -n rsync -a --numeric-ids '.escapeshellarg(rtrim($oldRoot, '/').'/').' '.escapeshellarg($config->deployRoot.'/'));
+        run('command sudo -n mkdir -p '.$config->deployRoot);
+        run('command sudo -n rsync -a --numeric-ids '.escapeshellarg(rtrim($oldRoot, '/').'/').' '.escapeshellarg($config->deployRoot.'/'));
         invoke('accelerator:provision');
         invoke('accelerator:services');
         invoke('accelerator:health');

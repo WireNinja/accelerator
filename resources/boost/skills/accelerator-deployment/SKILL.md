@@ -23,6 +23,8 @@ Staging and production use separate `{project}_{stage}` Supervisor groups and se
 
 Stable root is `/var/www/{domain}`. Deployer owns lock, releases, shared dirs/files, vendors, writable paths, symlink switching, cleanup, and rollback. Accelerator owns env upload, frozen pnpm/npm build, pre-migration DB backup, Laravel ordering, Nginx/Supervisor rendering, service restart, and HTTPS health. A post-switch health failure may restore only the previous code symlink; it must report that database recovery remains manual.
 
+Certbot manages certificate material through Accelerator's ACME webroot and must not rewrite Nginx. Accelerator renders and owns the complete HTTP/HTTPS virtual host.
+
 Deployment clones the root repository and initializes only `packages/accelerator` before Composer. Never replace that scoped command with recursive or all-submodule initialization: unrelated gitlinks are outside Accelerator deployment scope.
 
 Never run Composer update remotely, print env contents, touch unrelated projects, auto-rollback migrations, or delete the old root during relocation. Relocation locks the project, copies into the new stable root, reprovisions Nginx/SSL/services, health-checks, and deliberately preserves the old root. Horizon and a plain queue worker are mutually exclusive. A code rollback changes the symlink and services only; database recovery is manual.

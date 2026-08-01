@@ -90,6 +90,8 @@ php artisan accelerator:deploy:relocate --stage=production --old-root=/var/www/o
 
 Configuration never SSHes. Changing a domain recalculates `/var/www/{domain}` and reports the exact relocation command; it never moves remote files implicitly. Remote mutators confirm stage, domain, root, and host; non-interactive mutation requires explicit force. Deployment uses committed Composer/pnpm/npm locks, installs rather than updates dependencies, backs up the database before migrations, switches releases atomically, restarts only configured services, and never auto-rolls back database migrations. A failed post-switch health check may restore the previous code symlink, but database review remains manual.
 
+Certbot obtains or reuses certificate material through the dedicated ACME webroot; it does not rewrite the Nginx virtual host. Accelerator remains the single owner and renderer of both HTTP and HTTPS configuration.
+
 The deploy recipe clones the application repository and initializes only the tracked `packages/accelerator` submodule before Composer runs. It intentionally does not recurse through unrelated submodules, so a broken or optional gitlink elsewhere cannot widen deployment scope.
 
 `deploy:init` and ordinary deploy run a read-only ownership/collision preflight before mutation. It rejects unmanaged roots, duplicate Nginx domains, duplicate Supervisor groups/programs, and occupied Octane/Reverb/Nightwatch ports. Accelerator-written roots and service files carry project/stage ownership markers, so `--force` never means “take over another project”. Dual staging/production topology uses distinct `{project}_{stage}` Supervisor groups and distinct listener ports on the same SSH host.
