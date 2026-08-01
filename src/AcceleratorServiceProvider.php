@@ -10,6 +10,7 @@ use WireNinja\Accelerator\Providers\HorizonServiceProvider;
 use WireNinja\Accelerator\Providers\OAuthServiceProvider;
 use WireNinja\Accelerator\Providers\PanelServiceProvider;
 use WireNinja\Accelerator\Providers\PwaServiceProvider;
+use WireNinja\Accelerator\Support\Filament\ShieldPermissions;
 
 class AcceleratorServiceProvider extends ServiceProvider
 {
@@ -26,6 +27,7 @@ class AcceleratorServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->mergeConfigFrom(__DIR__.'/../config/accelerator.php', 'accelerator');
+        $this->configureUnpublishedShieldDefaults();
 
         $this->app->register(CoreServiceProvider::class);
         $this->app->register(FilamentServiceProvider::class);
@@ -38,5 +40,24 @@ class AcceleratorServiceProvider extends ServiceProvider
 
             $this->app->register($provider);
         }
+    }
+
+    private function configureUnpublishedShieldDefaults(): void
+    {
+        if (is_file(config_path('filament-shield.php'))) {
+            return;
+        }
+
+        config()->set([
+            'filament-shield.super_admin.define_via_gate' => true,
+            'filament-shield.policies.merge' => true,
+            'filament-shield.policies.methods' => ['viewAny', 'view', 'create', 'update', 'delete', 'deleteAny'],
+            'filament-shield.policies.single_parameter_methods' => ['viewAny', 'create', 'deleteAny'],
+            'filament-shield.localization.enabled' => true,
+            'filament-shield.resources.manage' => ShieldPermissions::builtIn(),
+            'filament-shield.discovery.discover_all_resources' => true,
+            'filament-shield.discovery.discover_all_widgets' => true,
+            'filament-shield.discovery.discover_all_pages' => true,
+        ]);
     }
 }

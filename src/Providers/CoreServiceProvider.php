@@ -21,6 +21,7 @@ use SessionHandlerInterface;
 use WireNinja\Accelerator\Console\Agent\DoctorCommand;
 use WireNinja\Accelerator\Console\ConfigureCommand;
 use WireNinja\Accelerator\Console\ContextCommand;
+use WireNinja\Accelerator\Console\DependenciesCommand;
 use WireNinja\Accelerator\Console\Deployment\DeployCommand;
 use WireNinja\Accelerator\Console\Deployment\DeployInitCommand;
 use WireNinja\Accelerator\Console\Deployment\DeployRelocateCommand;
@@ -28,6 +29,7 @@ use WireNinja\Accelerator\Console\Deployment\DeployRollbackCommand;
 use WireNinja\Accelerator\Console\Deployment\DeployStatusCommand;
 use WireNinja\Accelerator\Console\Deployment\DeployUnlockCommand;
 use WireNinja\Accelerator\Console\EnvCommand;
+use WireNinja\Accelerator\Console\FeatureListCommand;
 use WireNinja\Accelerator\Console\InstallCommand;
 use WireNinja\Accelerator\Console\ProvisionAdminCommand;
 use WireNinja\Accelerator\Console\Vps\BackupStatusCommand;
@@ -54,7 +56,6 @@ final class CoreServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
-        $this->loadMigrationsFrom(__DIR__.'/../../database/migrations');
         $this->loadViewsFrom(__DIR__.'/../../resources/views', 'accelerator');
 
         $this->configureTrustedProxy();
@@ -73,6 +74,7 @@ final class CoreServiceProvider extends ServiceProvider
             DoctorCommand::class,
             ConfigureCommand::class,
             ContextCommand::class,
+            DependenciesCommand::class,
             DeployCommand::class,
             DeployInitCommand::class,
             DeployRelocateCommand::class,
@@ -80,6 +82,7 @@ final class CoreServiceProvider extends ServiceProvider
             DeployStatusCommand::class,
             DeployUnlockCommand::class,
             EnvCommand::class,
+            FeatureListCommand::class,
             InstallCommand::class,
             ProvisionAdminCommand::class,
             BackupStatusCommand::class,

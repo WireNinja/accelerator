@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace WireNinja\Accelerator\Console;
 
 use Illuminate\Console\Command;
+use JsonException;
 use Throwable;
 use WireNinja\Accelerator\Installer\Installer;
 use WireNinja\Accelerator\Installer\Onboarding;
@@ -41,7 +42,8 @@ final class InstallCommand extends Command
         {--deploy-root=}
         {--staging-domain=}
         {--staging-deploy-root=}
-        {--http-runtime=octane}';
+        {--http-runtime=octane}
+        {--json : Emit one stable JSON result and suppress progress output}';
 
     protected $description = 'Install Accelerator into a pristine Laravel application';
 
@@ -50,13 +52,17 @@ final class InstallCommand extends Command
         $projectRoot = base_path();
 
         if ($this->alreadyInstalled($projectRoot)) {
-            $this->components->info('Accelerator is already installed. Nothing changed.');
+            if ($this->option('json')) {
+                $this->writeJson('already_installed', false);
+            } else {
+                $this->components->info('Accelerator is already installed. Nothing changed.');
+            }
 
             return self::SUCCESS;
         }
 
         try {
-            $processRunner = new ProcessRunner;
+            $processRunner = new ProcessRunner(quiet: (bool) $this->option('json'));
             $plan = (new Onboarding($projectRoot, $processRunner))->plan($this->installerArguments());
 
             (new Installer(
@@ -64,10 +70,26 @@ final class InstallCommand extends Command
                 packageRoot: dirname(__DIR__, 2),
                 plan: $plan,
                 processRunner: $processRunner,
+                quiet: (bool) $this->option('json'),
             ))->run();
+
+            if ($this->option('json')) {
+                $this->writeJson('installed', true, [
+                    'app_name' => $plan->appName,
+                    'app_url' => $plan->appUrl,
+                    'package_manager' => $plan->packageManager,
+                    'database' => $plan->database,
+                    'features' => $plan->features,
+                    'deployment_configured' => $plan->deploy,
+                ]);
+            }
         } catch (Throwable $exception) {
-            $this->components->error($exception->getMessage());
-            $this->components->warn('Fix the reported cause, then run the same command again to resume.');
+            if ($this->option('json')) {
+                $this->writeJson('error', false, error: $exception->getMessage());
+            } else {
+                $this->components->error($exception->getMessage());
+                $this->components->warn('Fix the reported cause, then run the same command again to resume.');
+            }
 
             return self::FAILURE;
         }
@@ -80,7 +102,7 @@ final class InstallCommand extends Command
      */
     private function installerArguments(): array
     {
-        $arguments = $this->input->isInteractive() ? [] : ['--no-interaction'];
+        $arguments = $this->input->isInteractive() && ! $this->option('json') ? [] : ['--no-interaction'];
 
         foreach (self::INSTALLER_OPTIONS as $name) {
             $value = $this->option($name);
@@ -107,5 +129,24 @@ final class InstallCommand extends Command
         $environment = @file_get_contents($projectRoot.'/.env');
 
         return is_string($environment) && str_contains($environment, 'ACCELERATOR_UPLOAD_MAX_MB=');
+    }
+
+    /** @param array<string, mixed>|null $receipt @throws JsonException */
+    private function writeJson(string $status, bool $changed, ?array $receipt = null, ?string $error = null): void
+    {
+        $this->output->writeln(json_encode([
+            'schema' => 1,
+            'ok' => $error === null,
+            'command' => 'accelerator:install',
+            'phase' => $error === null ? 'complete' : 'failed',
+            'status' => $status,
+            'changed' => $changed,
+            'warnings' => [],
+            'errors' => $error === null ? [] : [$error],
+            'receipt' => $receipt,
+            'next_commands' => $error === null
+                ? ['php artisan accelerator:doctor --json --compact']
+                : ['Fix the error and rerun the same command to resume.'],
+        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
     }
 }

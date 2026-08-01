@@ -1,10 +1,5 @@
 <?php
 
-use App\Enums\System\LauncherEnum;
-use App\Enums\System\NavigationGroup;
-use App\Enums\System\PanelEnum;
-use App\Enums\System\RoleEnum;
-
 return [
     'features' => [
         'oauth' => env('ACCELERATOR_FEATURE_OAUTH', false),
@@ -21,10 +16,10 @@ return [
     ],
 
     'enums' => [
-        'role' => RoleEnum::class,
-        'panel' => PanelEnum::class,
-        'launcher' => enum_exists(LauncherEnum::class) ? LauncherEnum::class : null,
-        'navigation_group' => enum_exists(NavigationGroup::class) ? NavigationGroup::class : null,
+        'role' => 'App\\Enums\\System\\RoleEnum',
+        'panel' => 'App\\Enums\\System\\PanelEnum',
+        'launcher' => 'App\\Enums\\System\\LauncherEnum',
+        'navigation_group' => 'App\\Enums\\System\\NavigationGroup',
     ],
 
     'horizon' => [
@@ -44,6 +39,16 @@ return [
 
     'uploads' => [
         'max_megabytes' => env('ACCELERATOR_UPLOAD_MAX_MB', 100),
+    ],
+
+    'audit' => [
+        'default_except' => [
+            'password',
+            'remember_token',
+            'app_authentication_secret',
+            'app_authentication_recovery_codes',
+        ],
+        'models' => [],
     ],
 
     'ui' => [

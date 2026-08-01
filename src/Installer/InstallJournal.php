@@ -16,6 +16,9 @@ final class InstallJournal
 
     private bool $finished = false;
 
+    /** @var array<string, list<string>> */
+    private array $publishes = [];
+
     private readonly string $path;
 
     /**
@@ -63,6 +66,16 @@ final class InstallJournal
         $this->persist();
     }
 
+    /** @param list<string> $files */
+    public function recordPublish(string $command, array $files): void
+    {
+        if ($files !== [] || ! array_key_exists($command, $this->publishes)) {
+            $this->publishes[$command] = $files;
+        }
+
+        $this->persist();
+    }
+
     /**
      * @throws JsonException
      */
@@ -84,6 +97,13 @@ final class InstallJournal
             ? array_values(array_filter($steps, is_string(...)))
             : [];
         $this->finished = ($state['finished'] ?? false) === true;
+        $publishes = $state['publishes'] ?? [];
+        $this->publishes = is_array($publishes)
+            ? array_map(
+                static fn (mixed $files): array => is_array($files) ? array_values(array_filter($files, is_string(...))) : [],
+                $publishes,
+            )
+            : [];
     }
 
     /**
@@ -109,6 +129,7 @@ final class InstallJournal
                 'deployment_configured' => $this->plan->deploy,
             ] : null,
             'completed_steps' => $this->completedSteps,
+            'publishes' => $this->publishes,
             'finished' => $this->finished,
         ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR).PHP_EOL;
 

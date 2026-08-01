@@ -12,11 +12,11 @@ composer require wireninja/accelerator:^2.0@dev -W --no-interaction
 php artisan accelerator:install
 ```
 
-Inspect `php artisan accelerator:install --help` for non-interactive options. Default to pnpm 11+; use npm 12+ only when requested. The installer rejects older package-manager versions because they cannot enforce the committed policy. Never install a Laravel starter kit first.
+Inspect `php artisan accelerator:install --help` for non-interactive options. Non-interactive runs require `--admin-password` or `ACCELERATOR_ADMIN_PASSWORD`; never print it. Use `--json` for one stable result. Default to pnpm 11+; use npm 12+ only when requested. The installer rejects older package-manager versions because they cannot enforce the committed policy. Never install a Laravel starter kit first.
 
-The installer owns only a verified pristine skeleton. It preserves root `/`, installs Filament/System/RBAC/auth as core, configures selected OAuth/PWA/Telegram/Horizon/Reverb/Scout/Nightwatch integrations, runs `migrate:fresh --seed`, provisions Super Admin, generates Shield permissions, builds frontend assets, installs Boost resources, and runs non-test quality checks.
+The installer owns only a verified pristine skeleton. It preserves root `/`, installs Filament/System/RBAC/auth as core, configures selected OAuth/PWA/Telegram/Horizon/Reverb/Scout/Nightwatch integrations, publishes native vendor migrations by exact command/tag, copies only Accelerator-owned user/settings migrations, runs `migrate:fresh --seed`, provisions Super Admin, generates Shield permissions, builds frontend assets, installs Boost resources, and runs non-test quality checks. Vendor config is not copied wholesale.
 
-Supply-chain policy is mandatory: one lockfile, seven-day minimum release age, no exotic transitive sources, no trust downgrade except reviewed exact-version exceptions, and explicit build-script allowlisting. Security-only exceptions currently force patched `concurrently`, `sharp`, and `filelist`; do not broaden them or disable the age window globally.
+Supply-chain policy is mandatory: one lockfile, seven-day minimum release age, no exotic transitive sources, no trust downgrade except reviewed exact-version exceptions, and explicit build-script allowlisting. Security-only exceptions currently force patched `concurrently`, `sharp`, and `filelist`; do not broaden them or disable the age window globally. An emergency age bypass must name one reviewed package/version and be removed after the window.
 
 Files: `.env` local runtime, committed `.accelerator/deploy.json` non-secret topology, ignored stage envs, and ignored install receipt. Never treat the receipt as config.
 

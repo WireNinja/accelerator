@@ -4,20 +4,23 @@ declare(strict_types=1);
 
 namespace WireNinja\Accelerator\Console\Agent;
 
+use Composer\InstalledVersions;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Schema;
+use InvalidArgumentException;
 use JsonException;
 use Symfony\Component\Process\ExecutableFinder;
 use Symfony\Component\Process\Process;
 use Throwable;
 use WireNinja\Accelerator\AcceleratorServiceProvider;
 use WireNinja\Accelerator\Contracts\AcceleratorUser;
+use WireNinja\Accelerator\Deployment\DeploymentConfig;
 
-#[Signature('accelerator:doctor {--json : Output as JSON} {--compact : Compact JSON output}')]
+#[Signature('accelerator:doctor {--json : Output as JSON} {--compact : Compact JSON output} {--section= : runtime, database, frontend, deployment, or security}')]
 #[Description('Verify the Accelerator installation contract and report actionable failures')]
 final class DoctorCommand extends Command
 {
@@ -29,12 +32,17 @@ final class DoctorCommand extends Command
     /** @throws JsonException */
     public function handle(): int
     {
-        $this->inspectRuntime();
-        $this->inspectRecipe();
-        $this->inspectFrontend();
-        $this->inspectConfiguration();
-        $this->inspectDatabase();
-        $this->inspectHost();
+        $section = $this->option('section');
+
+        if (! is_string($section) || $section === '') {
+            foreach (['runtime', 'database', 'frontend', 'deployment', 'security'] as $selected) {
+                $this->inspectSection($selected);
+            }
+        } elseif (in_array($section, ['runtime', 'database', 'frontend', 'deployment', 'security'], true)) {
+            $this->inspectSection($section);
+        } else {
+            $this->record('Runtime', 'Section', $section, 'error', 'Section must be runtime, database, frontend, deployment, or security.');
+        }
 
         $errors = $this->messagesFor('error');
         $warnings = $this->messagesFor('warning');
@@ -74,6 +82,17 @@ final class DoctorCommand extends Command
     {
         $this->assert('Runtime', 'PHP', PHP_VERSION, version_compare(PHP_VERSION, '8.5.0', '>='), 'PHP 8.5 or newer is required.');
         $this->assert('Runtime', 'Laravel', Application::VERSION, str_starts_with(Application::VERSION, '13.'), 'Laravel 13 is required.');
+        $packageVersion = InstalledVersions::getPrettyVersion('wireninja/accelerator') ?? 'source checkout';
+        $this->assert('Runtime', 'Accelerator', $packageVersion, true, 'Accelerator is not installed.');
+
+        foreach (['ctype', 'curl', 'dom', 'fileinfo', 'filter', 'mbstring', 'openssl', 'pdo', 'tokenizer', 'xml'] as $extension) {
+            $this->assert('Runtime', "ext-{$extension}", extension_loaded($extension) ? 'loaded' : 'missing', extension_loaded($extension), "PHP extension {$extension} is required.");
+        }
+
+        $opcache = extension_loaded('Zend OPcache');
+        $this->assert('Runtime', 'OPcache', $opcache ? ((bool) ini_get('opcache.enable') ? 'enabled' : 'disabled') : 'unavailable', $opcache, 'OPcache should be installed on production hosts.', 'warning');
+        $octane = (string) config('octane.server', 'swoole');
+        $this->assert('Runtime', 'Octane driver', $octane, in_array($octane, ['swoole', 'frankenphp', 'roadrunner'], true), 'Octane driver must be swoole, frankenphp, or roadrunner.', 'warning');
         $this->assert(
             'Runtime',
             'Package discovery',
@@ -207,8 +226,72 @@ final class DoctorCommand extends Command
 
         foreach (['composer', $manager, 'git'] as $executable) {
             $path = $finder->find($executable);
-            $this->assert('Host', $executable, $path ?? 'not found', $path !== null, "{$executable} is not available on PATH.", 'warning');
+            $this->assert('Host', $executable, $path === null ? 'not found' : 'available', $path !== null, "{$executable} is not available on PATH.", 'warning');
         }
+
+        foreach (['storage', 'bootstrap/cache'] as $directory) {
+            $this->assert('Host', "Writable {$directory}", is_writable(base_path($directory)) ? 'writable' : 'not writable', is_writable(base_path($directory)), "{$directory} must be writable.");
+        }
+    }
+
+    private function inspectDeployment(): void
+    {
+        if (is_file(base_path('.accelerator/deploy.env'))) {
+            $this->record('Deployment', 'Legacy topology', 'deploy.env', 'error', 'Migrate .accelerator/deploy.env to .accelerator/deploy.json before deployment.');
+
+            return;
+        }
+
+        if (! is_file(base_path('.accelerator/deploy.json'))) {
+            $this->record('Deployment', 'Topology', 'not configured', 'warning', 'Deployment is optional. Configure it with php artisan accelerator:configure deployment.');
+
+            return;
+        }
+
+        try {
+            $config = DeploymentConfig::load(base_path());
+            $stageEnvironment = ".accelerator/environments/{$config->stage}.env";
+            $this->assert('Deployment', 'Topology', "{$config->stage}: {$config->domain}", true, 'Deployment topology is invalid.');
+            $this->assert('Deployment', 'Stable root', $config->deployRoot, $config->deployRoot === "/var/www/{$config->domain}", 'Deployment root must match the domain.');
+            $this->assert('Deployment', 'Stage environment', $stageEnvironment, is_file(base_path($stageEnvironment)), "Missing {$stageEnvironment}.");
+            $this->assert('Deployment', 'Queue topology', $config->horizonEnabled ? 'horizon' : 'queue-worker', $config->horizonEnabled xor $config->queueWorkerEnabled, 'Exactly one queue worker topology must be enabled.');
+        } catch (Throwable $exception) {
+            $this->record('Deployment', 'Topology', 'invalid', 'error', $this->redact($exception->getMessage()));
+        }
+    }
+
+    private function inspectSecurity(): void
+    {
+        $productionDebug = app()->isProduction() && (bool) config('app.debug');
+        $this->assert('Security', 'Production debug', $productionDebug ? 'enabled' : 'disabled', ! $productionDebug, 'APP_DEBUG must be false in production.');
+        $this->assert('Security', 'Application key', filled(config('app.key')) ? 'set' : 'empty', filled(config('app.key')), 'APP_KEY is empty.');
+
+        foreach (glob(base_path('.accelerator/environments/*.env')) ?: [] as $file) {
+            $permissions = fileperms($file);
+            $mode = is_int($permissions) ? $permissions & 0777 : 0;
+            $relative = ltrim(str_replace(base_path(), '', $file), '/');
+            $this->assert('Security', $relative, decoct($mode), $mode !== 0 && ($mode & 0077) === 0, "{$relative} must not be readable by group or others.");
+        }
+    }
+
+    private function inspectSection(string $section): void
+    {
+        match ($section) {
+            'runtime' => $this->inspectRuntimeSection(),
+            'database' => $this->inspectDatabase(),
+            'frontend' => $this->inspectFrontend(),
+            'deployment' => $this->inspectDeployment(),
+            'security' => $this->inspectSecurity(),
+            default => throw new InvalidArgumentException("Unknown doctor section: {$section}"),
+        };
+    }
+
+    private function inspectRuntimeSection(): void
+    {
+        $this->inspectRuntime();
+        $this->inspectRecipe();
+        $this->inspectConfiguration();
+        $this->inspectHost();
     }
 
     /** @param 'warning'|'error' $failureStatus */
@@ -220,6 +303,8 @@ final class DoctorCommand extends Command
     /** @param 'ok'|'warning'|'error' $status */
     private function record(string $category, string $label, string $value, string $status, ?string $message): void
     {
+        $value = $this->redact($value);
+        $message = is_string($message) ? $this->redact($message) : null;
         $this->checks[] = compact('category', 'label', 'value', 'status', 'message');
     }
 
@@ -249,5 +334,14 @@ final class DoctorCommand extends Command
         }
 
         return $groups;
+    }
+
+    private function redact(string $value): string
+    {
+        $value = str_replace(base_path(), '[project]', $value);
+        $value = (string) preg_replace('#/Users/[^/]+#', '/Users/[redacted]', $value);
+        $value = (string) preg_replace('/(password|secret|token|key)=([^\s&]+)/i', '$1=[redacted]', $value);
+
+        return $value;
     }
 }

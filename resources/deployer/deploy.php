@@ -66,6 +66,22 @@ task('accelerator:health', function () use ($config): void {
     run('curl --fail --silent --show-error --max-time 15 https://'.$config->domain.$config->healthPath.' >/dev/null');
 });
 
+task('accelerator:health-or-restore', function (): void {
+    try {
+        invoke('accelerator:health');
+    } catch (\Throwable $exception) {
+        warning('Health check failed after the release switch. Restoring the previous code symlink; database migrations are not reversed.');
+        invoke('rollback');
+
+        throw new \RuntimeException('Health check failed. The previous release symlink and services were restored; review database compatibility manually.', previous: $exception);
+    }
+});
+
+task('accelerator:activate-release', function (): void {
+    invoke('accelerator:services');
+    invoke('accelerator:health-or-restore');
+});
+
 task('accelerator:provision', function () use ($config, $renderer): void {
     $temporary = sys_get_temp_dir().'/accelerator-deploy-'.bin2hex(random_bytes(8));
     mkdir($temporary, 0700, true);
@@ -88,7 +104,15 @@ task('accelerator:provision', function () use ($config, $renderer): void {
 });
 
 task('accelerator:status', function () use ($config): void {
-    run("printf 'stage={$config->stage}\\ndomain={$config->domain}\\nroot={$config->deployRoot}\\ncurrent='; readlink {{deploy_path}}/current || true; printf 'locked='; test -f {{deploy_path}}/.dep/deploy.lock && echo yes || echo no; df -h {{deploy_path}} | tail -1");
+    run("printf 'ACCELERATOR_STATUS stage={$config->stage}\\nACCELERATOR_STATUS domain={$config->domain}\\nACCELERATOR_STATUS root={$config->deployRoot}\\n'");
+    run("printf 'ACCELERATOR_STATUS current='; readlink {{deploy_path}}/current 2>/dev/null || true");
+    run("printf 'ACCELERATOR_STATUS previous='; find {{deploy_path}}/releases -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort -V | tail -n 2 | head -n 1 || true");
+    run("printf 'ACCELERATOR_STATUS locked='; test -f {{deploy_path}}/.dep/deploy.lock && echo yes || echo no");
+    run("printf 'ACCELERATOR_STATUS maintenance='; test -f {{deploy_path}}/current/storage/framework/down && echo yes || echo no");
+    run("printf 'ACCELERATOR_STATUS disk_available_kb='; df -Pk {{deploy_path}} | awk 'NR==2 {print \\$4}'");
+    run("printf 'ACCELERATOR_STATUS recent_backup='; find {{deploy_path}}/shared/storage -type f 2>/dev/null | sort | tail -n 1 || true");
+    run("printf 'ACCELERATOR_STATUS supervisor='; sudo -n supervisorctl status {$config->group}:* 2>/dev/null | tr '\\n' ';' || echo unavailable");
+    run("printf 'ACCELERATOR_STATUS health='; curl --fail --silent --max-time 10 https://{$config->domain}{$config->healthPath} >/dev/null && echo ok || echo failed");
 });
 
 task('accelerator:relocate', function () use ($config): void {
@@ -98,15 +122,23 @@ task('accelerator:relocate', function () use ($config): void {
         throw new \RuntimeException('ACCELERATOR_OLD_ROOT must identify a different /var/www root.');
     }
 
-    run('sudo -n mkdir -p '.$config->deployRoot);
-    run('sudo -n rsync -a --numeric-ids '.escapeshellarg(rtrim($oldRoot, '/').'/').' '.escapeshellarg($config->deployRoot.'/'));
-    writeln('Old root preserved at '.$oldRoot.'. Remove it manually only after verifying the new domain.');
+    invoke('deploy:lock');
+
+    try {
+        run('sudo -n mkdir -p '.$config->deployRoot);
+        run('sudo -n rsync -a --numeric-ids '.escapeshellarg(rtrim($oldRoot, '/').'/').' '.escapeshellarg($config->deployRoot.'/'));
+        invoke('accelerator:provision');
+        invoke('accelerator:services');
+        invoke('accelerator:health');
+        writeln('Old root preserved at '.$oldRoot.'. Remove it manually only after verifying the new domain.');
+    } finally {
+        invoke('deploy:unlock');
+    }
 });
 
 before('deploy:shared', 'accelerator:environment');
 after('deploy:update_code', 'accelerator:frontend');
 before('artisan:migrate', 'accelerator:backup');
-after('deploy:symlink', 'accelerator:services');
-after('accelerator:services', 'accelerator:health');
+after('deploy:symlink', 'accelerator:activate-release');
 after('rollback', 'accelerator:services');
 after('deploy:failed', 'deploy:unlock');

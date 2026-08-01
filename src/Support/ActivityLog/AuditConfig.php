@@ -80,7 +80,7 @@ final class AuditConfig
      */
     private static function normalizeModelConfig(string $modelClass): array
     {
-        $config = config('audit.models.'.$modelClass, []);
+        $config = config('accelerator.audit.models.'.$modelClass, []);
         $config = is_array($config) ? $config : [];
 
         $modelExcept = $config['except'] ?? [];
@@ -105,7 +105,7 @@ final class AuditConfig
      */
     private static function defaultExcept(): array
     {
-        return self::$defaultExcept ??= self::stringList(config('audit.default_except', []));
+        return self::$defaultExcept ??= self::stringList(config('accelerator.audit.default_except', []));
     }
 
     /**

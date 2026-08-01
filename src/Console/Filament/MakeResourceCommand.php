@@ -13,6 +13,7 @@ use Illuminate\Filesystem\Filesystem;
 use Illuminate\Support\Str;
 use JsonException;
 use RuntimeException;
+use SplFileInfo;
 use Symfony\Component\Process\Process;
 use Throwable;
 use UnitEnum;
@@ -123,7 +124,7 @@ final class MakeResourceCommand extends Command
         $expected = Str::pluralStudly($name).'Resource.php';
         $matches = array_values(array_filter(
             $files->allFiles($root),
-            static fn (\SplFileInfo $file): bool => $file->getFilename() === $expected,
+            static fn (SplFileInfo $file): bool => $file->getFilename() === $expected,
         ));
 
         if (count($matches) !== 1) {

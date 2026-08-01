@@ -279,8 +279,7 @@ final class Onboarding
         $adminPassword = $this->option($options, 'admin-password', (string) getenv('ACCELERATOR_ADMIN_PASSWORD'));
 
         if ($adminPassword === '') {
-            $adminPassword = 'Aa1!'.bin2hex(random_bytes(12));
-            note('Generated initial Super Admin password (shown once): '.$adminPassword);
+            throw new RuntimeException('Non-interactive installation requires --admin-password or ACCELERATOR_ADMIN_PASSWORD. The password is never generated or printed.');
         }
 
         if ($error = $this->validatePassword($adminPassword)) {

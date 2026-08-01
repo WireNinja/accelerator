@@ -5,12 +5,14 @@ declare(strict_types=1);
 namespace WireNinja\Accelerator\Console;
 
 use Illuminate\Console\Command;
+use InvalidArgumentException;
 use JsonException;
 use RuntimeException;
 use Symfony\Component\Process\Process;
 use WireNinja\Accelerator\Configuration\EnvironmentStore;
 use WireNinja\Accelerator\Configuration\SshConfig;
 use WireNinja\Accelerator\Deployment\DeploymentConfig;
+use WireNinja\Accelerator\Deployment\LegacyDeploymentConfig;
 
 use function Laravel\Prompts\confirm;
 use function Laravel\Prompts\multiselect;
@@ -22,7 +24,17 @@ final class ConfigureCommand extends Command
 {
     protected $signature = 'accelerator:configure
         {scope? : application, features, deployment, or environment}
-        {--stage= : staging or production}';
+        {--stage= : staging or production}
+        {--app-name= : Application name}
+        {--app-url= : Absolute local application URL}
+        {--features= : Comma-separated enabled optional features}
+        {--ssh-host= : SSH alias for deployment}
+        {--domain= : Production domain}
+        {--staging-domain= : Staging domain; empty disables staging}
+        {--http-runtime= : octane or fpm}
+        {--migrate-legacy : Convert .accelerator/deploy.env to deploy.json and delete the legacy file}
+        {--force : Confirm a validated non-interactive write}
+        {--json : Emit a stable JSON result}';
 
     protected $description = 'Configure Accelerator through validated local files';
 
@@ -32,24 +44,30 @@ final class ConfigureCommand extends Command
         'pwa' => 'ACCELERATOR_FEATURE_PWA',
         'telegram' => 'ACCELERATOR_FEATURE_TELEGRAM',
         'horizon' => 'ACCELERATOR_FEATURE_HORIZON',
-        'reverb' => 'BROADCAST_CONNECTION',
-        'scout' => 'SCOUT_DRIVER',
-        'nightwatch' => 'NIGHTWATCH_ENABLED',
+        'reverb' => 'ACCELERATOR_FEATURE_REVERB',
+        'scout' => 'ACCELERATOR_FEATURE_SCOUT',
+        'nightwatch' => 'ACCELERATOR_FEATURE_NIGHTWATCH',
     ];
 
     public function handle(): int
     {
-        $scope = (string) ($this->argument('scope') ?: select('Configuration section', [
-            'application' => 'Application identity and local URL',
-            'features' => 'Optional runtime integrations',
-            'deployment' => 'Mutable single-VPS deployment topology',
-            'environment' => 'Secret Laravel stage environment',
-        ]));
+        $scope = (string) $this->argument('scope');
+
+        if ($scope === '') {
+            if (! $this->interactive()) {
+                return $this->failure('A configuration scope is required in non-interactive mode.');
+            }
+
+            $scope = select('Configuration section', [
+                'application' => 'Application identity and local URL',
+                'features' => 'Optional runtime integrations',
+                'deployment' => 'Mutable single-VPS deployment topology',
+                'environment' => 'Secret Laravel stage environment',
+            ]);
+        }
 
         if (! in_array($scope, ['application', 'features', 'deployment', 'environment'], true)) {
-            $this->components->error("Unknown configuration section [{$scope}].");
-
-            return self::FAILURE;
+            return $this->failure("Unknown configuration section [{$scope}].");
         }
 
         try {
@@ -61,23 +79,29 @@ final class ConfigureCommand extends Command
                 'deployment' => $this->configureDeployment($store),
                 'environment' => $this->configureEnvironment($store),
             };
-        } catch (RuntimeException|JsonException $exception) {
-            $this->components->error($exception->getMessage());
-
-            return self::FAILURE;
+        } catch (InvalidArgumentException|RuntimeException|JsonException $exception) {
+            return $this->failure($exception->getMessage());
         }
     }
 
     private function configureApplication(EnvironmentStore $store): int
     {
         $current = $store->read('.env');
-        $name = text('Application name', default: $current['APP_NAME'] ?? (string) config('app.name'), required: true);
-        $url = text(
-            'Local application URL',
-            default: $current['APP_URL'] ?? 'http://localhost:8000',
-            required: true,
-            validate: static fn (string $value): ?string => filter_var($value, FILTER_VALIDATE_URL) ? null : 'Enter an absolute URL.',
-        );
+        $name = $this->stringOption('app-name') ?? ($this->interactive()
+            ? text('Application name', default: $current['APP_NAME'] ?? (string) config('app.name'), required: true)
+            : ($current['APP_NAME'] ?? (string) config('app.name')));
+        $url = $this->stringOption('app-url') ?? ($this->interactive()
+            ? text(
+                'Local application URL',
+                default: $current['APP_URL'] ?? 'http://localhost:8000',
+                required: true,
+                validate: static fn (string $value): ?string => filter_var($value, FILTER_VALIDATE_URL) ? null : 'Enter an absolute URL.',
+            )
+            : ($current['APP_URL'] ?? 'http://localhost:8000'));
+
+        if (trim($name) === '' || ! filter_var($url, FILTER_VALIDATE_URL)) {
+            throw new RuntimeException('Application name and an absolute --app-url are required.');
+        }
         $draft = [
             'APP_NAME' => $name,
             'APP_URL' => $url,
@@ -86,71 +110,98 @@ final class ConfigureCommand extends Command
         ];
 
         if (! $this->confirmDraft('.env', $current, $draft)) {
-            return self::SUCCESS;
+            return $this->success('application', false, []);
         }
 
         $store->merge('.env', $draft);
         $store->merge('.env.example', $draft);
         $this->refreshCaches();
 
-        return self::SUCCESS;
+        return $this->success('application', true, ['.env', '.env.example']);
     }
 
     private function configureFeatures(EnvironmentStore $store): int
     {
         $current = $store->read('.env');
-        $selected = multiselect(
-            'Active optional integrations',
-            options: array_combine(array_keys(self::FEATURE_KEYS), array_keys(self::FEATURE_KEYS)),
-            default: array_keys(array_filter(self::FEATURE_KEYS, static fn (string $key, string $feature): bool => match ($feature) {
-                'reverb' => ($current[$key] ?? 'log') === 'reverb',
-                'scout' => ($current[$key] ?? 'collection') === 'database',
-                default => self::truthy($current[$key] ?? 'false'),
-            }, ARRAY_FILTER_USE_BOTH)),
-            hint: 'Filament, settings, and RBAC are always active.',
-        );
+        $featureOption = $this->option('features');
+
+        if (is_string($featureOption)) {
+            $selected = array_values(array_filter(explode(',', $featureOption), static fn (string $feature): bool => $feature !== ''));
+        } elseif ($this->interactive()) {
+            $selected = multiselect(
+                'Active optional integrations',
+                options: array_combine(array_keys(self::FEATURE_KEYS), array_keys(self::FEATURE_KEYS)),
+                default: array_keys(array_filter(self::FEATURE_KEYS, static fn (string $key): bool => self::truthy($current[$key] ?? 'false'))),
+                hint: 'Filament, settings, and RBAC are always active.',
+            );
+        } else {
+            throw new RuntimeException('Non-interactive feature configuration requires --features=oauth,pwa,...; pass --features= to disable all.');
+        }
+
+        $unknown = array_values(array_diff($selected, array_keys(self::FEATURE_KEYS)));
+
+        if ($unknown !== []) {
+            throw new RuntimeException('Unknown Accelerator features: '.implode(', ', $unknown));
+        }
         $draft = [];
 
         foreach (self::FEATURE_KEYS as $feature => $key) {
             $enabled = in_array($feature, $selected, true);
-            $draft[$key] = match ($feature) {
-                'reverb' => $enabled ? 'reverb' : 'log',
-                'scout' => $enabled ? 'database' : 'collection',
-                default => $enabled ? 'true' : 'false',
-            };
+            $draft[$key] = $enabled ? 'true' : 'false';
         }
 
         $draft['ACCELERATOR_OAUTH_MODE'] = in_array('oauth', $selected, true) ? 'existing_only' : 'disabled';
+        $draft['BROADCAST_CONNECTION'] = in_array('reverb', $selected, true) ? 'reverb' : 'log';
+        $draft['SCOUT_DRIVER'] = in_array('scout', $selected, true) ? 'database' : 'collection';
+        $draft['NIGHTWATCH_ENABLED'] = in_array('nightwatch', $selected, true) ? 'true' : 'false';
 
         if (! $this->confirmDraft('.env', $current, $draft)) {
-            return self::SUCCESS;
+            return $this->success('features', false, []);
         }
 
         $store->merge('.env', $draft);
         $store->merge('.env.example', $draft);
         $this->refreshCaches();
 
-        return self::SUCCESS;
+        return $this->success('features', true, ['.env', '.env.example']);
     }
 
     /** @throws JsonException */
     private function configureDeployment(EnvironmentStore $store): int
     {
+        if ($this->option('migrate-legacy')) {
+            return $this->migrateLegacyDeployment();
+        }
+
         DeploymentConfig::assertNoLegacyFiles($this->laravel->basePath());
         $current = $this->deploymentDocument();
         $local = $store->read('.env');
         $aliases = SshConfig::aliases();
         $production = is_array($current['stages']['production'] ?? null) ? $current['stages']['production'] : [];
         $currentHost = is_string($production['ssh_host'] ?? null) ? $production['ssh_host'] : '';
-        $sshHost = $aliases === []
-            ? text('SSH host alias from ~/.ssh/config', default: $currentHost, required: true)
-            : select('SSH host alias', array_combine($aliases, $aliases), default: in_array($currentHost, $aliases, true) ? $currentHost : null);
-        $domain = text('Production domain', default: is_string($production['domain'] ?? null) ? $production['domain'] : '', required: true);
-        $stagingEnabled = confirm('Configure staging too?', default: (bool) ($current['stages']['staging']['enabled'] ?? false));
+        $sshHost = $this->stringOption('ssh-host') ?? ($this->interactive()
+            ? ($aliases === []
+                ? text('SSH host alias from ~/.ssh/config', default: $currentHost, required: true)
+                : select('SSH host alias', array_combine($aliases, $aliases), default: in_array($currentHost, $aliases, true) ? $currentHost : null))
+            : $currentHost);
+        $currentDomain = is_string($production['domain'] ?? null) ? $production['domain'] : '';
+        $domain = $this->stringOption('domain') ?? ($this->interactive()
+            ? text('Production domain', default: $currentDomain, required: true)
+            : $currentDomain);
+        $stagingOption = $this->option('staging-domain');
+        $stagingEnabled = is_string($stagingOption)
+            ? $stagingOption !== ''
+            : ($this->interactive()
+                ? confirm('Configure staging too?', default: (bool) ($current['stages']['staging']['enabled'] ?? false))
+                : (bool) ($current['stages']['staging']['enabled'] ?? false));
         $stagingDomain = $stagingEnabled
-            ? text('Staging domain', default: is_string($current['stages']['staging']['domain'] ?? null) ? $current['stages']['staging']['domain'] : "staging.{$domain}", required: true)
+            ? (is_string($stagingOption) ? $stagingOption : ($this->interactive()
+                ? text('Staging domain', default: is_string($current['stages']['staging']['domain'] ?? null) ? $current['stages']['staging']['domain'] : "staging.{$domain}", required: true)
+                : (string) ($current['stages']['staging']['domain'] ?? "staging.{$domain}")))
             : '';
-        $runtime = select('HTTP runtime', ['octane' => 'Octane + Swoole', 'fpm' => 'PHP-FPM'], default: is_string($production['http_runtime'] ?? null) ? $production['http_runtime'] : 'octane');
+        $runtime = $this->stringOption('http-runtime') ?? ($this->interactive()
+            ? select('HTTP runtime', ['octane' => 'Octane + Swoole', 'fpm' => 'PHP-FPM'], default: is_string($production['http_runtime'] ?? null) ? $production['http_runtime'] : 'octane')
+            : (is_string($production['http_runtime'] ?? null) ? $production['http_runtime'] : 'octane'));
         $horizon = self::truthy($local['ACCELERATOR_FEATURE_HORIZON'] ?? 'false');
         $reverb = ($local['BROADCAST_CONNECTION'] ?? 'log') === 'reverb';
         $nightwatch = self::truthy($local['NIGHTWATCH_ENABLED'] ?? 'false');
@@ -188,10 +239,12 @@ final class ConfigureCommand extends Command
             ],
         ];
 
-        note('Affected committed file: .accelerator/deploy.json. No SSH connection will be opened.');
+        if (! $this->option('json')) {
+            note('Affected committed file: .accelerator/deploy.json. No SSH connection will be opened.');
+        }
 
-        if (! confirm('Write deployment topology?', default: false)) {
-            return self::SUCCESS;
+        if (! $this->confirmMutation('Write deployment topology?')) {
+            return $this->success('deployment', false, []);
         }
 
         $this->writeDeploymentDocument($document);
@@ -201,9 +254,50 @@ final class ConfigureCommand extends Command
             $this->ensureStageEnvironment($store, 'staging', $stagingDomain, $local);
         }
 
-        $this->components->info('Deployment configuration updated. Review deploy.json, then configure each stage environment.');
+        $oldRoot = is_string($production['root'] ?? null) ? $production['root'] : '';
+        $newRoot = "/var/www/{$domain}";
+        $next = $oldRoot !== '' && $oldRoot !== $newRoot
+            ? "Run php artisan accelerator:deploy:relocate {$oldRoot} --stage=production after reviewing the new topology."
+            : 'Review deploy.json, then configure each stage environment.';
 
-        return self::SUCCESS;
+        if (! $this->option('json')) {
+            $this->components->info('Deployment configuration updated. '.$next);
+        }
+
+        return $this->success('deployment', true, ['.accelerator/deploy.json'], $next);
+    }
+
+    /** @throws JsonException */
+    private function migrateLegacyDeployment(): int
+    {
+        $root = $this->laravel->basePath();
+        $legacyValues = (new EnvironmentStore($root))->read('.accelerator/deploy.env');
+        $oldProductionRoot = $legacyValues['OPS_DEPLOY_PRODUCTION_ROOT'] ?? '';
+        $document = LegacyDeploymentConfig::read($root, $this->packageManager());
+
+        if (! $this->confirmMutation('Write deploy.json and remove the legacy deploy.env?')) {
+            return $this->success('deployment', false, []);
+        }
+
+        $this->writeDeploymentDocument($document);
+        $legacy = $root.'/.accelerator/deploy.env';
+
+        if (is_file($legacy) && ! unlink($legacy)) {
+            throw new RuntimeException('deploy.json was written, but the legacy deploy.env could not be removed.');
+        }
+
+        $production = is_array($document['stages']['production'] ?? null) ? $document['stages']['production'] : [];
+        $newProductionRoot = is_string($production['root'] ?? null) ? $production['root'] : '';
+        $next = $oldProductionRoot !== '' && $oldProductionRoot !== $newProductionRoot
+            ? "Review deploy.json, then run php artisan accelerator:deploy:relocate {$oldProductionRoot} --stage=production."
+            : 'Run php artisan accelerator:doctor --section=deployment, then review before any remote mutation.';
+
+        return $this->success(
+            'deployment',
+            true,
+            ['.accelerator/deploy.json', '.accelerator/deploy.env (removed)'],
+            $next,
+        );
     }
 
     private function configureEnvironment(EnvironmentStore $store): int
@@ -236,20 +330,34 @@ final class ConfigureCommand extends Command
         if (($current['DB_CONNECTION'] ?? 'sqlite') === 'sqlite') {
             $draft['DB_DATABASE'] = "/var/www/{$domain}/shared/database/database.sqlite";
         } else {
-            $draft['DB_HOST'] = text('Database host', default: $current['DB_HOST'] ?? '127.0.0.1', required: true);
-            $draft['DB_DATABASE'] = text('Database name', default: $current['DB_DATABASE'] ?? '', required: true);
-            $draft['DB_USERNAME'] = text('Database user', default: $current['DB_USERNAME'] ?? '', required: true);
-            $draft['DB_PASSWORD'] = text('Database password', default: $current['DB_PASSWORD'] ?? '', required: true);
+            if ($this->interactive()) {
+                $draft['DB_HOST'] = text('Database host', default: $current['DB_HOST'] ?? '127.0.0.1', required: true);
+                $draft['DB_DATABASE'] = text('Database name', default: $current['DB_DATABASE'] ?? '', required: true);
+                $draft['DB_USERNAME'] = text('Database user', default: $current['DB_USERNAME'] ?? '', required: true);
+                $draft['DB_PASSWORD'] = text('Database password', default: $current['DB_PASSWORD'] ?? '', required: true);
+            } else {
+                foreach (['DB_HOST', 'DB_DATABASE', 'DB_USERNAME', 'DB_PASSWORD'] as $key) {
+                    if (($current[$key] ?? '') === '') {
+                        throw new RuntimeException("{$key} must already exist in {$path} before non-interactive configuration.");
+                    }
+
+                    $draft[$key] = $current[$key];
+                }
+            }
         }
 
         if (! $this->confirmDraft($path, $current, $draft)) {
-            return self::SUCCESS;
+            return $this->success('environment', false, []);
         }
 
         $store->merge($path, $draft);
-        $this->components->info("Stage saved. Next: php artisan accelerator:deploy:init --stage={$stage}");
+        $next = "php artisan accelerator:deploy:init --stage={$stage}";
 
-        return self::SUCCESS;
+        if (! $this->option('json')) {
+            $this->components->info("Stage saved. Next: {$next}");
+        }
+
+        return $this->success('environment', true, [$path], $next);
     }
 
     /** @return array<string, mixed> */
@@ -301,6 +409,30 @@ final class ConfigureCommand extends Command
         if (file_put_contents($directory.'/deploy.json', $payload, LOCK_EX) === false) {
             throw new RuntimeException('Unable to write .accelerator/deploy.json.');
         }
+
+        $this->updateDeploymentGitignore();
+    }
+
+    private function updateDeploymentGitignore(): void
+    {
+        $path = $this->laravel->basePath('.gitignore');
+        $contents = is_file($path) ? file_get_contents($path) : '';
+
+        if (! is_string($contents)) {
+            throw new RuntimeException('Unable to read .gitignore.');
+        }
+
+        $contents = preg_replace('/^\/\.accelerator\/\R?/m', '', $contents) ?? $contents;
+
+        foreach (['/.accelerator/install-state.json', '/.accelerator/environments/'] as $entry) {
+            if (! preg_match('/^'.preg_quote($entry, '/').'$/m', $contents)) {
+                $contents = rtrim($contents).PHP_EOL.$entry.PHP_EOL;
+            }
+        }
+
+        if (file_put_contents($path, $contents, LOCK_EX) === false) {
+            throw new RuntimeException('Unable to update .gitignore deployment ownership.');
+        }
     }
 
     /** @param array<string, string> $local */
@@ -341,14 +473,81 @@ final class ConfigureCommand extends Command
         }
 
         if ($rows === []) {
-            note("No changes for {$path}.");
+            if (! $this->option('json')) {
+                note("No changes for {$path}.");
+            }
 
             return false;
+        }
+
+        if ($this->option('force')) {
+            return true;
+        }
+
+        if (! $this->interactive()) {
+            throw new RuntimeException('Validated changes are pending. Rerun with --force to write them non-interactively.');
         }
 
         $this->table(['Key', 'Current', 'Draft'], $rows);
 
         return confirm("Write {$path}?", default: false);
+    }
+
+    private function confirmMutation(string $question): bool
+    {
+        if ($this->option('force')) {
+            return true;
+        }
+
+        if (! $this->interactive()) {
+            throw new RuntimeException('Rerun with --force to confirm the validated non-interactive mutation.');
+        }
+
+        return confirm($question, default: false);
+    }
+
+    private function stringOption(string $name): ?string
+    {
+        $value = $this->option($name);
+
+        return is_string($value) ? $value : null;
+    }
+
+    private function interactive(): bool
+    {
+        return $this->input->isInteractive() && ! $this->option('json');
+    }
+
+    /** @param list<string> $files @throws JsonException */
+    private function success(string $scope, bool $changed, array $files, ?string $next = null): int
+    {
+        if ($this->option('json')) {
+            $this->output->writeln(json_encode([
+                'schema' => 1,
+                'status' => 'OK',
+                'scope' => $scope,
+                'changed' => $changed,
+                'files' => $files,
+                'next' => $next,
+            ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
+        }
+
+        return self::SUCCESS;
+    }
+
+    private function failure(string $message): int
+    {
+        if ($this->option('json')) {
+            $this->output->writeln(json_encode([
+                'schema' => 1,
+                'status' => 'ERROR',
+                'error' => $message,
+            ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+        } else {
+            $this->components->error($message);
+        }
+
+        return self::FAILURE;
     }
 
     private function packageManager(): string
