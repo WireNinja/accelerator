@@ -234,10 +234,11 @@ final class ConfigureCommand extends Command
             'run_user' => 'www-data',
             'ssl_email' => $local['MAIL_FROM_ADDRESS'] ?? '',
             'stages' => [
-                'staging' => $this->stageTopology($stagingEnabled, $sshHost, $stagingDomain, $runtime, $horizon, $reverb, $nightwatch, 8100, 8180, 2507),
-                'production' => $this->stageTopology(true, $sshHost, $domain, $runtime, $horizon, $reverb, $nightwatch, 8000, 8080, 2407),
+                'staging' => $this->stageTopology('staging', $project, $stagingEnabled, $sshHost, $stagingDomain, $runtime, $horizon, $reverb, $nightwatch, 8100, 8180, 2507),
+                'production' => $this->stageTopology('production', $project, true, $sshHost, $domain, $runtime, $horizon, $reverb, $nightwatch, 8000, 8080, 2407),
             ],
         ];
+        DeploymentConfig::validateTopologyDocument($document);
 
         if (! $this->option('json')) {
             note('Affected committed file: .accelerator/deploy.json. No SSH connection will be opened.');
@@ -361,13 +362,14 @@ final class ConfigureCommand extends Command
     }
 
     /** @return array<string, mixed> */
-    private function stageTopology(bool $enabled, string $sshHost, string $domain, string $runtime, bool $horizon, bool $reverb, bool $nightwatch, int $octanePort, int $reverbPort, int $nightwatchPort): array
+    private function stageTopology(string $stage, string $project, bool $enabled, string $sshHost, string $domain, string $runtime, bool $horizon, bool $reverb, bool $nightwatch, int $octanePort, int $reverbPort, int $nightwatchPort): array
     {
         return [
             'enabled' => $enabled,
             'ssh_host' => $sshHost,
             'domain' => $domain,
             'root' => $domain === '' ? '' : "/var/www/{$domain}",
+            'service_group' => DeploymentConfig::defaultServiceGroup($project, $stage),
             'http_runtime' => $runtime,
             'horizon' => $horizon,
             'queue_worker' => ! $horizon,

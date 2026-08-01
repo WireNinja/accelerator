@@ -19,12 +19,13 @@ final class LegacyDeploymentConfig
         }
 
         $sshHost = self::value($values, 'OPS_DEPLOY_SSH_HOST');
-        $staging = self::stage($values, 'STAGING', $sshHost);
-        $production = self::stage($values, 'PRODUCTION', $sshHost);
+        $project = self::value($values, 'OPS_DEPLOY_PROJECT');
+        $staging = self::stage($values, 'STAGING', $sshHost, $project);
+        $production = self::stage($values, 'PRODUCTION', $sshHost, $project);
         $document = [
             'schema' => 1,
             'default_stage' => self::value($values, 'OPS_DEPLOY_DEFAULT_STAGE', 'production'),
-            'project' => self::value($values, 'OPS_DEPLOY_PROJECT'),
+            'project' => $project,
             'repository' => self::value($values, 'OPS_DEPLOY_REPO'),
             'branch' => self::value($values, 'OPS_DEPLOY_BRANCH', 'main'),
             'keep_releases' => self::integer($values, 'OPS_DEPLOY_KEEP_RELEASES', 5),
@@ -49,12 +50,13 @@ final class LegacyDeploymentConfig
             stagingDomain: $staging['enabled'] ? (string) $staging['domain'] : null,
             stagingRoot: $staging['enabled'] ? (string) $staging['root'] : null,
         );
+        DeploymentConfig::validateTopologyDocument($document);
 
         return $document;
     }
 
     /** @param array<string, string> $values @return array<string, bool|int|string> */
-    private static function stage(array $values, string $stage, string $sshHost): array
+    private static function stage(array $values, string $stage, string $sshHost, string $project): array
     {
         $prefix = "OPS_DEPLOY_{$stage}_";
         $domain = self::value($values, $prefix.'DOMAIN');
@@ -64,7 +66,7 @@ final class LegacyDeploymentConfig
             'ssh_host' => $sshHost,
             'domain' => $domain,
             'root' => $domain === '' ? '' : "/var/www/{$domain}",
-            'service_group' => self::value($values, $prefix.'GROUP'),
+            'service_group' => self::value($values, $prefix.'GROUP', DeploymentConfig::defaultServiceGroup($project, strtolower($stage))),
             'dns_direct' => self::boolean($values, $prefix.'DNS_DIRECT', true),
             'http_runtime' => self::value($values, $prefix.'HTTP_RUNTIME', 'octane'),
             'fpm_socket' => self::value($values, $prefix.'FPM_SOCKET'),

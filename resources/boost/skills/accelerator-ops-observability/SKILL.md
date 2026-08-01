@@ -9,6 +9,7 @@ Confirm configured stage/domain/root/runtime/ports/group first. Inspect only tha
 
 ```bash
 php artisan accelerator:doctor --json
+php artisan accelerator:deploy:preflight --stage=production --json
 php artisan accelerator:deploy:status --stage=production --json
 php artisan vps:backup-status --json --compact
 ```

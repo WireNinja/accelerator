@@ -6,6 +6,7 @@ namespace WireNinja\Accelerator\Installer;
 
 use JsonException;
 use RuntimeException;
+use WireNinja\Accelerator\Deployment\DeploymentConfig;
 
 final readonly class EnvironmentWriter
 {
@@ -42,11 +43,12 @@ final readonly class EnvironmentWriter
         }
 
         $plan = $this->context->plan;
-        $stage = fn (bool $enabled, string $domain, int $octanePort, int $reverbPort, int $nightwatchPort): array => [
+        $stage = fn (string $name, bool $enabled, string $domain, int $octanePort, int $reverbPort, int $nightwatchPort): array => [
             'enabled' => $enabled,
             'ssh_host' => $plan->sshHost,
             'domain' => $domain,
             'root' => $domain === '' ? '' : "/var/www/{$domain}",
+            'service_group' => DeploymentConfig::defaultServiceGroup($plan->project, $name),
             'http_runtime' => $plan->httpRuntime,
             'horizon' => $this->context->hasFeature('horizon'),
             'queue_worker' => ! $this->context->hasFeature('horizon'),
@@ -71,10 +73,11 @@ final readonly class EnvironmentWriter
             'run_user' => 'www-data',
             'ssl_email' => $plan->adminEmail,
             'stages' => [
-                'staging' => $stage($plan->deploymentMode === 'dual', $plan->stagingDomain, 8100, 8180, 2507),
-                'production' => $stage(true, $plan->domain, 8000, 8080, 2407),
+                'staging' => $stage('staging', $plan->deploymentMode === 'dual', $plan->stagingDomain, 8100, 8180, 2507),
+                'production' => $stage('production', true, $plan->domain, 8000, 8080, 2407),
             ],
         ];
+        DeploymentConfig::validateTopologyDocument($document);
         $this->context->writeFile('.accelerator/deploy.json', json_encode(
             $document,
             JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,

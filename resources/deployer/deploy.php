@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Deployer;
 
+use RuntimeException;
+use Throwable;
 use WireNinja\Accelerator\Deployment\DeploymentConfig;
 use WireNinja\Accelerator\Deployment\DeploymentRenderer;
 
@@ -13,6 +15,7 @@ $projectRoot = getenv('ACCELERATOR_PROJECT_ROOT') ?: getcwd();
 $stage = getenv('ACCELERATOR_DEPLOY_STAGE') ?: null;
 $config = DeploymentConfig::load($projectRoot, is_string($stage) ? $stage : null);
 $renderer = new DeploymentRenderer($config);
+$nodeEnvironment = 'export NVM_DIR="$HOME/.nvm"; if [ -s "$NVM_DIR/nvm.sh" ]; then . "$NVM_DIR/nvm.sh"; fi';
 
 host($config->stage)
     ->setHostname($config->sshHost)
@@ -27,6 +30,7 @@ set('writable_dirs', ['bootstrap/cache', 'storage']);
 set('writable_mode', 'chmod');
 set('writable_chmod_mode', '0775');
 set('composer_options', '--prefer-dist --no-progress --no-interaction --no-dev --optimize-autoloader --classmap-authoritative');
+set('update_code_strategy', 'clone');
 set('old_root', '');
 
 task('accelerator:environment', function () use ($config): void {
@@ -34,16 +38,28 @@ task('accelerator:environment', function () use ($config): void {
     upload($config->runtimeEnvironmentFile(), '{{deploy_path}}/shared/.env');
 });
 
-task('accelerator:frontend', function () use ($config): void {
+task('accelerator:submodule', function (): void {
+    cd('{{release_path}}');
+
+    $environment = [
+        'GIT_TERMINAL_PROMPT' => '0',
+        'GIT_SSH_COMMAND' => get('git_ssh_command'),
+    ];
+
+    run('{{bin/git}} submodule sync -- packages/accelerator', env: $environment);
+    run('{{bin/git}} submodule update --init --force --depth 1 -- packages/accelerator', env: $environment);
+});
+
+task('accelerator:frontend', function () use ($config, $nodeEnvironment): void {
     cd('{{release_path}}');
 
     if ($config->packageManager === 'pnpm') {
-        run('pnpm install --frozen-lockfile');
-        run('pnpm run build');
+        run($nodeEnvironment.'; pnpm install --frozen-lockfile');
+        run($nodeEnvironment.'; pnpm run build');
     } else {
-        run('npm ci');
-        run('npm rebuild sharp --ignore-scripts=false');
-        run('npm run build');
+        run($nodeEnvironment.'; npm ci');
+        run($nodeEnvironment.'; npm rebuild sharp --ignore-scripts=false');
+        run($nodeEnvironment.'; npm run build');
     }
 });
 
@@ -69,12 +85,145 @@ task('accelerator:health', function () use ($config): void {
 task('accelerator:health-or-restore', function (): void {
     try {
         invoke('accelerator:health');
-    } catch (\Throwable $exception) {
+    } catch (Throwable $exception) {
         warning('Health check failed after the release switch. Restoring the previous code symlink; database migrations are not reversed.');
         invoke('rollback');
 
-        throw new \RuntimeException('Health check failed. The previous release symlink and services were restored; review database compatibility manually.', previous: $exception);
+        throw new RuntimeException('Health check failed. The previous release symlink and services were restored; review database compatibility manually.', previous: $exception);
     }
+});
+
+task('accelerator:preflight', function () use ($config, $nodeEnvironment): void {
+    $expectedNginx = '/etc/nginx/sites-available/'.$config->domain;
+    $expectedSupervisor = '/etc/supervisor/conf.d/'.$config->group.'.conf';
+    $rootOwner = $config->deployRoot.'/.accelerator-owner';
+    $rootToken = $config->ownerToken('root');
+    $nginxMarker = '# '.$config->ownerToken('nginx');
+    $supervisorMarker = '# '.$config->ownerToken('supervisor');
+
+    $requiredCommands = ['git', $config->phpBinary, 'composer', 'sudo'];
+    $requiredSudoCommands = ['ss', 'nginx', 'certbot'];
+
+    if ($config->hasSupervisorPrograms()) {
+        $requiredSudoCommands[] = 'supervisorctl';
+    }
+
+    foreach (array_unique($requiredCommands) as $command) {
+        $available = trim(run('command -v '.escapeshellarg($command).' >/dev/null 2>&1 && echo yes || echo no'));
+
+        if ($available !== 'yes') {
+            throw new RuntimeException("Deployment preflight failed: required command [{$command}] is unavailable on [{$config->sshHost}].");
+        }
+    }
+
+    foreach (['node', $config->packageManager] as $command) {
+        $available = trim(run($nodeEnvironment.'; command -v '.escapeshellarg($command).' >/dev/null 2>&1 && echo yes || echo no'));
+
+        if ($available !== 'yes') {
+            throw new RuntimeException("Deployment preflight failed: Node runtime command [{$command}] is unavailable after loading system/NVM environment on [{$config->sshHost}].");
+        }
+    }
+
+    if (trim(run('sudo -n true >/dev/null 2>&1 && echo yes || echo no')) !== 'yes') {
+        throw new RuntimeException("Deployment preflight failed: passwordless sudo is unavailable on [{$config->sshHost}].");
+    }
+
+    foreach ($requiredSudoCommands as $command) {
+        $available = trim(run('sudo -n sh -c '.escapeshellarg('command -v '.escapeshellarg($command).' >/dev/null 2>&1').' && echo yes || echo no'));
+
+        if ($available !== 'yes') {
+            throw new RuntimeException("Deployment preflight failed: required sudo command [{$command}] is unavailable on [{$config->sshHost}].");
+        }
+    }
+
+    $rootState = trim(run(
+        'if [ ! -e '.escapeshellarg($config->deployRoot).' ]; then echo absent; '
+        .'elif [ ! -d '.escapeshellarg($config->deployRoot).' ]; then echo collision:not-directory; '
+        .'elif [ -f '.escapeshellarg($rootOwner).' ] && [ "$(cat '.escapeshellarg($rootOwner).')" = '.escapeshellarg($rootToken).' ]; then echo owned; '
+        .'elif [ -z "$(find '.escapeshellarg($config->deployRoot).' -mindepth 1 -maxdepth 1 -print -quit)" ]; then echo empty; '
+        .'else echo collision:unmanaged; fi',
+    ));
+
+    if (str_starts_with($rootState, 'collision:')) {
+        throw new RuntimeException("Deployment preflight failed: root [{$config->deployRoot}] is {$rootState} and is not owned by {$config->project}:{$config->stage}.");
+    }
+
+    $nginxOwner = trim(run(
+        'if [ ! -e '.escapeshellarg($expectedNginx).' ]; then echo absent; '
+        .'elif sudo -n grep -Fxq '.escapeshellarg($nginxMarker).' '.escapeshellarg($expectedNginx).'; then echo owned; '
+        .'else echo collision:unmanaged; fi',
+    ));
+
+    if ($nginxOwner === 'collision:unmanaged') {
+        throw new RuntimeException("Deployment preflight failed: Nginx file [{$expectedNginx}] exists without the expected Accelerator ownership marker.");
+    }
+
+    $domainPattern = 'server_name[[:space:]]+'.preg_quote($config->domain, '/').'([[:space:];]|$)';
+    $nginxMatches = trim(run(
+        'sudo -n grep -RslE '.escapeshellarg($domainPattern).' /etc/nginx/sites-enabled /etc/nginx/conf.d 2>/dev/null || true',
+    ));
+
+    foreach (preg_split('/\R/', $nginxMatches) ?: [] as $match) {
+        if ($match === '') {
+            continue;
+        }
+
+        $resolved = trim(run('readlink -f '.escapeshellarg($match).' 2>/dev/null || true'));
+
+        if ($resolved !== $expectedNginx) {
+            throw new RuntimeException("Deployment preflight failed: domain [{$config->domain}] is already owned by Nginx config [{$match}].");
+        }
+    }
+
+    $supervisorOwner = 'disabled';
+
+    if ($config->hasSupervisorPrograms()) {
+        $supervisorOwner = trim(run(
+            'if [ ! -e '.escapeshellarg($expectedSupervisor).' ]; then echo absent; '
+            .'elif sudo -n grep -Fxq '.escapeshellarg($supervisorMarker).' '.escapeshellarg($expectedSupervisor).'; then echo owned; '
+            .'else echo collision:unmanaged; fi',
+        ));
+
+        if ($supervisorOwner === 'collision:unmanaged') {
+            throw new RuntimeException("Deployment preflight failed: Supervisor file [{$expectedSupervisor}] exists without the expected Accelerator ownership marker.");
+        }
+
+        $groupPattern = '^\\[(group:'.preg_quote($config->group, '/').'|program:'.preg_quote($config->group, '/').'_).*\\]';
+        $supervisorMatches = trim(run(
+            'sudo -n grep -RslE '.escapeshellarg($groupPattern).' /etc/supervisor/conf.d 2>/dev/null || true',
+        ));
+
+        foreach (preg_split('/\R/', $supervisorMatches) ?: [] as $match) {
+            if ($match !== '' && $match !== $expectedSupervisor) {
+                throw new RuntimeException("Deployment preflight failed: service group [{$config->group}] is already declared by Supervisor config [{$match}].");
+            }
+        }
+    }
+
+    $portStates = [];
+
+    foreach ($config->listeningServices() as $service => $port) {
+        $occupied = trim(run(
+            'sudo -n ss -H -ltn '.escapeshellarg("sport = :{$port}").' 2>/dev/null | grep -q . && echo yes || echo no',
+        )) === 'yes';
+
+        if (! $occupied) {
+            $portStates[] = "{$service}:{$port}=free";
+
+            continue;
+        }
+
+        $program = $config->group.'_'.$service;
+        $status = trim(run('sudo -n supervisorctl status '.escapeshellarg($program).' 2>/dev/null || true'));
+
+        if ($supervisorOwner !== 'owned' || ! str_contains($status, 'RUNNING')) {
+            throw new RuntimeException("Deployment preflight failed: {$service} port [{$port}] is already in use by a process not owned by Supervisor program [{$program}].");
+        }
+
+        $portStates[] = "{$service}:{$port}=owned";
+    }
+
+    run("printf 'ACCELERATOR_PREFLIGHT stage={$config->stage}\\nACCELERATOR_PREFLIGHT host={$config->sshHost}\\nACCELERATOR_PREFLIGHT domain={$config->domain}\\nACCELERATOR_PREFLIGHT root={$config->deployRoot}\\nACCELERATOR_PREFLIGHT service_group={$config->group}\\nACCELERATOR_PREFLIGHT root_state={$rootState}\\nACCELERATOR_PREFLIGHT nginx_state={$nginxOwner}\\nACCELERATOR_PREFLIGHT supervisor_state={$supervisorOwner}\\nACCELERATOR_PREFLIGHT ports=".implode(',', $portStates)."\\n'", forceOutput: true);
 });
 
 task('accelerator:activate-release', function (): void {
@@ -83,12 +232,15 @@ task('accelerator:activate-release', function (): void {
 });
 
 task('accelerator:provision', function () use ($config, $renderer): void {
+    invoke('accelerator:preflight');
+
     $temporary = sys_get_temp_dir().'/accelerator-deploy-'.bin2hex(random_bytes(8));
     mkdir($temporary, 0700, true);
     file_put_contents($temporary.'/nginx.conf', $renderer->nginx(false));
     file_put_contents($temporary.'/supervisor.conf', $renderer->supervisor());
 
     run('mkdir -p '.$config->deployRoot.'/shared/storage '.$config->deployRoot.'/shared/database '.$config->deployRoot.'/shared/acme');
+    run('printf %s '.escapeshellarg($config->ownerToken('root')).' > '.escapeshellarg($config->deployRoot.'/.accelerator-owner'));
     upload($temporary.'/nginx.conf', '/tmp/'.$config->group.'-nginx.conf');
     run('sudo -n install -m 0644 /tmp/'.$config->group.'-nginx.conf /etc/nginx/sites-available/'.$config->domain);
     run('sudo -n ln -sfn /etc/nginx/sites-available/'.$config->domain.' /etc/nginx/sites-enabled/'.$config->domain);
@@ -104,22 +256,22 @@ task('accelerator:provision', function () use ($config, $renderer): void {
 });
 
 task('accelerator:status', function () use ($config): void {
-    run("printf 'ACCELERATOR_STATUS stage={$config->stage}\\nACCELERATOR_STATUS domain={$config->domain}\\nACCELERATOR_STATUS root={$config->deployRoot}\\n'");
-    run("printf 'ACCELERATOR_STATUS current='; readlink {{deploy_path}}/current 2>/dev/null || true");
-    run("printf 'ACCELERATOR_STATUS previous='; find {{deploy_path}}/releases -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort -V | tail -n 2 | head -n 1 || true");
-    run("printf 'ACCELERATOR_STATUS locked='; test -f {{deploy_path}}/.dep/deploy.lock && echo yes || echo no");
-    run("printf 'ACCELERATOR_STATUS maintenance='; test -f {{deploy_path}}/current/storage/framework/down && echo yes || echo no");
-    run("printf 'ACCELERATOR_STATUS disk_available_kb='; df -Pk {{deploy_path}} | awk 'NR==2 {print \\$4}'");
-    run("printf 'ACCELERATOR_STATUS recent_backup='; find {{deploy_path}}/shared/storage -type f 2>/dev/null | sort | tail -n 1 || true");
-    run("printf 'ACCELERATOR_STATUS supervisor='; sudo -n supervisorctl status {$config->group}:* 2>/dev/null | tr '\\n' ';' || echo unavailable");
-    run("printf 'ACCELERATOR_STATUS health='; curl --fail --silent --max-time 10 https://{$config->domain}{$config->healthPath} >/dev/null && echo ok || echo failed");
+    run("printf 'ACCELERATOR_STATUS stage={$config->stage}\\nACCELERATOR_STATUS domain={$config->domain}\\nACCELERATOR_STATUS root={$config->deployRoot}\\n'", forceOutput: true);
+    run("printf 'ACCELERATOR_STATUS current=%s\\n' \"\$(readlink {{deploy_path}}/current 2>/dev/null || true)\"", forceOutput: true);
+    run("printf 'ACCELERATOR_STATUS previous=%s\\n' \"\$(find {{deploy_path}}/releases -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort -V | tail -n 2 | head -n 1 || true)\"", forceOutput: true);
+    run("if test -f {{deploy_path}}/.dep/deploy.lock; then value=yes; else value=no; fi; printf 'ACCELERATOR_STATUS locked=%s\\n' \"\$value\"", forceOutput: true);
+    run("if test -f {{deploy_path}}/current/storage/framework/down; then value=yes; else value=no; fi; printf 'ACCELERATOR_STATUS maintenance=%s\\n' \"\$value\"", forceOutput: true);
+    run("printf 'ACCELERATOR_STATUS disk_available_kb=%s\\n' \"\$(df -Pk {{deploy_path}} | awk 'NR==2 {print \$4}')\"", forceOutput: true);
+    run("printf 'ACCELERATOR_STATUS recent_backup=%s\\n' \"\$(find {{deploy_path}}/shared/storage/app/private -type f ! -name '.*' 2>/dev/null | sort | tail -n 1 || true)\"", forceOutput: true);
+    run("printf 'ACCELERATOR_STATUS supervisor=%s\\n' \"\$(sudo -n supervisorctl status {$config->group}:* 2>/dev/null | tr '\\n' ';' || echo unavailable)\"", forceOutput: true);
+    run("if curl --fail --silent --max-time 10 https://{$config->domain}{$config->healthPath} >/dev/null; then value=ok; else value=failed; fi; printf 'ACCELERATOR_STATUS health=%s\\n' \"\$value\"", forceOutput: true);
 });
 
 task('accelerator:relocate', function () use ($config): void {
     $oldRoot = get('old_root');
 
     if (! is_string($oldRoot) || ! str_starts_with($oldRoot, '/var/www/') || $oldRoot === $config->deployRoot) {
-        throw new \RuntimeException('ACCELERATOR_OLD_ROOT must identify a different /var/www root.');
+        throw new RuntimeException('ACCELERATOR_OLD_ROOT must identify a different /var/www root.');
     }
 
     invoke('deploy:lock');
@@ -137,7 +289,8 @@ task('accelerator:relocate', function () use ($config): void {
 });
 
 before('deploy:shared', 'accelerator:environment');
-after('deploy:update_code', 'accelerator:frontend');
+after('deploy:update_code', 'accelerator:submodule');
+after('accelerator:submodule', 'accelerator:frontend');
 before('artisan:migrate', 'accelerator:backup');
 after('deploy:symlink', 'accelerator:activate-release');
 after('rollback', 'accelerator:services');

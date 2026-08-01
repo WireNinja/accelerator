@@ -23,12 +23,13 @@ final class DeployInitCommand extends Command
         try {
             $stage = (string) $this->option('stage');
             $config = DeploymentConfig::load(base_path(), $stage);
+            $deployer = new Deployer(base_path());
+            $deployer->run('accelerator:preflight', $stage, capture: true);
 
             if (! $this->confirmed('Initialize', $config)) {
                 return self::FAILURE;
             }
 
-            $deployer = new Deployer(base_path());
             $deployer->run('accelerator:provision', $stage);
             $deployer->run('deploy', $stage);
 

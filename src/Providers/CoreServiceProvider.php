@@ -24,6 +24,7 @@ use WireNinja\Accelerator\Console\ContextCommand;
 use WireNinja\Accelerator\Console\DependenciesCommand;
 use WireNinja\Accelerator\Console\Deployment\DeployCommand;
 use WireNinja\Accelerator\Console\Deployment\DeployInitCommand;
+use WireNinja\Accelerator\Console\Deployment\DeployPreflightCommand;
 use WireNinja\Accelerator\Console\Deployment\DeployRelocateCommand;
 use WireNinja\Accelerator\Console\Deployment\DeployRollbackCommand;
 use WireNinja\Accelerator\Console\Deployment\DeployStatusCommand;
@@ -77,6 +78,7 @@ final class CoreServiceProvider extends ServiceProvider
             DependenciesCommand::class,
             DeployCommand::class,
             DeployInitCommand::class,
+            DeployPreflightCommand::class,
             DeployRelocateCommand::class,
             DeployRollbackCommand::class,
             DeployStatusCommand::class,
