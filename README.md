@@ -92,6 +92,8 @@ Configuration never SSHes. Changing a domain recalculates `/var/www/{domain}` an
 
 Shared Laravel storage and cache paths use inherited ACLs for both the deploy user and runtime user. Releases become rollback candidates only after services pass the retried HTTPS health check; incomplete or failed releases are marked bad and never selected as rollback targets.
 
+Supervisor is the sole owner of long-running service restarts. Accelerator deliberately omits Laravel's generic post-deploy `artisan reload`, which would duplicate the restart and cannot signal Supervisor processes owned by the runtime user.
+
 Certbot obtains or reuses certificate material through the dedicated ACME webroot; it does not rewrite the Nginx virtual host. Accelerator remains the single owner and renderer of both HTTP and HTTPS configuration.
 
 The deploy recipe clones the application repository and initializes only the tracked `packages/accelerator` submodule before Composer runs. It intentionally does not recurse through unrelated submodules, so a broken or optional gitlink elsewhere cannot widen deployment scope.

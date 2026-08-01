@@ -27,6 +27,8 @@ Stable root is `/var/www/{domain}`. Deployer owns lock, releases, shared dirs/fi
 
 Runtime/deploy writable paths use inherited ACLs. A release is rollback-eligible only after its services pass the retried HTTPS health check; never target an unfinished, failed, or unmarked release.
 
+Supervisor owns long-running service restarts. Do not add Laravel's generic post-deploy `artisan reload`; it duplicates the stage-scoped restart and may not signal processes owned by the runtime user.
+
 Certbot manages certificate material through Accelerator's ACME webroot and must not rewrite Nginx. Accelerator renders and owns the complete HTTP/HTTPS virtual host.
 
 Deployment clones the root repository and initializes only `packages/accelerator` before Composer. Never replace that scoped command with recursive or all-submodule initialization: unrelated gitlinks are outside Accelerator deployment scope.

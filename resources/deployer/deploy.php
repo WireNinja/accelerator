@@ -332,8 +332,17 @@ task('accelerator:relocate', function () use ($config): void {
 });
 
 task('accelerator:mark-failed-release', function (): void {
-    run('if [ -h {{deploy_path}}/release ]; then failed="$(basename "$(readlink {{deploy_path}}/release)")"; touch "{{deploy_path}}/releases/$failed/BAD_RELEASE"; fi');
+    run('if [ -h {{deploy_path}}/release ]; then failed="$(basename "$(readlink {{deploy_path}}/release)")"; if [ ! -f "{{deploy_path}}/releases/$failed/ACCELERATOR_SUCCESSFUL_RELEASE" ]; then touch "{{deploy_path}}/releases/$failed/BAD_RELEASE"; fi; fi');
 });
+
+task('deploy', [
+    'deploy:prepare',
+    'deploy:vendors',
+    'artisan:storage:link',
+    'artisan:optimize',
+    'artisan:migrate',
+    'deploy:publish',
+]);
 
 before('deploy:shared', 'accelerator:environment');
 after('deploy:update_code', 'accelerator:submodule');
