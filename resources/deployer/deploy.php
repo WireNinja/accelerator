@@ -294,7 +294,7 @@ task('accelerator:relocate', function () use ($config): void {
 
 before('deploy:shared', 'accelerator:environment');
 after('deploy:update_code', 'accelerator:submodule');
-after('accelerator:submodule', 'accelerator:frontend');
+after('deploy:vendors', 'accelerator:frontend');
 before('artisan:migrate', 'accelerator:backup');
 after('deploy:symlink', 'accelerator:activate-release');
 after('rollback', 'accelerator:services');
