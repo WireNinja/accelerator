@@ -239,7 +239,7 @@ task('accelerator:provision', function () use ($config, $renderer): void {
     file_put_contents($temporary.'/nginx.conf', $renderer->nginx(false));
     file_put_contents($temporary.'/supervisor.conf', $renderer->supervisor());
 
-    run('mkdir -p '.$config->deployRoot.'/shared/storage '.$config->deployRoot.'/shared/database '.$config->deployRoot.'/shared/acme');
+    run('mkdir -p '.$config->deployRoot.'/shared/storage/logs '.$config->deployRoot.'/shared/database '.$config->deployRoot.'/shared/acme');
     run('printf %s '.escapeshellarg($config->ownerToken('root')).' > '.escapeshellarg($config->deployRoot.'/.accelerator-owner'));
     upload($temporary.'/nginx.conf', '/tmp/'.$config->group.'-nginx.conf');
     run('sudo -n install -m 0644 /tmp/'.$config->group.'-nginx.conf /etc/nginx/sites-available/'.$config->domain);
