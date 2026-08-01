@@ -29,7 +29,6 @@ set('shared_dirs', ['storage']);
 set('writable_dirs', ['bootstrap/cache', 'storage']);
 set('writable_mode', 'acl');
 set('writable_recursive', true);
-set('writable_acl_force', true);
 set('http_user', $config->runUser);
 set('composer_options', '--prefer-dist --no-progress --no-interaction --no-dev --optimize-autoloader --classmap-authoritative');
 set('update_code_strategy', 'clone');
