@@ -7,6 +7,7 @@ namespace WireNinja\Accelerator\Deployment;
 use InvalidArgumentException;
 use JsonException;
 use RuntimeException;
+use WireNinja\Accelerator\Configuration\EnvironmentStore;
 
 final readonly class DeploymentConfig
 {
@@ -91,6 +92,8 @@ final readonly class DeploymentConfig
         $httpRuntime = self::string($stageConfig, 'http_runtime', 'octane');
         $horizonEnabled = self::bool($stageConfig, 'horizon');
         $queueWorkerEnabled = self::bool($stageConfig, 'queue_worker', ! $horizonEnabled);
+        $reverbEnabled = self::bool($stageConfig, 'reverb');
+        $nightwatchEnabled = self::bool($stageConfig, 'nightwatch');
 
         self::validateInstallerTargets(
             project: $project,
@@ -112,6 +115,12 @@ final readonly class DeploymentConfig
         if ($horizonEnabled && $queueWorkerEnabled) {
             throw new InvalidArgumentException('Horizon and the plain queue worker are mutually exclusive.');
         }
+
+        self::validateRuntimeServiceFeatures($projectRoot, $stage, [
+            'ACCELERATOR_FEATURE_HORIZON' => $horizonEnabled,
+            'ACCELERATOR_FEATURE_REVERB' => $reverbEnabled,
+            'ACCELERATOR_FEATURE_NIGHTWATCH' => $nightwatchEnabled,
+        ]);
 
         return new self(
             projectRoot: $projectRoot,
@@ -142,10 +151,10 @@ final readonly class DeploymentConfig
             queueWorkerConnection: self::string($stageConfig, 'queue_connection', 'database'),
             queueWorkerQueue: self::string($stageConfig, 'queue', 'default'),
             queueWorkerProcesses: self::integer($stageConfig, 'queue_processes', 1),
-            reverbEnabled: self::bool($stageConfig, 'reverb'),
+            reverbEnabled: $reverbEnabled,
             reverbPort: self::port($stageConfig, 'reverb_port', $stage === 'production' ? 8080 : 8180),
             schedulerEnabled: self::bool($stageConfig, 'scheduler', true),
-            nightwatchEnabled: self::bool($stageConfig, 'nightwatch'),
+            nightwatchEnabled: $nightwatchEnabled,
             nightwatchPort: self::port($stageConfig, 'nightwatch_port', $stage === 'production' ? 2407 : 2507),
             healthPath: self::string($stageConfig, 'health_path', '/up'),
             document: $document,
@@ -403,6 +412,25 @@ final readonly class DeploymentConfig
 
         if ($root !== "/var/www/{$domain}") {
             throw new InvalidArgumentException("Deployment root must be /var/www/{$domain}.");
+        }
+    }
+
+    /** @param array<string, bool> $expected */
+    private static function validateRuntimeServiceFeatures(string $projectRoot, string $stage, array $expected): void
+    {
+        $path = ".accelerator/environments/{$stage}.env";
+        $environment = (new EnvironmentStore($projectRoot))->read($path);
+
+        foreach ($expected as $key => $enabled) {
+            $value = filter_var($environment[$key] ?? null, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+
+            if (! is_bool($value)) {
+                throw new InvalidArgumentException("{$key} must be explicitly true or false in {$path}.");
+            }
+
+            if ($value !== $enabled) {
+                throw new InvalidArgumentException("{$key} in {$path} must match the {$stage} deployment topology.");
+            }
         }
     }
 }

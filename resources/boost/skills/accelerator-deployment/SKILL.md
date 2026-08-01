@@ -19,6 +19,8 @@ php artisan accelerator:deploy:relocate --stage=production --old-root=/var/www/o
 
 Before mutation, read committed `.accelerator/deploy.json`, confirm stage/SSH alias/domain/root/service group, confirm the matching ignored stage env exists, then run `accelerator:deploy:preflight`. Non-interactive mutation requires explicit force. Never guess production targets.
 
+Stage environment configuration must explicitly match Horizon, Reverb, and Nightwatch service flags in the committed topology. Use `accelerator:configure environment --stage=...`; never assume an installed package means its runtime provider is enabled.
+
 Staging and production use separate `{project}_{stage}` Supervisor groups and separate Octane/Reverb/Nightwatch ports when they share an SSH host. Never merge stages into one process group: status, restart, deploy, and rollback must remain stage-scoped. Preflight rejects unmanaged roots, Nginx domain ownership conflicts, Supervisor group/program conflicts, and occupied listener ports before provision/deploy mutates the server. Accelerator ownership markers may authorize an existing stage; `--force` never authorizes taking over another project.
 
 Stable root is `/var/www/{domain}`. Deployer owns lock, releases, shared dirs/files, vendors, writable paths, symlink switching, cleanup, and rollback. Accelerator owns env upload, frozen pnpm/npm build, pre-migration DB backup, Laravel ordering, Nginx/Supervisor rendering, service restart, and HTTPS health. A post-switch health failure may restore only the previous code symlink; it must report that database recovery remains manual.

@@ -251,7 +251,7 @@ task('accelerator:preflight', function () use ($config, $nodeEnvironment): void 
         }
 
         $program = $config->group.'_'.$service;
-        $status = trim(run('command sudo -n supervisorctl status '.escapeshellarg($program).' 2>/dev/null || true'));
+        $status = trim(run('command sudo -n supervisorctl status '.escapeshellarg($config->group.':'.$program).' 2>/dev/null || true'));
 
         if ($supervisorOwner !== 'owned' || ! str_contains($status, 'RUNNING')) {
             throw new RuntimeException("Deployment preflight failed: {$service} port [{$port}] is already in use by a process not owned by Supervisor program [{$program}].");

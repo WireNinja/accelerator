@@ -323,6 +323,15 @@ final class ConfigureCommand extends Command
             'APP_URL' => "https://{$domain}",
             'LOG_LEVEL' => 'error',
         ];
+        $local = $store->read('.env');
+
+        foreach (self::FEATURE_KEYS as $feature => $key) {
+            $enabled = match ($feature) {
+                'horizon', 'reverb', 'nightwatch' => ($stageConfig[$feature] ?? false) === true,
+                default => self::truthy($local[$key] ?? 'false'),
+            };
+            $draft[$key] = $enabled ? 'true' : 'false';
+        }
 
         if (($current['APP_KEY'] ?? '') === '') {
             $draft['APP_KEY'] = 'base64:'.base64_encode(random_bytes(32));
@@ -337,12 +346,20 @@ final class ConfigureCommand extends Command
                 $draft['DB_USERNAME'] = text('Database user', default: $current['DB_USERNAME'] ?? '', required: true);
                 $draft['DB_PASSWORD'] = text('Database password', default: $current['DB_PASSWORD'] ?? '', required: true);
             } else {
-                foreach (['DB_HOST', 'DB_DATABASE', 'DB_USERNAME', 'DB_PASSWORD'] as $key) {
+                foreach (['DB_DATABASE', 'DB_USERNAME', 'DB_PASSWORD'] as $key) {
                     if (($current[$key] ?? '') === '') {
                         throw new RuntimeException("{$key} must already exist in {$path} before non-interactive configuration.");
                     }
 
                     $draft[$key] = $current[$key];
+                }
+
+                if (($current['DB_SOCKET'] ?? '') !== '') {
+                    $draft['DB_SOCKET'] = $current['DB_SOCKET'];
+                } elseif (($current['DB_HOST'] ?? '') !== '') {
+                    $draft['DB_HOST'] = $current['DB_HOST'];
+                } else {
+                    throw new RuntimeException("DB_SOCKET or DB_HOST must already exist in {$path} before non-interactive configuration.");
                 }
             }
         }

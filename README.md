@@ -98,6 +98,8 @@ The deploy recipe clones the application repository and initializes only the tra
 
 `deploy:init` and ordinary deploy run a read-only ownership/collision preflight before mutation. It rejects unmanaged roots, duplicate Nginx domains, duplicate Supervisor groups/programs, and occupied Octane/Reverb/Nightwatch ports. Accelerator-written roots and service files carry project/stage ownership markers, so `--force` never means “take over another project”. Dual staging/production topology uses distinct `{project}_{stage}` Supervisor groups and distinct listener ports on the same SSH host.
 
+`accelerator:configure environment` synchronizes stage runtime feature flags, and deployment refuses to start when Horizon, Reverb, or Nightwatch flags disagree with their stage service topology. Installed packages alone are not proof that their runtime providers are enabled.
+
 Horizon and a plain queue worker are mutually exclusive. One VPS per stage is supported; clusters, containers, microservices, and CI orchestration are deliberately out of scope.
 
 ## Package maintenance
