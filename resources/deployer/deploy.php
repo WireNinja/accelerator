@@ -78,6 +78,12 @@ task('accelerator:services', function () use ($config): void {
     }
 });
 
+task('accelerator:supervisor-load', function () use ($config): void {
+    if ($config->hasSupervisorPrograms()) {
+        run('command sudo -n supervisorctl reread && command sudo -n supervisorctl update');
+    }
+});
+
 task('accelerator:health', function () use ($config): void {
     run('curl --fail --silent --show-error --max-time 15 https://'.$config->domain.$config->healthPath.' >/dev/null');
 });
@@ -227,6 +233,7 @@ task('accelerator:preflight', function () use ($config, $nodeEnvironment): void 
 });
 
 task('accelerator:activate-release', function (): void {
+    invoke('accelerator:supervisor-load');
     invoke('accelerator:services');
     invoke('accelerator:health-or-restore');
 });
@@ -250,7 +257,6 @@ task('accelerator:provision', function () use ($config, $renderer): void {
     if ($config->hasSupervisorPrograms()) {
         upload($temporary.'/supervisor.conf', '/tmp/'.$config->group.'-supervisor.conf');
         run('command sudo -n install -m 0644 /tmp/'.$config->group.'-supervisor.conf /etc/supervisor/conf.d/'.$config->group.'.conf');
-        run('command sudo -n supervisorctl reread && command sudo -n supervisorctl update');
     }
 
     run('command sudo -n nginx -t && command sudo -n systemctl reload nginx');
@@ -284,6 +290,7 @@ task('accelerator:relocate', function () use ($config): void {
         run('command sudo -n mkdir -p '.$config->deployRoot);
         run('command sudo -n rsync -a --numeric-ids '.escapeshellarg(rtrim($oldRoot, '/').'/').' '.escapeshellarg($config->deployRoot.'/'));
         invoke('accelerator:provision');
+        invoke('accelerator:supervisor-load');
         invoke('accelerator:services');
         invoke('accelerator:health');
         writeln('Old root preserved at '.$oldRoot.'. Remove it manually only after verifying the new domain.');
