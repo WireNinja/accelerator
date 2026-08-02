@@ -1,0 +1,4 @@
+interface:
+  display_name: "Accelerator Project Lifecycle"
+  short_description: "Guide install through single or dual deploy"
+  default_prompt: "Use $accelerator-project-lifecycle to guide this Accelerator project from fresh Laravel install through verified deployment."

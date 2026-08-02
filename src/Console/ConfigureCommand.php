@@ -257,6 +257,7 @@ final class ConfigureCommand extends Command
         }
 
         $this->writeDeploymentDocument($document);
+        $this->syncLocalEnvironmentIndicator($store, $stagingEnabled);
         $this->ensureStageEnvironment($store, 'production', $domain, $local);
         $this->syncEnvironmentIndicator($store, 'production', $stagingEnabled);
 
@@ -542,6 +543,19 @@ final class ConfigureCommand extends Command
         $store->merge($path, $this->environmentIndicatorValues($current, $stage, $dualStage));
     }
 
+    private function syncLocalEnvironmentIndicator(EnvironmentStore $store, bool $dualStage): void
+    {
+        $current = $store->read('.env');
+        $label = trim($current['ACCELERATOR_ENVIRONMENT_INDICATOR_LABEL'] ?? '');
+        $color = trim($current['ACCELERATOR_ENVIRONMENT_INDICATOR_COLOR'] ?? '');
+
+        $store->merge('.env', [
+            'ACCELERATOR_ENVIRONMENT_INDICATOR_ENABLED' => $dualStage ? 'true' : 'false',
+            'ACCELERATOR_ENVIRONMENT_INDICATOR_LABEL' => $label !== '' ? $label : 'LOCAL DATA',
+            'ACCELERATOR_ENVIRONMENT_INDICATOR_COLOR' => $label !== '' && $color !== '' ? $color : 'info',
+        ]);
+    }
+
     /** @param array<string, string> $current @return array<string, string> */
     private function environmentIndicatorValues(array $current, string $stage, bool $dualStage): array
     {
@@ -551,7 +565,7 @@ final class ConfigureCommand extends Command
         return [
             'ACCELERATOR_ENVIRONMENT_INDICATOR_ENABLED' => $dualStage ? 'true' : 'false',
             'ACCELERATOR_ENVIRONMENT_INDICATOR_LABEL' => $label !== '' ? $label : ($stage === 'staging' ? 'TEST DATA' : 'LIVE DATA'),
-            'ACCELERATOR_ENVIRONMENT_INDICATOR_COLOR' => $color !== '' ? $color : ($stage === 'staging' ? 'warning' : 'danger'),
+            'ACCELERATOR_ENVIRONMENT_INDICATOR_COLOR' => $label !== '' && $color !== '' ? $color : ($stage === 'staging' ? 'warning' : 'danger'),
         ];
     }
 

@@ -135,9 +135,13 @@ final readonly class EnvironmentWriter
             'ACCELERATOR_OAUTH_MODE' => $this->context->hasFeature('oauth') ? 'existing_only' : 'disabled',
             'ACCELERATOR_UPLOAD_MAX_MB' => '100',
             'ACCELERATOR_UI_DENSITY' => 'compact',
-            'ACCELERATOR_ENVIRONMENT_INDICATOR_ENABLED' => 'false',
-            'ACCELERATOR_ENVIRONMENT_INDICATOR_LABEL' => '',
-            'ACCELERATOR_ENVIRONMENT_INDICATOR_COLOR' => 'warning',
+            'ACCELERATOR_ENVIRONMENT_INDICATOR_ENABLED' => $this->context->boolean(
+                $this->context->plan->deploy && $this->context->plan->deploymentMode === 'dual',
+            ),
+            'ACCELERATOR_ENVIRONMENT_INDICATOR_LABEL' => $this->context->plan->deploy
+                && $this->context->plan->deploymentMode === 'dual' ? 'LOCAL DATA' : '',
+            'ACCELERATOR_ENVIRONMENT_INDICATOR_COLOR' => $this->context->plan->deploy
+                && $this->context->plan->deploymentMode === 'dual' ? 'info' : 'warning',
             'GOOGLE_REDIRECT_URI' => rtrim($plan->appUrl, '/').'/auth/google/callback',
             'VITE_APP_NAME' => '"'.addcslashes($plan->appName, '"\\').'"',
         ];

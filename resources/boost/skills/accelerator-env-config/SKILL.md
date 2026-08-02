@@ -21,7 +21,7 @@ Application code calls `config()`, never `env()` outside config files. Keep Tele
 
 Optional features are OAuth, PWA, Telegram, Horizon, Reverb, Scout, and Nightwatch. Filament, settings, RBAC, audit, and core UI are always active. Use `accelerator:env` and `config:show accelerator` for read-only inspection.
 
-Dual-stage topology must set `ACCELERATOR_ENVIRONMENT_INDICATOR_ENABLED=true` in both stage env files. The default labels are `TEST DATA` for staging and `LIVE DATA` for production, with configurable Filament badge colors. Single-production topology must keep the indicator disabled. `accelerator:configure deployment` owns the enable/disable state; stage env may customize only the label and color.
+Dual-stage topology must set `ACCELERATOR_ENVIRONMENT_INDICATOR_ENABLED=true` locally and in both stage env files. Default labels are `LOCAL DATA`, `TEST DATA`, and `LIVE DATA`, with `info`, `warning`, and `danger` colors respectively. Single-production topology must keep the indicator disabled. `accelerator:configure deployment` owns the enable/disable state; each env may customize only its label and color. Composer updates never mutate env files or activate the indicator.
 
 Dual stages are independent, identical instances: keep code, dependencies, features, and application behavior equal while isolating domain and all mutable data/runtime state. When instances share one Redis server, `accelerator:configure environment` owns distinct `{project}_{stage}` values for `REDIS_PREFIX`, `CACHE_PREFIX`, `HORIZON_NAME`, `HORIZON_PREFIX`, and `SESSION_COOKIE`; never make these equal across staging and production. Reverb credentials must also be distinct.
 

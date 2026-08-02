@@ -107,7 +107,7 @@ The deploy recipe clones the application repository and initializes only the tra
 
 Dual-stage deployment runs two independent, identical instances of the same application. Code, dependencies, features, UI, and deployment behavior remain identical. Only the domain and each instance's mutable data/runtime state are separate: SQL data, uploads, cache, queues, sessions, credentials, keys, logs, and processes. Never use staging as a differently configured edition of the application.
 
-Dual-stage projects show a persistent Filament topbar badge so test and live data cannot be confused. This badge is the deliberate UI exception to the identical-instance rule. `accelerator:configure deployment` enables it automatically for both instances; single-production projects keep it hidden. The ignored stage env controls the presentation through `ACCELERATOR_ENVIRONMENT_INDICATOR_ENABLED`, `ACCELERATOR_ENVIRONMENT_INDICATOR_LABEL`, and `ACCELERATOR_ENVIRONMENT_INDICATOR_COLOR`. Defaults are `TEST DATA`/`warning` for staging and `LIVE DATA`/`danger` for production; changing the label or any valid Filament badge color does not require a package edit.
+Dual-stage projects show a persistent Filament topbar badge so local, test, and live data cannot be confused. This badge is the deliberate UI exception to the identical-instance rule. `accelerator:configure deployment` enables it automatically in local, staging, and production env files; single-production projects keep it hidden. Each env controls presentation through `ACCELERATOR_ENVIRONMENT_INDICATOR_ENABLED`, `ACCELERATOR_ENVIRONMENT_INDICATOR_LABEL`, and `ACCELERATOR_ENVIRONMENT_INDICATOR_COLOR`. Defaults are `LOCAL DATA`/`info`, `TEST DATA`/`warning`, and `LIVE DATA`/`danger`; changing the label or any valid Filament badge color does not require a package edit. Composer installation or updates deliberately never mutate these env values.
 
 Dual stages on one VPS must also have distinct `REDIS_PREFIX`, `CACHE_PREFIX`, `HORIZON_NAME`, `HORIZON_PREFIX`, and `SESSION_COOKIE` values. `accelerator:configure environment` derives those namespaces from `{project}_{stage}` so queues, cache, sessions, and Horizon state cannot cross stage boundaries even when both stages use the same Redis server.
 
@@ -138,7 +138,11 @@ PHPStan/Larastan level 5 is the minimum. Do not add a baseline or suppress real 
 | Models/schema/casts/relations | `accelerator-model-context` |
 | Activity logging | `accelerator-activity-log` |
 | PWA/Vite assets | `accelerator-pwa-development` |
+| Nightwatch MCP triage | `accelerator-nightwatch-mcp` |
+| Fresh-to-live project workflow | `accelerator-project-lifecycle` |
 | Remote mutation | `accelerator-deployment` |
 | Read-only runtime diagnosis | `accelerator-ops-observability` |
 
 Command `--help`, source/framework registry, policy, database, and runtime state are truth. Context output and skills are navigation aids.
+
+The complete opinionated lifecycle is stored in `resources/boost/skills/accelerator-project-lifecycle/references/workflow.md`. Efficient Nightwatch MCP issue resolution is stored in `resources/boost/skills/accelerator-nightwatch-mcp/references/issue-workflow.md`. Keep those references synchronized with public Artisan commands and deployment invariants; do not duplicate divergent workflows elsewhere.
