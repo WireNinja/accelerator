@@ -81,3 +81,5 @@ Default context does not execute field closures or instantiate schemas with a nu
 ## Taste gate
 
 Preserve the custom sidebar/topbar and VerticalWizard unless the owner explicitly changes product taste. Login uses Filament's native layout with the minimal Accelerator login class and OAuth render hook; do not recreate alternative login layouts.
+
+The `TOPBAR_END` dual-stage environment badge is a safety invariant, not decoration. Keep it hidden for single-stage deployments and visible for both staging and production when dual topology is enabled. Labels and Filament badge colors come from `accelerator.ui.environment_indicator`.

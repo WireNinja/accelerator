@@ -95,6 +95,7 @@ final readonly class EnvironmentWriter
                 'staging',
                 $plan->stagingDomain,
                 $plan->stagingDeployRoot,
+                true,
             ), 0600);
         }
 
@@ -103,6 +104,7 @@ final readonly class EnvironmentWriter
             'production',
             $plan->domain,
             $plan->deployRoot,
+            $plan->deploymentMode === 'dual',
         ), 0600);
     }
 
@@ -133,6 +135,9 @@ final readonly class EnvironmentWriter
             'ACCELERATOR_OAUTH_MODE' => $this->context->hasFeature('oauth') ? 'existing_only' : 'disabled',
             'ACCELERATOR_UPLOAD_MAX_MB' => '100',
             'ACCELERATOR_UI_DENSITY' => 'compact',
+            'ACCELERATOR_ENVIRONMENT_INDICATOR_ENABLED' => 'false',
+            'ACCELERATOR_ENVIRONMENT_INDICATOR_LABEL' => '',
+            'ACCELERATOR_ENVIRONMENT_INDICATOR_COLOR' => 'warning',
             'GOOGLE_REDIRECT_URI' => rtrim($plan->appUrl, '/').'/auth/google/callback',
             'VITE_APP_NAME' => '"'.addcslashes($plan->appName, '"\\').'"',
         ];
@@ -164,13 +169,22 @@ final readonly class EnvironmentWriter
         return rtrim($template).PHP_EOL;
     }
 
-    private function productionEnvironment(string $contents, string $stage, string $domain, string $deployRoot): string
+    private function productionEnvironment(string $contents, string $stage, string $domain, string $deployRoot, bool $dualStage): string
     {
         $contents = $this->setEnvironmentValue($contents, 'APP_ENV', 'production');
         $contents = $this->setEnvironmentValue($contents, 'APP_KEY', 'base64:'.base64_encode(random_bytes(32)));
         $contents = $this->setEnvironmentValue($contents, 'APP_DEBUG', 'false');
         $contents = $this->setEnvironmentValue($contents, 'APP_URL', "https://{$domain}");
         $contents = $this->setEnvironmentValue($contents, 'LOG_LEVEL', 'error');
+        $contents = $this->setEnvironmentValue($contents, 'ACCELERATOR_ENVIRONMENT_INDICATOR_ENABLED', $this->context->boolean($dualStage));
+        $contents = $this->setEnvironmentValue($contents, 'ACCELERATOR_ENVIRONMENT_INDICATOR_LABEL', $stage === 'staging' ? 'TEST DATA' : 'LIVE DATA');
+        $contents = $this->setEnvironmentValue($contents, 'ACCELERATOR_ENVIRONMENT_INDICATOR_COLOR', $stage === 'staging' ? 'warning' : 'danger');
+        $prefix = strtolower((string) preg_replace('/[^a-z0-9]+/i', '_', "{$this->context->plan->project}_{$stage}"));
+        $contents = $this->setEnvironmentValue($contents, 'REDIS_PREFIX', "{$prefix}_database_");
+        $contents = $this->setEnvironmentValue($contents, 'CACHE_PREFIX', "{$prefix}_cache_");
+        $contents = $this->setEnvironmentValue($contents, 'HORIZON_NAME', "{$this->context->plan->project}-{$stage}");
+        $contents = $this->setEnvironmentValue($contents, 'HORIZON_PREFIX', "{$prefix}_horizon:");
+        $contents = $this->setEnvironmentValue($contents, 'SESSION_COOKIE', "{$prefix}_session");
 
         if ($this->context->plan->database === 'sqlite') {
             $contents = $this->setEnvironmentValue($contents, 'DB_DATABASE', rtrim($deployRoot, '/').'/shared/database/database.sqlite');
@@ -235,7 +249,7 @@ final readonly class EnvironmentWriter
             throw new RuntimeException('Unable to read .gitignore.');
         }
 
-        $contents = preg_replace('/^\/\.accelerator\/\R?/m', '', $contents) ?? $contents;
+        $contents = preg_replace('/^\/\.accelerator\/[ \t]*$\R?/m', '', $contents) ?? $contents;
 
         foreach (['/.accelerator/install-state.json', '/.accelerator/environments/'] as $entry) {
             if (! preg_match('/^'.preg_quote($entry, '/').'$/m', $contents)) {

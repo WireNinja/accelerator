@@ -70,6 +70,10 @@
     @apply ms-auto flex shrink-0 items-center gap-4;
 }
 
+.accelerator-environment-indicator {
+    @apply whitespace-nowrap uppercase tracking-wide;
+}
+
 .accelerator-topbar-end .fi-topbar-database-notifications-btn {
     @apply size-10 rounded-lg border border-gray-200 bg-white shadow-xs hover:bg-gray-50 focus-visible:ring-2 focus-visible:ring-gray-300;
 }

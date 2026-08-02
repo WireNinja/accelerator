@@ -31,7 +31,10 @@ final class ConfigureCommand extends Command
         {--ssh-host= : SSH alias for deployment}
         {--domain= : Production domain}
         {--staging-domain= : Staging domain; empty disables staging}
+        {--ssl-email= : Email used for ACME certificate registration}
         {--http-runtime= : octane or fpm}
+        {--rotate-app-key : Generate a new APP_KEY for the selected stage}
+        {--rotate-reverb-credentials : Generate new Reverb credentials for the selected stage}
         {--migrate-legacy : Convert .accelerator/deploy.env to deploy.json and delete the legacy file}
         {--force : Confirm a validated non-interactive write}
         {--json : Emit a stable JSON result}';
@@ -178,6 +181,7 @@ final class ConfigureCommand extends Command
         $local = $store->read('.env');
         $aliases = SshConfig::aliases();
         $production = is_array($current['stages']['production'] ?? null) ? $current['stages']['production'] : [];
+        $staging = is_array($current['stages']['staging'] ?? null) ? $current['stages']['staging'] : [];
         $currentHost = is_string($production['ssh_host'] ?? null) ? $production['ssh_host'] : '';
         $sshHost = $this->stringOption('ssh-host') ?? ($this->interactive()
             ? ($aliases === []
@@ -209,6 +213,10 @@ final class ConfigureCommand extends Command
         $project = is_string($current['project'] ?? null) ? $current['project'] : basename($this->laravel->basePath());
         $repository = is_string($current['repository'] ?? null) ? $current['repository'] : $this->gitValue(['remote', 'get-url', 'origin']);
         $branch = is_string($current['branch'] ?? null) ? $current['branch'] : ($this->gitValue(['branch', '--show-current']) ?: 'main');
+        $sslEmail = $this->stringOption('ssl-email')
+            ?? (is_string($current['ssl_email'] ?? null) && $current['ssl_email'] !== ''
+                ? $current['ssl_email']
+                : ($local['MAIL_FROM_ADDRESS'] ?? ''));
 
         DeploymentConfig::validateInstallerTargets(
             project: $project,
@@ -227,15 +235,15 @@ final class ConfigureCommand extends Command
             'project' => $project,
             'repository' => $repository,
             'branch' => $branch,
-            'keep_releases' => 5,
-            'php_version' => '8.5',
-            'php_binary' => 'php8.5',
+            'keep_releases' => is_int($current['keep_releases'] ?? null) ? $current['keep_releases'] : 5,
+            'php_version' => is_string($current['php_version'] ?? null) ? $current['php_version'] : '8.5',
+            'php_binary' => is_string($current['php_binary'] ?? null) ? $current['php_binary'] : 'php8.5',
             'package_manager' => $packageManager,
-            'run_user' => 'www-data',
-            'ssl_email' => $local['MAIL_FROM_ADDRESS'] ?? '',
+            'run_user' => is_string($current['run_user'] ?? null) ? $current['run_user'] : 'www-data',
+            'ssl_email' => $sslEmail,
             'stages' => [
-                'staging' => $this->stageTopology('staging', $project, $stagingEnabled, $sshHost, $stagingDomain, $runtime, $horizon, $reverb, $nightwatch, 8100, 8180, 2507),
-                'production' => $this->stageTopology('production', $project, true, $sshHost, $domain, $runtime, $horizon, $reverb, $nightwatch, 8000, 8080, 2407),
+                'staging' => $this->stageTopology($staging, 'staging', $project, $stagingEnabled, $sshHost, $stagingDomain, $runtime, $horizon, $reverb, $nightwatch, 8100, 8180, 2507),
+                'production' => $this->stageTopology($production, 'production', $project, true, $sshHost, $domain, $runtime, $horizon, $reverb, $nightwatch, 8000, 8080, 2407),
             ],
         ];
         DeploymentConfig::validateTopologyDocument($document);
@@ -250,9 +258,13 @@ final class ConfigureCommand extends Command
 
         $this->writeDeploymentDocument($document);
         $this->ensureStageEnvironment($store, 'production', $domain, $local);
+        $this->syncEnvironmentIndicator($store, 'production', $stagingEnabled);
 
         if ($stagingEnabled) {
             $this->ensureStageEnvironment($store, 'staging', $stagingDomain, $local);
+            $this->syncEnvironmentIndicator($store, 'staging', true);
+        } elseif ($store->read('.accelerator/environments/staging.env') !== []) {
+            $this->syncEnvironmentIndicator($store, 'staging', false);
         }
 
         $oldRoot = is_string($production['root'] ?? null) ? $production['root'] : '';
@@ -323,6 +335,12 @@ final class ConfigureCommand extends Command
             'APP_URL' => "https://{$domain}",
             'LOG_LEVEL' => 'error',
         ];
+        $dualStage = collect($document['stages'] ?? [])->filter(
+            static fn (mixed $configuredStage): bool => is_array($configuredStage)
+                && ($configuredStage['enabled'] ?? false) === true,
+        )->count() > 1;
+        $draft += $this->environmentIndicatorValues($current, $stage, $dualStage);
+        $draft += $this->stageRuntimeIdentityValues((string) $document['project'], $stage);
         $local = $store->read('.env');
 
         foreach (self::FEATURE_KEYS as $feature => $key) {
@@ -333,8 +351,34 @@ final class ConfigureCommand extends Command
             $draft[$key] = $enabled ? 'true' : 'false';
         }
 
-        if (($current['APP_KEY'] ?? '') === '') {
+        if ($this->option('rotate-app-key') || ($current['APP_KEY'] ?? '') === '') {
             $draft['APP_KEY'] = 'base64:'.base64_encode(random_bytes(32));
+        }
+
+        if (($stageConfig['reverb'] ?? false) === true) {
+            $draft += [
+                'REVERB_HOST' => $domain,
+                'REVERB_PORT' => '443',
+                'REVERB_SCHEME' => 'https',
+                'VITE_REVERB_HOST' => $domain,
+                'VITE_REVERB_PORT' => '443',
+                'VITE_REVERB_SCHEME' => 'https',
+            ];
+
+            if ($this->option('rotate-reverb-credentials')
+                || ($current['REVERB_APP_ID'] ?? '') === ''
+                || ($current['REVERB_APP_KEY'] ?? '') === ''
+                || ($current['REVERB_APP_SECRET'] ?? '') === '') {
+                $reverbKey = bin2hex(random_bytes(16));
+                $draft += [
+                    'REVERB_APP_ID' => bin2hex(random_bytes(8)),
+                    'REVERB_APP_KEY' => $reverbKey,
+                    'REVERB_APP_SECRET' => bin2hex(random_bytes(32)),
+                    'VITE_REVERB_APP_KEY' => $reverbKey,
+                ];
+            } else {
+                $draft['VITE_REVERB_APP_KEY'] = $current['REVERB_APP_KEY'];
+            }
         }
 
         if (($current['DB_CONNECTION'] ?? 'sqlite') === 'sqlite') {
@@ -378,10 +422,10 @@ final class ConfigureCommand extends Command
         return $this->success('environment', true, [$path], $next);
     }
 
-    /** @return array<string, mixed> */
-    private function stageTopology(string $stage, string $project, bool $enabled, string $sshHost, string $domain, string $runtime, bool $horizon, bool $reverb, bool $nightwatch, int $octanePort, int $reverbPort, int $nightwatchPort): array
+    /** @param array<string, mixed> $current @return array<string, mixed> */
+    private function stageTopology(array $current, string $stage, string $project, bool $enabled, string $sshHost, string $domain, string $runtime, bool $horizon, bool $reverb, bool $nightwatch, int $octanePort, int $reverbPort, int $nightwatchPort): array
     {
-        return [
+        return array_replace($current + [
             'enabled' => $enabled,
             'ssh_host' => $sshHost,
             'domain' => $domain,
@@ -397,7 +441,17 @@ final class ConfigureCommand extends Command
             'reverb_port' => $reverbPort,
             'nightwatch_port' => $nightwatchPort,
             'health_path' => '/up',
-        ];
+        ], [
+            'enabled' => $enabled,
+            'ssh_host' => $sshHost,
+            'domain' => $domain,
+            'root' => $domain === '' ? '' : "/var/www/{$domain}",
+            'http_runtime' => $runtime,
+            'horizon' => $horizon,
+            'queue_worker' => ! $horizon,
+            'reverb' => $reverb,
+            'nightwatch' => $nightwatch,
+        ]);
     }
 
     /** @return array<string, mixed> */
@@ -441,7 +495,7 @@ final class ConfigureCommand extends Command
             throw new RuntimeException('Unable to read .gitignore.');
         }
 
-        $contents = preg_replace('/^\/\.accelerator\/\R?/m', '', $contents) ?? $contents;
+        $contents = preg_replace('/^\/\.accelerator\/[ \t]*$\R?/m', '', $contents) ?? $contents;
 
         foreach (['/.accelerator/install-state.json', '/.accelerator/environments/'] as $entry) {
             if (! preg_match('/^'.preg_quote($entry, '/').'$/m', $contents)) {
@@ -480,6 +534,41 @@ final class ConfigureCommand extends Command
         $store->replace($path, $environment);
     }
 
+    private function syncEnvironmentIndicator(EnvironmentStore $store, string $stage, bool $dualStage): void
+    {
+        $path = ".accelerator/environments/{$stage}.env";
+        $current = $store->read($path);
+
+        $store->merge($path, $this->environmentIndicatorValues($current, $stage, $dualStage));
+    }
+
+    /** @param array<string, string> $current @return array<string, string> */
+    private function environmentIndicatorValues(array $current, string $stage, bool $dualStage): array
+    {
+        $label = trim($current['ACCELERATOR_ENVIRONMENT_INDICATOR_LABEL'] ?? '');
+        $color = trim($current['ACCELERATOR_ENVIRONMENT_INDICATOR_COLOR'] ?? '');
+
+        return [
+            'ACCELERATOR_ENVIRONMENT_INDICATOR_ENABLED' => $dualStage ? 'true' : 'false',
+            'ACCELERATOR_ENVIRONMENT_INDICATOR_LABEL' => $label !== '' ? $label : ($stage === 'staging' ? 'TEST DATA' : 'LIVE DATA'),
+            'ACCELERATOR_ENVIRONMENT_INDICATOR_COLOR' => $color !== '' ? $color : ($stage === 'staging' ? 'warning' : 'danger'),
+        ];
+    }
+
+    /** @return array<string, string> */
+    private function stageRuntimeIdentityValues(string $project, string $stage): array
+    {
+        $prefix = strtolower((string) preg_replace('/[^a-z0-9]+/i', '_', "{$project}_{$stage}"));
+
+        return [
+            'REDIS_PREFIX' => "{$prefix}_database_",
+            'CACHE_PREFIX' => "{$prefix}_cache_",
+            'HORIZON_NAME' => "{$project}-{$stage}",
+            'HORIZON_PREFIX' => "{$prefix}_horizon:",
+            'SESSION_COOKIE' => "{$prefix}_session",
+        ];
+    }
+
     /** @param array<string, string> $current @param array<string, string> $draft */
     private function confirmDraft(string $path, array $current, array $draft): bool
     {
@@ -487,7 +576,12 @@ final class ConfigureCommand extends Command
 
         foreach ($draft as $key => $value) {
             if (($current[$key] ?? null) !== $value) {
-                $rows[] = [$key, $current[$key] ?? '[blank]', str_contains($key, 'PASSWORD') ? '[redacted]' : $value];
+                $sensitive = preg_match('/(?:KEY|PASSWORD|SECRET|TOKEN)$/', $key) === 1;
+                $rows[] = [
+                    $key,
+                    $sensitive && isset($current[$key]) ? '[redacted]' : ($current[$key] ?? '[blank]'),
+                    $sensitive ? '[redacted]' : $value,
+                ];
             }
         }
 

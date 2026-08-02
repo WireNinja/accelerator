@@ -109,6 +109,8 @@
                 @endif
                 class="accelerator-topbar-end"
             >
+                {{ \Filament\Support\Facades\FilamentView::renderHook(\Filament\View\PanelsRenderHook::TOPBAR_END) }}
+
                 @if ($hasTenancy && filament()->hasTenantMenu())
                     <x-filament-panels::tenant-menu teleport />
                 @endif
@@ -134,7 +136,6 @@
             </div>
         </div>
 
-        {{ \Filament\Support\Facades\FilamentView::renderHook(\Filament\View\PanelsRenderHook::TOPBAR_END) }}
     </nav>
 
     <x-filament-actions::modals />

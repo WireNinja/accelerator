@@ -53,6 +53,11 @@ return [
 
     'ui' => [
         'density' => env('ACCELERATOR_UI_DENSITY', 'compact'),
+        'environment_indicator' => [
+            'enabled' => env('ACCELERATOR_ENVIRONMENT_INDICATOR_ENABLED', false),
+            'label' => env('ACCELERATOR_ENVIRONMENT_INDICATOR_LABEL', ''),
+            'color' => env('ACCELERATOR_ENVIRONMENT_INDICATOR_COLOR', 'warning'),
+        ],
         'sidebar' => [
             'default_width' => 336,
             'min_width' => 288,

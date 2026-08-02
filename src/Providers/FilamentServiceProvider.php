@@ -106,6 +106,20 @@ final class FilamentServiceProvider extends ServiceProvider
             PanelsRenderHook::SIDEBAR_NAV_START,
             static fn (): View => view()->file(__DIR__.'/../../resources/views/filament/sidebar/notice.blade.php'),
         );
+
+        if (config('accelerator.ui.environment_indicator.enabled', false)
+            && filled(config('accelerator.ui.environment_indicator.label'))) {
+            FilamentView::registerRenderHook(
+                PanelsRenderHook::TOPBAR_END,
+                static fn (): View => view()->file(
+                    __DIR__.'/../../resources/views/filament/environment-indicator.blade.php',
+                    [
+                        'label' => config('accelerator.ui.environment_indicator.label'),
+                        'color' => config('accelerator.ui.environment_indicator.color', 'warning'),
+                    ],
+                ),
+            );
+        }
     }
 
     private function protectShieldCommands(): void

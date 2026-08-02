@@ -32,6 +32,7 @@ Accelerator is a proprietary, batteries-included foundation for Laravel 13 Filam
 - `.accelerator/environments/{stage}.env`: ignored stage secrets.
 - `.accelerator/install-state.json`: ignored resume receipt only.
 - Deployment root is `/var/www/{domain}` with Deployer releases and `current` symlink.
+- Dual stages are independent, identical application instances. Code, dependencies, features, UI, and behavior match; domain and mutable data/runtime state are isolated. The configurable topbar data badge is the deliberate UI exception. Single-stage projects do not show it.
 
 ### Safety
 
