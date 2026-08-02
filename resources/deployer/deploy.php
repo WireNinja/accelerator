@@ -6,6 +6,7 @@ namespace Deployer;
 
 use RuntimeException;
 use Throwable;
+use WireNinja\Accelerator\Configuration\EnvironmentStore;
 use WireNinja\Accelerator\Deployment\DeploymentConfig;
 use WireNinja\Accelerator\Deployment\DeploymentRenderer;
 
@@ -90,6 +91,108 @@ task('accelerator:frontend', function () use ($config, $nodeEnvironment): void {
 task('accelerator:backup', function (): void {
     cd('{{release_path}}');
     run('{{bin/php}} artisan backup:run --only-db --disable-notifications --no-interaction');
+});
+
+task('accelerator:database-init', function () use ($config): void {
+    $environment = (new EnvironmentStore($config->projectRoot))->read(
+        '.accelerator/environments/'.$config->stage.'.env',
+    );
+    $driver = $environment['DB_CONNECTION'] ?? 'sqlite';
+    $database = $environment['DB_DATABASE'] ?? '';
+
+    if ($driver === 'sqlite') {
+        $expected = $config->sharedPath().'/database/database.sqlite';
+
+        if ($database !== $expected) {
+            throw new RuntimeException("SQLite database for {$config->stage} must be [{$expected}].");
+        }
+
+        run('mkdir -p '.escapeshellarg(dirname($expected)).' && touch '.escapeshellarg($expected).' && chmod 0660 '.escapeshellarg($expected));
+
+        return;
+    }
+
+    $username = $environment['DB_USERNAME'] ?? '';
+    $host = $environment['DB_HOST'] ?? '';
+    $socket = $environment['DB_SOCKET'] ?? '';
+
+    foreach (['database' => $database, 'username' => $username] as $label => $value) {
+        if (preg_match('/^[a-z0-9_]+$/i', $value) !== 1) {
+            throw new RuntimeException("Deployment {$label} must contain only letters, numbers, and underscores.");
+        }
+    }
+
+    if ($socket === '' && ! in_array($host, ['127.0.0.1', 'localhost', '::1'], true)) {
+        throw new RuntimeException('deploy:init can bootstrap only a database on the deployment host. Create the external database explicitly first.');
+    }
+
+    $sqlString = static fn (string $value): string => "'".str_replace("'", "''", $value)."'";
+
+    if (in_array($driver, ['mysql', 'mariadb'], true)) {
+        $available = trim(run("command sudo -n sh -c 'command -v mysql >/dev/null 2>&1' && echo yes || echo no"));
+
+        if ($available !== 'yes') {
+            throw new RuntimeException('MySQL client is unavailable through passwordless sudo on the deployment host.');
+        }
+
+        $hosts = preg_split('/\R/', trim(run(
+            'command sudo -n mysql --batch --skip-column-names -e '.escapeshellarg(
+                'SELECT Host FROM mysql.user WHERE User = '.$sqlString($username).' ORDER BY Host;',
+            ),
+        ))) ?: [];
+        $hosts = array_values(array_filter($hosts, static fn (string $accountHost): bool => $accountHost !== ''));
+
+        if ($hosts === []) {
+            throw new RuntimeException("MySQL account [{$username}] must exist before deploy:init can grant the stage database.");
+        }
+
+        $identifier = '`'.str_replace('`', '``', $database).'`';
+        $sql = "CREATE DATABASE IF NOT EXISTS {$identifier} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;\n";
+
+        foreach ($hosts as $accountHost) {
+            $sql .= "GRANT ALL PRIVILEGES ON {$identifier}.* TO ".$sqlString($username).'@'.$sqlString($accountHost).";\n";
+        }
+
+        $temporary = sys_get_temp_dir().'/accelerator-database-'.bin2hex(random_bytes(8)).'.sql';
+        $remote = '/tmp/'.$config->group.'-database-init.sql';
+
+        try {
+            file_put_contents($temporary, $sql, LOCK_EX);
+            chmod($temporary, 0600);
+            upload($temporary, $remote);
+            run('chmod 0600 '.escapeshellarg($remote).' && trap '.escapeshellarg('rm -f '.$remote).' EXIT; command sudo -n mysql < '.escapeshellarg($remote));
+        } finally {
+            @unlink($temporary);
+        }
+
+        return;
+    }
+
+    if ($driver === 'pgsql') {
+        $roleExists = trim(run(
+            'command sudo -n -u postgres psql --tuples-only --no-align --command='.escapeshellarg(
+                'SELECT 1 FROM pg_roles WHERE rolname = '.$sqlString($username).';',
+            ),
+        ));
+
+        if ($roleExists !== '1') {
+            throw new RuntimeException("PostgreSQL role [{$username}] must exist before deploy:init can create the stage database.");
+        }
+
+        $databaseExists = trim(run(
+            'command sudo -n -u postgres psql --tuples-only --no-align --command='.escapeshellarg(
+                'SELECT 1 FROM pg_database WHERE datname = '.$sqlString($database).';',
+            ),
+        ));
+
+        if ($databaseExists !== '1') {
+            run('command sudo -n -u postgres createdb --owner='.escapeshellarg($username).' '.escapeshellarg($database));
+        }
+
+        return;
+    }
+
+    throw new RuntimeException("Unsupported deployment database driver [{$driver}].");
 });
 
 task('accelerator:services', function () use ($config): void {

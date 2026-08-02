@@ -31,6 +31,7 @@ final class DeployInitCommand extends Command
             }
 
             $deployer->run('accelerator:provision', $stage);
+            $deployer->run('accelerator:database-init', $stage);
             $deployer->run('deploy', $stage);
 
             return self::SUCCESS;

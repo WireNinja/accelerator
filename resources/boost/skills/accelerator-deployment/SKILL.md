@@ -27,6 +27,8 @@ Staging and production use separate `{project}_{stage}` Supervisor groups and se
 
 Stable root is `/var/www/{domain}`. Deployer owns lock, releases, shared dirs/files, vendors, writable paths, symlink switching, cleanup, and rollback. Accelerator owns env upload, frozen pnpm/npm build, pre-migration DB backup, Laravel ordering, Nginx/Supervisor rendering, service restart, and HTTPS health. A post-switch health failure may restore only the previous code symlink; it must report that database recovery remains manual.
 
+`deploy:init` creates a missing first database before backup and migration. It may create stage-owned SQLite, or a local MySQL/MariaDB/PostgreSQL database for an existing application account through passwordless sudo. It never creates database users, changes passwords, or provisions external database servers. Ordinary deploys never create databases.
+
 Runtime/deploy writable paths use inherited ACLs. A release is rollback-eligible only after its services pass the retried HTTPS health check; never target an unfinished, failed, or unmarked release.
 
 Supervisor owns long-running service restarts. Do not add Laravel's generic post-deploy `artisan reload`; it duplicates the stage-scoped restart and may not signal processes owned by the runtime user.
