@@ -41,6 +41,8 @@ Stable root is `/var/www/{domain}`. Deployer owns lock, releases, shared dirs/fi
 
 Runtime/deploy writable paths use inherited ACLs. A release is rollback-eligible only after its services pass the retried HTTPS health check; never target an unfinished, failed, or unmarked release.
 
+File backups include mutable `storage/app` by default. Never replace that with the release root: code belongs in Git, while release-tree backups leak `.env` and archive disposable vendors/build artifacts. Add another path only through `accelerator.backup.include` when the application truly owns mutable data there.
+
 For dual stages, deploy to staging first and promote only its marked-successful exact Git revision. Never promote a branch head that differs from the revision the client reviewed.
 
 Supervisor owns long-running service restarts. Do not add Laravel's generic post-deploy `artisan reload`; it duplicates the stage-scoped restart and may not signal processes owned by the runtime user.

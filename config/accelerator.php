@@ -41,6 +41,12 @@ return [
         'max_megabytes' => env('ACCELERATOR_UPLOAD_MAX_MB', 100),
     ],
 
+    'backup' => [
+        'include' => [
+            storage_path('app'),
+        ],
+    ],
+
     'audit' => [
         'default_except' => [
             'password',

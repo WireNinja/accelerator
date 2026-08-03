@@ -39,6 +39,8 @@ root exception: ZipArchive permission denied
 
 Treat this as one incident with multiple observations unless evidence shows independent causes.
 
+For backup permission incidents, distinguish destination/temp ACL failures from an unreadable source file. Accelerator file backups should include mutable `storage/app`, never the release root or `.env` symlink; confirm the effective `backup.backup.source.files.include` value before changing permissions.
+
 ## Required report
 
 - MCP access: callable or unavailable, with the exact boundary.

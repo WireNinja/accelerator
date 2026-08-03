@@ -73,6 +73,7 @@ final class CoreServiceProvider extends ServiceProvider
 
         $this->configureTrustedProxy();
         $this->registerCustomSessionDriver();
+        $this->configureBackup();
         $this->configureEloquent();
         $this->configureApplicationDefaults();
         $this->configureSuperAdminGate();
@@ -140,6 +141,14 @@ final class CoreServiceProvider extends ServiceProvider
             minutes: (int) $application['config']->get('session.lifetime'),
             tableName: (string) $application['config']->get('session.octane_table', 'sessions'),
         ));
+    }
+
+    private function configureBackup(): void
+    {
+        $this->app['config']->set(
+            'backup.backup.source.files.include',
+            $this->app['config']->get('accelerator.backup.include', [storage_path('app')]),
+        );
     }
 
     /**
