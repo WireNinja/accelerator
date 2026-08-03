@@ -8,6 +8,8 @@ use Illuminate\Console\Command;
 use JsonException;
 use RuntimeException;
 use WireNinja\Accelerator\Deployment\Deployer;
+use WireNinja\Accelerator\Deployment\DeploymentConfig;
+use WireNinja\Accelerator\Deployment\DeploymentEnvironment;
 
 final class DeployPreflightCommand extends Command
 {
@@ -21,6 +23,8 @@ final class DeployPreflightCommand extends Command
         $stage = (string) $this->option('stage');
 
         try {
+            $config = DeploymentConfig::load(base_path(), $stage);
+            (new DeploymentEnvironment(base_path()))->assertValid($config);
             $output = (new Deployer(base_path()))->run('accelerator:preflight', $stage, capture: true);
             $preflight = $this->parsePreflight($output);
 

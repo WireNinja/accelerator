@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Deployer;
 
 use RuntimeException;
+use Symfony\Component\Console\Input\InputOption;
 use Throwable;
 use WireNinja\Accelerator\Configuration\EnvironmentStore;
 use WireNinja\Accelerator\Deployment\DeploymentConfig;
@@ -34,6 +35,9 @@ set('http_user', $config->runUser);
 set('composer_options', '--prefer-dist --no-progress --no-interaction --no-dev --optimize-autoloader --classmap-authoritative');
 set('update_code_strategy', 'clone');
 set('old_root', '');
+option('service', null, InputOption::VALUE_REQUIRED, 'Configured stage service', 'all');
+option('backup-mode', null, InputOption::VALUE_REQUIRED, 'all, database, or files', 'all');
+option('lines', null, InputOption::VALUE_REQUIRED, 'Log lines to read', '200');
 set('rollback_candidate', function (): string {
     $currentRelease = basename(run('readlink {{current_path}}'));
     $foundCurrent = false;
@@ -60,7 +64,27 @@ set('rollback_candidate', function (): string {
 
 task('accelerator:environment', function () use ($config): void {
     run('mkdir -p {{deploy_path}}/shared');
-    upload($config->runtimeEnvironmentFile(), '{{deploy_path}}/shared/.env');
+    $temporary = '{{deploy_path}}/shared/.env.accelerator-upload';
+    upload($config->runtimeEnvironmentFile(), $temporary);
+    run('chmod 0600 '.$temporary.' && mv -f '.$temporary.' {{deploy_path}}/shared/.env');
+});
+
+task('accelerator:runtime-acl', function () use ($config): void {
+    $storage = escapeshellarg($config->sharedPath().'/storage');
+    $runtimeUser = escapeshellarg($config->runUser);
+
+    run("command sudo -n mkdir -p {$storage}");
+    run("command sudo -n setfacl -R -m u:{$runtimeUser}:rwx,m::rwx {$storage}");
+    run("command sudo -n find {$storage} -type d -exec setfacl -m d:u:{$runtimeUser}:rwx,d:m::rwx {} +");
+});
+
+task('accelerator:environment-push', function () use ($config): void {
+    invoke('accelerator:preflight');
+    invoke('accelerator:environment');
+    invoke('accelerator:runtime-acl');
+    run('command sudo -n -u '.escapeshellarg($config->runUser).' '.escapeshellarg($config->phpBinary).' '.escapeshellarg($config->currentPath().'/artisan').' optimize:clear --no-interaction');
+    invoke('accelerator:services');
+    invoke('accelerator:health');
 });
 
 task('accelerator:submodule', function (): void {
@@ -91,6 +115,64 @@ task('accelerator:frontend', function () use ($config, $nodeEnvironment): void {
 task('accelerator:backup', function (): void {
     cd('{{release_path}}');
     run('{{bin/php}} artisan backup:run --only-db --disable-notifications --no-interaction');
+});
+
+task('accelerator:backup-manual', function () use ($config): void {
+    $mode = (string) input()->getOption('backup-mode');
+
+    if (! in_array($mode, ['all', 'database', 'files'], true)) {
+        throw new RuntimeException('backup-mode must be all, database, or files.');
+    }
+
+    invoke('accelerator:runtime-acl');
+    $only = match ($mode) {
+        'database' => ' --only-db',
+        'files' => ' --only-files',
+        default => '',
+    };
+    run('cd '.escapeshellarg($config->currentPath()).' && command sudo -n -u '.escapeshellarg($config->runUser).' '.escapeshellarg($config->phpBinary).' artisan backup:run'.$only.' --disable-notifications --no-interaction', forceOutput: true);
+});
+
+foreach (['status', 'start', 'stop', 'restart'] as $operation) {
+    task("accelerator:service-{$operation}", function () use ($config, $operation): void {
+        if (! $config->hasSupervisorPrograms()) {
+            throw new RuntimeException("No Supervisor services are enabled for {$config->stage}.");
+        }
+
+        $service = (string) input()->getOption('service');
+        $target = $service === 'all'
+            ? $config->group.':*'
+            : $config->group.':'.$config->programName($service);
+        $command = 'command sudo -n supervisorctl '.$operation.' '.escapeshellarg($target);
+
+        if ($operation === 'status') {
+            $command .= ' || true';
+        }
+
+        run($command, forceOutput: true);
+    });
+}
+
+task('accelerator:revision', function (): void {
+    run("if [ -f {{current_path}}/ACCELERATOR_SUCCESSFUL_RELEASE ]; then revision=\$(cat {{current_path}}/REVISION 2>/dev/null || true); else revision=''; fi; printf 'ACCELERATOR_REVISION revision=%s\\n' \"\$revision\"", forceOutput: true);
+});
+
+task('accelerator:logs', function () use ($config): void {
+    $service = (string) input()->getOption('service');
+    $allowed = ['laravel', ...$config->supervisorServices()];
+
+    if (! in_array($service, $allowed, true)) {
+        throw new RuntimeException('Unknown or disabled log service ['.$service.'].');
+    }
+
+    $lines = filter_var(input()->getOption('lines'), FILTER_VALIDATE_INT);
+
+    if (! is_int($lines) || $lines < 1 || $lines > 5000) {
+        throw new RuntimeException('lines must be between 1 and 5000.');
+    }
+
+    $file = $config->sharedPath().'/storage/logs/'.($service === 'laravel' ? 'laravel.log' : "{$service}.log");
+    run('command sudo -n tail -n '.$lines.' '.escapeshellarg($file), forceOutput: true);
 });
 
 task('accelerator:database-init', function () use ($config): void {
@@ -239,6 +321,7 @@ task('accelerator:preflight', function () use ($config, $nodeEnvironment): void 
     $rootToken = $config->ownerToken('root');
     $nginxMarker = '# '.$config->ownerToken('nginx');
     $supervisorMarker = '# '.$config->ownerToken('supervisor');
+    $legacyIdentity = 'stage='.$config->stage.' domain='.$config->domain.' root='.$config->deployRoot;
 
     $requiredCommands = ['git', $config->phpBinary, 'composer', 'sudo', 'getfacl', 'setfacl'];
     $requiredSudoCommands = ['ss', 'nginx', 'certbot'];
@@ -279,17 +362,19 @@ task('accelerator:preflight', function () use ($config, $nodeEnvironment): void 
         'if [ ! -e '.escapeshellarg($config->deployRoot).' ]; then echo absent; '
         .'elif [ ! -d '.escapeshellarg($config->deployRoot).' ]; then echo collision:not-directory; '
         .'elif [ -f '.escapeshellarg($rootOwner).' ] && [ "$(cat '.escapeshellarg($rootOwner).')" = '.escapeshellarg($rootToken).' ]; then echo owned; '
+        .'elif [ -f '.escapeshellarg($rootOwner).' ] && grep -Fq '.escapeshellarg('WireNinja-Accelerator kind=root').' '.escapeshellarg($rootOwner).' && grep -Fq '.escapeshellarg($legacyIdentity).' '.escapeshellarg($rootOwner).'; then echo legacy-owned; '
         .'elif [ -z "$(find '.escapeshellarg($config->deployRoot).' -mindepth 1 -maxdepth 1 -print -quit)" ]; then echo empty; '
         .'else echo collision:unmanaged; fi',
     ));
 
     if (str_starts_with($rootState, 'collision:')) {
-        throw new RuntimeException("Deployment preflight failed: root [{$config->deployRoot}] is {$rootState} and is not owned by {$config->project}:{$config->stage}.");
+        throw new RuntimeException("Deployment preflight failed: root [{$config->deployRoot}] is {$rootState} and is not owned by {$config->deploymentKey}:{$config->stage}.");
     }
 
     $nginxOwner = trim(run(
         'if [ ! -e '.escapeshellarg($expectedNginx).' ]; then echo absent; '
         .'elif sudo -n grep -Fxq '.escapeshellarg($nginxMarker).' '.escapeshellarg($expectedNginx).'; then echo owned; '
+        .'elif sudo -n grep -Fq '.escapeshellarg('WireNinja-Accelerator kind=nginx').' '.escapeshellarg($expectedNginx).' && sudo -n grep -Fq '.escapeshellarg($legacyIdentity).' '.escapeshellarg($expectedNginx).'; then echo legacy-owned; '
         .'else echo collision:unmanaged; fi',
     ));
 
@@ -315,6 +400,7 @@ task('accelerator:preflight', function () use ($config, $nodeEnvironment): void 
     }
 
     $supervisorOwner = 'disabled';
+    $legacySupervisor = '';
 
     if ($config->hasSupervisorPrograms()) {
         $supervisorOwner = trim(run(
@@ -327,7 +413,23 @@ task('accelerator:preflight', function () use ($config, $nodeEnvironment): void 
             throw new RuntimeException("Deployment preflight failed: Supervisor file [{$expectedSupervisor}] exists without the expected Accelerator ownership marker.");
         }
 
-        $groupPattern = '^\\[(group:'.preg_quote($config->group, '/').'|program:'.preg_quote($config->group, '/').'_).*\\]';
+        if ($supervisorOwner === 'absent') {
+            $legacySupervisor = trim(run(
+                'command sudo -n grep -RslF '.escapeshellarg($legacyIdentity).' /etc/supervisor/conf.d 2>/dev/null || true',
+            ));
+            $legacyFiles = array_values(array_filter(preg_split('/\R/', $legacySupervisor) ?: []));
+
+            if (count($legacyFiles) > 1) {
+                throw new RuntimeException('Deployment preflight failed: multiple legacy Supervisor files claim this stage.');
+            }
+
+            if ($legacyFiles !== []) {
+                $legacySupervisor = $legacyFiles[0];
+                $supervisorOwner = 'legacy-owned';
+            }
+        }
+
+        $groupPattern = '^\\[(group:'.preg_quote($config->group, '/').'|program:'.preg_quote($config->group, '/').'-).*\\]';
         $supervisorMatches = trim(run(
             'command sudo -n grep -RslE '.escapeshellarg($groupPattern).' /etc/supervisor/conf.d 2>/dev/null || true',
         ));
@@ -352,8 +454,18 @@ task('accelerator:preflight', function () use ($config, $nodeEnvironment): void 
             continue;
         }
 
-        $program = $config->group.'_'.$service;
+        $program = $config->programName($service);
         $status = trim(run('command sudo -n supervisorctl status '.escapeshellarg($config->group.':'.$program).' 2>/dev/null || true'));
+
+        if ($supervisorOwner === 'legacy-owned') {
+            $legacyOwnsPort = trim(run('command sudo -n grep -Eq '.escapeshellarg('(--port=|:)(?:127\\.0\\.0\\.1:)?'.$port.'([^0-9]|$)').' '.escapeshellarg($legacySupervisor).' && echo yes || echo no')) === 'yes';
+
+            if ($legacyOwnsPort) {
+                $portStates[] = "{$service}:{$port}=legacy-owned";
+
+                continue;
+            }
+        }
 
         if ($supervisorOwner !== 'owned' || ! str_contains($status, 'RUNNING')) {
             throw new RuntimeException("Deployment preflight failed: {$service} port [{$port}] is already in use by a process not owned by Supervisor program [{$program}].");
@@ -362,7 +474,7 @@ task('accelerator:preflight', function () use ($config, $nodeEnvironment): void 
         $portStates[] = "{$service}:{$port}=owned";
     }
 
-    run("printf 'ACCELERATOR_PREFLIGHT stage={$config->stage}\\nACCELERATOR_PREFLIGHT host={$config->sshHost}\\nACCELERATOR_PREFLIGHT domain={$config->domain}\\nACCELERATOR_PREFLIGHT root={$config->deployRoot}\\nACCELERATOR_PREFLIGHT service_group={$config->group}\\nACCELERATOR_PREFLIGHT root_state={$rootState}\\nACCELERATOR_PREFLIGHT nginx_state={$nginxOwner}\\nACCELERATOR_PREFLIGHT supervisor_state={$supervisorOwner}\\nACCELERATOR_PREFLIGHT ports=".implode(',', $portStates)."\\n'", forceOutput: true);
+    run("printf 'ACCELERATOR_PREFLIGHT deployment_key={$config->deploymentKey}\\nACCELERATOR_PREFLIGHT stage={$config->stage}\\nACCELERATOR_PREFLIGHT host={$config->sshHost}\\nACCELERATOR_PREFLIGHT domain={$config->domain}\\nACCELERATOR_PREFLIGHT root={$config->deployRoot}\\nACCELERATOR_PREFLIGHT supervisor_group={$config->group}\\nACCELERATOR_PREFLIGHT root_state={$rootState}\\nACCELERATOR_PREFLIGHT nginx_state={$nginxOwner}\\nACCELERATOR_PREFLIGHT supervisor_state={$supervisorOwner}\\nACCELERATOR_PREFLIGHT ports=".implode(',', $portStates)."\\n'", forceOutput: true);
 });
 
 task('accelerator:activate-release', function (): void {
@@ -382,6 +494,7 @@ task('accelerator:provision', function () use ($config, $renderer): void {
     file_put_contents($temporary.'/supervisor.conf', $renderer->supervisor());
 
     run('mkdir -p '.$config->deployRoot.'/shared/database '.$config->deployRoot.'/shared/acme');
+    invoke('accelerator:runtime-acl');
     run('printf %s '.escapeshellarg($config->ownerToken('root')).' > '.escapeshellarg($config->deployRoot.'/.accelerator-owner'));
     upload($temporary.'/nginx.conf', '/tmp/'.$config->group.'-nginx.conf');
     upload($temporary.'/nginx-secure.conf', '/tmp/'.$config->group.'-nginx-secure.conf');
@@ -389,6 +502,14 @@ task('accelerator:provision', function () use ($config, $renderer): void {
     run('command sudo -n ln -sfn /etc/nginx/sites-available/'.$config->domain.' /etc/nginx/sites-enabled/'.$config->domain);
 
     if ($config->hasSupervisorPrograms()) {
+        $legacyIdentity = 'stage='.$config->stage.' domain='.$config->domain.' root='.$config->deployRoot;
+        $expectedSupervisor = '/etc/supervisor/conf.d/'.$config->group.'.conf';
+        run(
+            'legacy=$(command sudo -n grep -RslF '.escapeshellarg($legacyIdentity).' /etc/supervisor/conf.d 2>/dev/null | grep -Fvx '.escapeshellarg($expectedSupervisor).' | head -n 1 || true); '
+            .'if [ -n "$legacy" ]; then old_group=$(command sudo -n sed -n "s/^# .* group=\\([^ ]*\\).*$/\\1/p" "$legacy" | head -n 1); '
+            .'if [ -n "$old_group" ]; then command sudo -n supervisorctl stop "$old_group:*" >/dev/null 2>&1 || true; fi; '
+            .'command sudo -n rm -f "$legacy"; command sudo -n supervisorctl reread; command sudo -n supervisorctl update; fi',
+        );
         upload($temporary.'/supervisor.conf', '/tmp/'.$config->group.'-supervisor.conf');
         run('command sudo -n install -m 0644 /tmp/'.$config->group.'-supervisor.conf /etc/supervisor/conf.d/'.$config->group.'.conf');
     }
@@ -400,7 +521,8 @@ task('accelerator:provision', function () use ($config, $renderer): void {
 });
 
 task('accelerator:status', function () use ($config): void {
-    run("printf 'ACCELERATOR_STATUS stage={$config->stage}\\nACCELERATOR_STATUS domain={$config->domain}\\nACCELERATOR_STATUS root={$config->deployRoot}\\n'", forceOutput: true);
+    run("printf 'ACCELERATOR_STATUS revision=%s\\n' \"\$(cat {{current_path}}/REVISION 2>/dev/null || true)\"", forceOutput: true);
+    run("printf 'ACCELERATOR_STATUS deployment_key={$config->deploymentKey}\\nACCELERATOR_STATUS stage={$config->stage}\\nACCELERATOR_STATUS domain={$config->domain}\\nACCELERATOR_STATUS root={$config->deployRoot}\\nACCELERATOR_STATUS supervisor_group={$config->group}\\n'", forceOutput: true);
     run("printf 'ACCELERATOR_STATUS current=%s\\n' \"\$(readlink {{deploy_path}}/current 2>/dev/null || true)\"", forceOutput: true);
     run("current=\"\$(readlink -f {{deploy_path}}/current 2>/dev/null || true)\"; previous=''; for marker in \$(find {{deploy_path}}/releases -mindepth 2 -maxdepth 2 -name ACCELERATOR_SUCCESSFUL_RELEASE 2>/dev/null | sort -Vr); do candidate=\"\$(dirname \"\$marker\")\"; if [ \"\$candidate\" != \"\$current\" ] && [ ! -f \"\$candidate/BAD_RELEASE\" ]; then previous=\"\$candidate\"; break; fi; done; printf 'ACCELERATOR_STATUS previous=%s\\n' \"\$previous\"", forceOutput: true);
     run("if test -f {{deploy_path}}/.dep/deploy.lock; then value=yes; else value=no; fi; printf 'ACCELERATOR_STATUS locked=%s\\n' \"\$value\"", forceOutput: true);
@@ -450,6 +572,7 @@ before('deploy:shared', 'accelerator:environment');
 after('deploy:update_code', 'accelerator:submodule');
 after('deploy:vendors', 'accelerator:frontend');
 before('artisan:migrate', 'accelerator:backup');
+before('accelerator:backup', 'accelerator:runtime-acl');
 after('deploy:symlink', 'accelerator:activate-release');
 after('rollback', 'accelerator:services');
 after('deploy:failed', 'accelerator:mark-failed-release');

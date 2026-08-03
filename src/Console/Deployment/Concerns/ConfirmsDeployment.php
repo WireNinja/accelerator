@@ -23,7 +23,7 @@ trait ConfirmsDeployment
         }
 
         return confirm(
-            "{$action} {$config->stage}: {$config->domain} at {$config->deployRoot} via {$config->sshHost}?",
+            "{$action} {$config->stage}: {$config->domain} at {$config->deployRoot} via {$config->sshHost} ({$config->group})?",
             default: false,
         );
     }

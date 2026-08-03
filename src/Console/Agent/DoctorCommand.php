@@ -19,6 +19,7 @@ use Throwable;
 use WireNinja\Accelerator\AcceleratorServiceProvider;
 use WireNinja\Accelerator\Contracts\AcceleratorUser;
 use WireNinja\Accelerator\Deployment\DeploymentConfig;
+use WireNinja\Accelerator\Deployment\DeploymentEnvironment;
 
 #[Signature('accelerator:doctor {--json : Output as JSON} {--compact : Compact JSON output} {--section= : runtime, database, frontend, deployment, or security}')]
 #[Description('Verify the Accelerator installation contract and report actionable failures')]
@@ -252,9 +253,13 @@ final class DoctorCommand extends Command
             $config = DeploymentConfig::load(base_path());
             $stageEnvironment = ".accelerator/environments/{$config->stage}.env";
             $this->assert('Deployment', 'Topology', "{$config->stage}: {$config->domain}", true, 'Deployment topology is invalid.');
+            $this->assert('Deployment', 'Identity', $config->deploymentKey, $config->group === DeploymentConfig::serviceGroup($config->deploymentKey, $config->stage), 'Supervisor identity must be derived from deployment_key.');
+            $this->assert('Deployment', 'Port block', "{$config->portBase}-".($config->portBase + 19), true, 'Deployment port block is invalid.');
             $this->assert('Deployment', 'Stable root', $config->deployRoot, $config->deployRoot === "/var/www/{$config->domain}", 'Deployment root must match the domain.');
             $this->assert('Deployment', 'Stage environment', $stageEnvironment, is_file(base_path($stageEnvironment)), "Missing {$stageEnvironment}.");
             $this->assert('Deployment', 'Queue topology', $config->horizonEnabled ? 'horizon' : 'queue-worker', $config->horizonEnabled xor $config->queueWorkerEnabled, 'Exactly one queue worker topology must be enabled.');
+            $environmentErrors = (new DeploymentEnvironment(base_path()))->validate($config, requireExternalSecrets: false);
+            $this->assert('Deployment', 'Stage environment contract', $environmentErrors === [] ? 'valid' : 'invalid', $environmentErrors === [], implode(' ', $environmentErrors));
         } catch (Throwable $exception) {
             $this->record('Deployment', 'Topology', 'invalid', 'error', $this->redact($exception->getMessage()));
         }

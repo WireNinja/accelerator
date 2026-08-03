@@ -21,9 +21,12 @@ Treat public Artisan commands as the only user/AI interface. Deployer is the int
 - pnpm is default; npm is fallback; one lockfile only.
 - Never run Composer update on the VPS.
 - Stable root is `/var/www/{domain}` with `releases`, `shared`, and `current`.
+- Stable deployment identity is `deployment_key`; derive Supervisor groups and service names from it.
+- Reserve a scanned, explicit 20-port block; never auto-assign during deploy.
 - Dual stages run identical code/features but isolate every mutable datum and process.
 - Single-stage projects hide the environment badge.
 - Dual-stage projects show `LOCAL DATA`, `TEST DATA`, and `LIVE DATA` badges.
 - A code rollback never reverses database migrations.
+- Dual-stage production receives the exact successful staging revision through `accelerator:deploy:promote`.
 
 Read [references/workflow.md](references/workflow.md) before producing a full install-to-domain plan or executing a multi-phase lifecycle.

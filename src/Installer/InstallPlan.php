@@ -36,10 +36,11 @@ final readonly class InstallPlan
         public array $features,
         public bool $deploy,
         public string $deploymentMode,
-        public string $project,
+        public string $deploymentKey,
         public string $sshHost,
         public string $repository,
         public string $repositoryBranch,
+        public int $portBase,
         public string $domain,
         public string $deployRoot,
         public string $stagingDomain,
@@ -94,6 +95,10 @@ final readonly class InstallPlan
             throw new InvalidArgumentException('Deployment mode must be single or dual.');
         }
 
+        if ($this->deploy && ($this->portBase < 1024 || $this->portBase > 65523)) {
+            throw new InvalidArgumentException('Deployment port base must be between 1024 and 65523.');
+        }
+
         if ($this->deploy && (
             $this->repository === ''
             || $this->repositoryBranch === ''
@@ -106,7 +111,7 @@ final readonly class InstallPlan
 
         if ($this->deploy) {
             DeploymentConfig::validateInstallerTargets(
-                project: $this->project,
+                deploymentKey: $this->deploymentKey,
                 sshHost: $this->sshHost,
                 repository: $this->repository,
                 branch: $this->repositoryBranch,
@@ -119,7 +124,7 @@ final readonly class InstallPlan
     }
 
     /**
-     * @return array<string, array<int, string>|bool|string>
+     * @return array<string, array<int, string>|bool|int|string>
      */
     public function toArray(): array
     {
@@ -144,10 +149,11 @@ final readonly class InstallPlan
             features: array_values(array_filter($data['features'] ?? [], is_string(...))),
             deploy: (bool) ($data['deploy'] ?? false),
             deploymentMode: self::string($data, 'deploymentMode', 'single'),
-            project: self::string($data, 'project'),
+            deploymentKey: self::string($data, 'deploymentKey', self::string($data, 'project')),
             sshHost: self::string($data, 'sshHost'),
             repository: self::string($data, 'repository'),
             repositoryBranch: self::string($data, 'repositoryBranch', 'main'),
+            portBase: self::integer($data, 'portBase', 9010),
             domain: self::string($data, 'domain'),
             deployRoot: self::string($data, 'deployRoot'),
             stagingDomain: self::string($data, 'stagingDomain'),
@@ -162,5 +168,11 @@ final readonly class InstallPlan
     private static function string(array $data, string $key, string $default = ''): string
     {
         return is_string($data[$key] ?? null) ? $data[$key] : $default;
+    }
+
+    /** @param array<string, mixed> $data */
+    private static function integer(array $data, string $key, int $default): int
+    {
+        return is_int($data[$key] ?? null) ? $data[$key] : $default;
     }
 }

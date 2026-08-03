@@ -16,8 +16,8 @@ final class InstallCommand extends Command
     /** @var list<string> */
     private const INSTALLER_OPTIONS = [
         'app-name', 'app-url', 'admin-name', 'admin-username', 'admin-email', 'admin-password',
-        'package-manager', 'database', 'redis', 'features', 'deploy', 'deployment-mode', 'project',
-        'ssh-host', 'repo', 'branch', 'domain', 'deploy-root', 'staging-domain',
+        'package-manager', 'database', 'redis', 'features', 'deploy', 'deployment-mode', 'deployment-key',
+        'ssh-host', 'repo', 'branch', 'port-base', 'domain', 'deploy-root', 'staging-domain',
         'staging-deploy-root', 'http-runtime',
     ];
 
@@ -34,10 +34,11 @@ final class InstallCommand extends Command
         {--features=}
         {--deploy}
         {--deployment-mode=single}
-        {--project=}
+        {--deployment-key=}
         {--ssh-host=}
         {--repo=}
         {--branch=main}
+        {--port-base=9010}
         {--domain=}
         {--deploy-root=}
         {--staging-domain=}

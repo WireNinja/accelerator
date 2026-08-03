@@ -147,10 +147,11 @@ final class Onboarding
             hint: 'You can configure it later with php artisan accelerator:configure deployment.',
         );
 
-        $project = '';
+        $deploymentKey = '';
         $sshHost = '';
         $repository = '';
         $repositoryBranch = '';
+        $portBase = 9010;
         $deploymentMode = '';
         $domain = '';
         $deployRoot = '';
@@ -159,7 +160,7 @@ final class Onboarding
         $httpRuntime = '';
 
         if ($deploy) {
-            $project = $defaultProject;
+            $deploymentKey = $defaultProject;
             $repository = $this->processRunner->capture(['git', 'remote', 'get-url', 'origin'], $this->projectRoot);
             $repositoryBranch = $this->processRunner->capture(['git', 'branch', '--show-current'], $this->projectRoot) ?: 'main';
             $deploymentMode = select(
@@ -170,13 +171,21 @@ final class Onboarding
                 ],
                 default: 'single',
             );
-            $project = text(label: 'Deployment project key', default: $project, required: true);
+            $deploymentKey = text(label: 'Stable deployment key', default: $deploymentKey, required: true);
             $sshAliases = SshConfig::aliases();
             $sshHost = $sshAliases === []
                 ? text(label: 'SSH host alias from ~/.ssh/config', required: true)
                 : select(label: 'SSH host alias', options: array_combine($sshAliases, $sshAliases));
             $repository = text(label: 'Git repository URL', default: $repository, required: true);
             $repositoryBranch = text(label: 'Git deployment branch', default: $repositoryBranch, required: true);
+            $portBase = (int) text(
+                label: 'First port in the reserved 20-port block',
+                default: '9010',
+                required: true,
+                validate: static fn (string $value): ?string => ctype_digit($value) && (int) $value >= 1024 && (int) $value <= 65523
+                    ? null
+                    : 'Enter an integer between 1024 and 65523.',
+            );
             $domain = text(
                 label: 'Production domain',
                 required: true,
@@ -218,10 +227,11 @@ final class Onboarding
             features: $features,
             deploy: $deploy,
             deploymentMode: $deploymentMode,
-            project: $project,
+            deploymentKey: $deploymentKey,
             sshHost: $sshHost,
             repository: $repository,
             repositoryBranch: $repositoryBranch,
+            portBase: $portBase,
             domain: $domain,
             deployRoot: $deployRoot,
             stagingDomain: $stagingDomain,
@@ -299,10 +309,11 @@ final class Onboarding
             features: $features,
             deploy: $deploy,
             deploymentMode: $deploy ? $deploymentMode : '',
-            project: $deploy ? $this->option($options, 'project', $defaultProject) : '',
+            deploymentKey: $deploy ? $this->option($options, 'deployment-key', $defaultProject) : '',
             sshHost: $deploy ? $this->option($options, 'ssh-host') : '',
             repository: $deploy ? $this->option($options, 'repo') : '',
             repositoryBranch: $deploy ? $this->option($options, 'branch', 'main') : '',
+            portBase: $deploy ? (int) $this->option($options, 'port-base', '9010') : 9010,
             domain: $domain,
             deployRoot: $this->option($options, 'deploy-root', $domain === '' ? '' : "/var/www/{$domain}"),
             stagingDomain: $stagingDomain,

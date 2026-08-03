@@ -20,14 +20,19 @@ final class LegacyDeploymentConfig
 
         $sshHost = self::value($values, 'OPS_DEPLOY_SSH_HOST');
         $project = self::value($values, 'OPS_DEPLOY_PROJECT');
-        $staging = self::stage($values, 'STAGING', $sshHost, $project);
-        $production = self::stage($values, 'PRODUCTION', $sshHost, $project);
+        $staging = self::stage($values, 'STAGING', $sshHost);
+        $production = self::stage($values, 'PRODUCTION', $sshHost);
         $document = [
-            'schema' => 1,
+            'schema' => 2,
             'default_stage' => self::value($values, 'OPS_DEPLOY_DEFAULT_STAGE', 'production'),
-            'project' => $project,
+            'deployment_key' => $project,
             'repository' => self::value($values, 'OPS_DEPLOY_REPO'),
             'branch' => self::value($values, 'OPS_DEPLOY_BRANCH', 'main'),
+            'port_base' => self::integer(
+                $values,
+                $staging['enabled'] ? 'OPS_DEPLOY_STAGING_OCTANE_PORT' : 'OPS_DEPLOY_PRODUCTION_OCTANE_PORT',
+                9010,
+            ),
             'keep_releases' => self::integer($values, 'OPS_DEPLOY_KEEP_RELEASES', 5),
             'php_version' => self::value($values, 'OPS_DEPLOY_PHP_VERSION', '8.5'),
             'php_binary' => self::value($values, 'OPS_DEPLOY_PHP_BIN', 'php8.5'),
@@ -41,7 +46,7 @@ final class LegacyDeploymentConfig
         ];
 
         DeploymentConfig::validateInstallerTargets(
-            project: (string) $document['project'],
+            deploymentKey: (string) $document['deployment_key'],
             sshHost: $sshHost,
             repository: (string) $document['repository'],
             branch: (string) $document['branch'],
@@ -56,7 +61,7 @@ final class LegacyDeploymentConfig
     }
 
     /** @param array<string, string> $values @return array<string, bool|int|string> */
-    private static function stage(array $values, string $stage, string $sshHost, string $project): array
+    private static function stage(array $values, string $stage, string $sshHost): array
     {
         $prefix = "OPS_DEPLOY_{$stage}_";
         $domain = self::value($values, $prefix.'DOMAIN');
@@ -66,13 +71,11 @@ final class LegacyDeploymentConfig
             'ssh_host' => $sshHost,
             'domain' => $domain,
             'root' => $domain === '' ? '' : "/var/www/{$domain}",
-            'service_group' => self::value($values, $prefix.'GROUP', DeploymentConfig::defaultServiceGroup($project, strtolower($stage))),
             'dns_direct' => self::boolean($values, $prefix.'DNS_DIRECT', true),
             'http_runtime' => self::value($values, $prefix.'HTTP_RUNTIME', 'octane'),
             'fpm_socket' => self::value($values, $prefix.'FPM_SOCKET'),
             'fpm_service' => self::value($values, $prefix.'FPM_SERVICE'),
             'octane_server' => self::value($values, $prefix.'OCTANE_SERVER', 'swoole'),
-            'octane_port' => self::integer($values, $prefix.'OCTANE_PORT', $stage === 'PRODUCTION' ? 8000 : 8100),
             'octane_workers' => self::integer($values, $prefix.'OCTANE_WORKERS', 4),
             'octane_task_workers' => self::integer($values, $prefix.'OCTANE_TASK_WORKERS', 2),
             'horizon' => self::boolean($values, $prefix.'HORIZON_ENABLED'),
@@ -81,10 +84,8 @@ final class LegacyDeploymentConfig
             'queue' => self::value($values, $prefix.'QUEUE_WORKER_QUEUE', 'default'),
             'queue_processes' => self::integer($values, $prefix.'QUEUE_WORKER_PROCESSES', 1),
             'reverb' => self::boolean($values, $prefix.'REVERB_ENABLED'),
-            'reverb_port' => self::integer($values, $prefix.'REVERB_PORT', $stage === 'PRODUCTION' ? 8080 : 8180),
             'scheduler' => self::boolean($values, $prefix.'SCHEDULER_ENABLED', true),
             'nightwatch' => self::boolean($values, $prefix.'NIGHTWATCH_ENABLED'),
-            'nightwatch_port' => self::integer($values, $prefix.'NIGHTWATCH_PORT', $stage === 'PRODUCTION' ? 2407 : 2507),
             'health_path' => '/up',
         ];
     }

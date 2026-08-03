@@ -43,29 +43,26 @@ final readonly class EnvironmentWriter
         }
 
         $plan = $this->context->plan;
-        $stage = fn (string $name, bool $enabled, string $domain, int $octanePort, int $reverbPort, int $nightwatchPort): array => [
+        $stage = fn (bool $enabled, string $domain): array => [
             'enabled' => $enabled,
             'ssh_host' => $plan->sshHost,
             'domain' => $domain,
             'root' => $domain === '' ? '' : "/var/www/{$domain}",
-            'service_group' => DeploymentConfig::defaultServiceGroup($plan->project, $name),
             'http_runtime' => $plan->httpRuntime,
             'horizon' => $this->context->hasFeature('horizon'),
             'queue_worker' => ! $this->context->hasFeature('horizon'),
             'reverb' => $this->context->hasFeature('reverb'),
             'nightwatch' => $this->context->hasFeature('nightwatch'),
             'scheduler' => true,
-            'octane_port' => $octanePort,
-            'reverb_port' => $reverbPort,
-            'nightwatch_port' => $nightwatchPort,
             'health_path' => '/up',
         ];
         $document = [
-            'schema' => 1,
+            'schema' => 2,
             'default_stage' => $plan->deploymentMode === 'dual' ? 'staging' : 'production',
-            'project' => $plan->project,
+            'deployment_key' => $plan->deploymentKey,
             'repository' => $plan->repository,
             'branch' => $plan->repositoryBranch,
+            'port_base' => $plan->portBase,
             'keep_releases' => 5,
             'php_version' => '8.5',
             'php_binary' => 'php8.5',
@@ -73,8 +70,8 @@ final readonly class EnvironmentWriter
             'run_user' => 'www-data',
             'ssl_email' => $plan->adminEmail,
             'stages' => [
-                'staging' => $stage('staging', $plan->deploymentMode === 'dual', $plan->stagingDomain, 8100, 8180, 2507),
-                'production' => $stage('production', true, $plan->domain, 8000, 8080, 2407),
+                'staging' => $stage($plan->deploymentMode === 'dual', $plan->stagingDomain),
+                'production' => $stage(true, $plan->domain),
             ],
         ];
         DeploymentConfig::validateTopologyDocument($document);
@@ -112,7 +109,7 @@ final readonly class EnvironmentWriter
     {
         $plan = $this->context->plan;
         $cacheDriver = $plan->useRedis ? 'redis' : 'database';
-        $databaseName = str_replace('-', '_', $plan->project);
+        $databaseName = str_replace('-', '_', $plan->deploymentKey);
         $values = [
             'APP_NAME' => '"'.addcslashes($plan->appName, '"\\').'"',
             'APP_KEY' => $appKey,
@@ -139,7 +136,7 @@ final readonly class EnvironmentWriter
                 $this->context->plan->deploy && $this->context->plan->deploymentMode === 'dual',
             ),
             'ACCELERATOR_ENVIRONMENT_INDICATOR_LABEL' => $this->context->plan->deploy
-                && $this->context->plan->deploymentMode === 'dual' ? 'LOCAL DATA' : '',
+                && $this->context->plan->deploymentMode === 'dual' ? '"LOCAL DATA"' : '',
             'ACCELERATOR_ENVIRONMENT_INDICATOR_COLOR' => $this->context->plan->deploy
                 && $this->context->plan->deploymentMode === 'dual' ? 'info' : 'warning',
             'GOOGLE_REDIRECT_URI' => rtrim($plan->appUrl, '/').'/auth/google/callback',
@@ -181,19 +178,23 @@ final readonly class EnvironmentWriter
         $contents = $this->setEnvironmentValue($contents, 'APP_URL', "https://{$domain}");
         $contents = $this->setEnvironmentValue($contents, 'LOG_LEVEL', 'error');
         $contents = $this->setEnvironmentValue($contents, 'ACCELERATOR_ENVIRONMENT_INDICATOR_ENABLED', $this->context->boolean($dualStage));
-        $contents = $this->setEnvironmentValue($contents, 'ACCELERATOR_ENVIRONMENT_INDICATOR_LABEL', $stage === 'staging' ? 'TEST DATA' : 'LIVE DATA');
+        $contents = $this->setEnvironmentValue($contents, 'ACCELERATOR_ENVIRONMENT_INDICATOR_LABEL', $stage === 'staging' ? '"TEST DATA"' : '"LIVE DATA"');
         $contents = $this->setEnvironmentValue($contents, 'ACCELERATOR_ENVIRONMENT_INDICATOR_COLOR', $stage === 'staging' ? 'warning' : 'danger');
-        $prefix = strtolower((string) preg_replace('/[^a-z0-9]+/i', '_', "{$this->context->plan->project}_{$stage}"));
+        $prefix = strtolower((string) preg_replace('/[^a-z0-9]+/i', '_', "{$this->context->plan->deploymentKey}_{$stage}"));
         $contents = $this->setEnvironmentValue($contents, 'REDIS_PREFIX', "{$prefix}_database_");
         $contents = $this->setEnvironmentValue($contents, 'CACHE_PREFIX', "{$prefix}_cache_");
-        $contents = $this->setEnvironmentValue($contents, 'HORIZON_NAME', "{$this->context->plan->project}-{$stage}");
+        $contents = $this->setEnvironmentValue($contents, 'HORIZON_NAME', "{$this->context->plan->deploymentKey}-{$stage}");
         $contents = $this->setEnvironmentValue($contents, 'HORIZON_PREFIX', "{$prefix}_horizon:");
         $contents = $this->setEnvironmentValue($contents, 'SESSION_COOKIE', "{$prefix}_session");
+        $stagePortBase = $this->context->plan->portBase + ($stage === 'production' && $this->context->plan->deploymentMode === 'dual' ? 10 : 0);
+        $contents = $this->setEnvironmentValue($contents, 'OCTANE_PORT', (string) $stagePortBase);
+        $contents = $this->setEnvironmentValue($contents, 'REVERB_SERVER_PORT', (string) ($stagePortBase + 1));
+        $contents = $this->setEnvironmentValue($contents, 'NIGHTWATCH_INGEST_URI', '127.0.0.1:'.($stagePortBase + 2));
 
         if ($this->context->plan->database === 'sqlite') {
             $contents = $this->setEnvironmentValue($contents, 'DB_DATABASE', rtrim($deployRoot, '/').'/shared/database/database.sqlite');
         } else {
-            $database = str_replace('-', '_', $this->context->plan->project).'_'.$stage;
+            $database = str_replace('-', '_', $this->context->plan->deploymentKey).'_'.$stage;
             $contents = $this->setEnvironmentValue($contents, 'DB_DATABASE', $database);
         }
 

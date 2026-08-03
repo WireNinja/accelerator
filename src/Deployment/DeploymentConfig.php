@@ -17,10 +17,11 @@ final readonly class DeploymentConfig
     private function __construct(
         public string $projectRoot,
         public string $stage,
-        public string $project,
+        public string $deploymentKey,
         public string $sshHost,
         public string $repository,
         public string $branch,
+        public int $portBase,
         public int $keepReleases,
         public string $phpVersion,
         public string $phpBinary,
@@ -53,7 +54,7 @@ final readonly class DeploymentConfig
     ) {}
 
     /** @throws JsonException */
-    public static function load(string $projectRoot, ?string $requestedStage = null): self
+    public static function load(string $projectRoot, ?string $requestedStage = null, bool $validateRuntime = true): self
     {
         $projectRoot = rtrim($projectRoot, '/');
         self::assertNoLegacyFiles($projectRoot);
@@ -66,8 +67,8 @@ final readonly class DeploymentConfig
 
         $document = json_decode($contents, true, flags: JSON_THROW_ON_ERROR);
 
-        if (! is_array($document) || ($document['schema'] ?? null) !== 1) {
-            throw new RuntimeException('deploy.json must use Accelerator deployment schema 1.');
+        if (! is_array($document) || ($document['schema'] ?? null) !== 2) {
+            throw new RuntimeException('deploy.json must use Accelerator deployment schema 2. Run: php artisan accelerator:configure deployment');
         }
 
         self::validateTopologyDocument($document);
@@ -80,13 +81,15 @@ final readonly class DeploymentConfig
             throw new RuntimeException("Deployment stage [{$stage}] is missing or disabled.");
         }
 
-        $project = self::string($document, 'project');
+        $deploymentKey = self::string($document, 'deployment_key');
         $repository = self::string($document, 'repository');
         $branch = self::string($document, 'branch');
         $phpVersion = self::string($document, 'php_version', '8.5');
         $phpBinary = self::string($document, 'php_binary');
         $phpBinary = $phpBinary !== '' ? $phpBinary : "php{$phpVersion}";
         $packageManager = self::string($document, 'package_manager', 'pnpm');
+        $portBase = self::port($document, 'port_base', 9010);
+        $stagePortBase = self::stagePortBase($document, $stage, $portBase);
         $domain = self::string($stageConfig, 'domain');
         $deployRoot = rtrim(self::string($stageConfig, 'root', "/var/www/{$domain}"), '/');
         $httpRuntime = self::string($stageConfig, 'http_runtime', 'octane');
@@ -96,7 +99,7 @@ final readonly class DeploymentConfig
         $nightwatchEnabled = self::bool($stageConfig, 'nightwatch');
 
         self::validateInstallerTargets(
-            project: $project,
+            deploymentKey: $deploymentKey,
             sshHost: self::string($stageConfig, 'ssh_host'),
             repository: $repository,
             branch: $branch,
@@ -116,19 +119,22 @@ final readonly class DeploymentConfig
             throw new InvalidArgumentException('Horizon and the plain queue worker are mutually exclusive.');
         }
 
-        self::validateRuntimeServiceFeatures($projectRoot, $stage, [
-            'ACCELERATOR_FEATURE_HORIZON' => $horizonEnabled,
-            'ACCELERATOR_FEATURE_REVERB' => $reverbEnabled,
-            'ACCELERATOR_FEATURE_NIGHTWATCH' => $nightwatchEnabled,
-        ]);
+        if ($validateRuntime) {
+            self::validateRuntimeServiceFeatures($projectRoot, $stage, [
+                'ACCELERATOR_FEATURE_HORIZON' => $horizonEnabled,
+                'ACCELERATOR_FEATURE_REVERB' => $reverbEnabled,
+                'ACCELERATOR_FEATURE_NIGHTWATCH' => $nightwatchEnabled,
+            ]);
+        }
 
         return new self(
             projectRoot: $projectRoot,
             stage: $stage,
-            project: $project,
+            deploymentKey: $deploymentKey,
             sshHost: self::string($stageConfig, 'ssh_host'),
             repository: $repository,
             branch: $branch,
+            portBase: $portBase,
             keepReleases: self::integer($document, 'keep_releases', 5),
             phpVersion: $phpVersion,
             phpBinary: $phpBinary,
@@ -137,13 +143,13 @@ final readonly class DeploymentConfig
             sslEmail: self::string($document, 'ssl_email'),
             domain: $domain,
             deployRoot: $deployRoot,
-            group: self::string($stageConfig, 'service_group', self::defaultServiceGroup($project, $stage)),
+            group: self::serviceGroup($deploymentKey, $stage),
             dnsDirect: self::bool($stageConfig, 'dns_direct', true),
             httpRuntime: $httpRuntime,
             fpmSocket: self::string($stageConfig, 'fpm_socket', "/run/php/php{$phpVersion}-fpm.sock"),
             fpmService: self::string($stageConfig, 'fpm_service', "php{$phpVersion}-fpm.service"),
             octaneServer: self::string($stageConfig, 'octane_server', 'swoole'),
-            octanePort: self::port($stageConfig, 'octane_port', $stage === 'production' ? 8000 : 8100),
+            octanePort: $stagePortBase,
             octaneWorkers: self::integer($stageConfig, 'octane_workers', 4),
             octaneTaskWorkers: self::integer($stageConfig, 'octane_task_workers', 2),
             horizonEnabled: $horizonEnabled,
@@ -152,10 +158,10 @@ final readonly class DeploymentConfig
             queueWorkerQueue: self::string($stageConfig, 'queue', 'default'),
             queueWorkerProcesses: self::integer($stageConfig, 'queue_processes', 1),
             reverbEnabled: $reverbEnabled,
-            reverbPort: self::port($stageConfig, 'reverb_port', $stage === 'production' ? 8080 : 8180),
+            reverbPort: $stagePortBase + 1,
             schedulerEnabled: self::bool($stageConfig, 'scheduler', true),
             nightwatchEnabled: $nightwatchEnabled,
-            nightwatchPort: self::port($stageConfig, 'nightwatch_port', $stage === 'production' ? 2407 : 2507),
+            nightwatchPort: $stagePortBase + 2,
             healthPath: self::string($stageConfig, 'health_path', '/up'),
             document: $document,
         );
@@ -180,6 +186,47 @@ final readonly class DeploymentConfig
     {
         return $this->httpRuntime === 'octane' || $this->horizonEnabled || $this->queueWorkerEnabled
             || $this->reverbEnabled || $this->schedulerEnabled || $this->nightwatchEnabled;
+    }
+
+    /** @return list<string> */
+    public function supervisorServices(): array
+    {
+        $services = [];
+
+        if ($this->httpRuntime === 'octane') {
+            $services[] = 'octane';
+        }
+
+        if ($this->horizonEnabled) {
+            $services[] = 'horizon';
+        }
+
+        if ($this->queueWorkerEnabled) {
+            $services[] = 'queue';
+        }
+
+        if ($this->reverbEnabled) {
+            $services[] = 'reverb';
+        }
+
+        if ($this->schedulerEnabled) {
+            $services[] = 'scheduler';
+        }
+
+        if ($this->nightwatchEnabled) {
+            $services[] = 'nightwatch';
+        }
+
+        return $services;
+    }
+
+    public function programName(string $service): string
+    {
+        if (! in_array($service, $this->supervisorServices(), true)) {
+            throw new InvalidArgumentException("Service [{$service}] is not enabled for {$this->stage}.");
+        }
+
+        return "{$this->group}-{$service}";
     }
 
     /** @return array<string, int> */
@@ -207,7 +254,7 @@ final readonly class DeploymentConfig
         return implode(' ', [
             'WireNinja-Accelerator',
             "kind={$kind}",
-            "project={$this->project}",
+            "deployment={$this->deploymentKey}",
             "stage={$this->stage}",
             "domain={$this->domain}",
             "root={$this->deployRoot}",
@@ -215,9 +262,9 @@ final readonly class DeploymentConfig
         ]);
     }
 
-    public static function defaultServiceGroup(string $project, string $stage): string
+    public static function serviceGroup(string $deploymentKey, string $stage): string
     {
-        return strtolower((string) preg_replace('/[^a-z0-9]+/i', '_', trim("{$project}_{$stage}", '_')));
+        return "acc-{$deploymentKey}-{$stage}";
     }
 
     /**
@@ -225,7 +272,14 @@ final readonly class DeploymentConfig
      */
     public static function validateTopologyDocument(array $document): void
     {
-        $project = self::string($document, 'project');
+        $deploymentKey = self::string($document, 'deployment_key');
+        $portBase = self::port($document, 'port_base', 9010);
+
+        self::validateDeploymentKey($deploymentKey);
+
+        if ($portBase > 65523) {
+            throw new InvalidArgumentException('port_base must leave room for both ten-port stage blocks.');
+        }
         $stages = $document['stages'] ?? null;
 
         if (! is_array($stages)) {
@@ -249,10 +303,11 @@ final readonly class DeploymentConfig
             $host = self::string($stageConfig, 'ssh_host');
             $domain = self::string($stageConfig, 'domain');
             $root = rtrim(self::string($stageConfig, 'root', "/var/www/{$domain}"), '/');
-            $group = self::string($stageConfig, 'service_group', self::defaultServiceGroup($project, $stage));
+            $group = self::serviceGroup($deploymentKey, $stage);
             $runtime = self::string($stageConfig, 'http_runtime', 'octane');
             $horizon = self::bool($stageConfig, 'horizon');
             $queueWorker = self::bool($stageConfig, 'queue_worker', ! $horizon);
+            $stagePortBase = self::stagePortBase($document, $stage, $portBase);
 
             self::validateDomainRoot($domain, $root);
 
@@ -268,10 +323,6 @@ final readonly class DeploymentConfig
                 throw new InvalidArgumentException("Horizon and the plain queue worker are mutually exclusive for {$stage}.");
             }
 
-            if (preg_match('/^[a-z0-9][a-z0-9_]*$/', $group) !== 1) {
-                throw new InvalidArgumentException("service_group [{$group}] for {$stage} must contain only lowercase letters, numbers, and underscores.");
-            }
-
             if (isset($domains[$domain])) {
                 throw new InvalidArgumentException("Stages [{$domains[$domain]}] and [{$stage}] must use distinct domains.");
             }
@@ -281,7 +332,7 @@ final readonly class DeploymentConfig
             }
 
             if (isset($groups[$group])) {
-                throw new InvalidArgumentException("Stages [{$groups[$group]}] and [{$stage}] must use distinct service_group values.");
+                throw new InvalidArgumentException("Stages [{$groups[$group]}] and [{$stage}] resolve to the same Supervisor group.");
             }
 
             $domains[$domain] = $stage;
@@ -291,15 +342,15 @@ final readonly class DeploymentConfig
             $services = [];
 
             if ($runtime === 'octane') {
-                $services['octane'] = self::port($stageConfig, 'octane_port', $stage === 'production' ? 8000 : 8100);
+                $services['octane'] = $stagePortBase;
             }
 
             if (self::bool($stageConfig, 'reverb')) {
-                $services['reverb'] = self::port($stageConfig, 'reverb_port', $stage === 'production' ? 8080 : 8180);
+                $services['reverb'] = $stagePortBase + 1;
             }
 
             if (self::bool($stageConfig, 'nightwatch')) {
-                $services['nightwatch'] = self::port($stageConfig, 'nightwatch_port', $stage === 'production' ? 2407 : 2507);
+                $services['nightwatch'] = $stagePortBase + 2;
             }
 
             foreach ($services as $service => $port) {
@@ -325,7 +376,7 @@ final readonly class DeploymentConfig
     }
 
     public static function validateInstallerTargets(
-        string $project,
+        string $deploymentKey,
         string $sshHost,
         string $repository,
         string $branch,
@@ -334,9 +385,7 @@ final readonly class DeploymentConfig
         ?string $stagingDomain = null,
         ?string $stagingRoot = null,
     ): void {
-        if (preg_match('/^[a-z0-9][a-z0-9._-]*$/i', $project) !== 1) {
-            throw new InvalidArgumentException('Deployment project key is invalid.');
-        }
+        self::validateDeploymentKey($deploymentKey);
 
         if (preg_match('/^[a-z0-9][a-z0-9._-]*$/i', $sshHost) !== 1) {
             throw new InvalidArgumentException('SSH host must be an alias from ~/.ssh/config.');
@@ -355,6 +404,22 @@ final readonly class DeploymentConfig
                 throw new InvalidArgumentException('Staging and production must use distinct domains and roots.');
             }
         }
+    }
+
+    private static function validateDeploymentKey(string $deploymentKey): void
+    {
+        if (preg_match('/^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$/', $deploymentKey) !== 1) {
+            throw new InvalidArgumentException('deployment_key must be a lowercase slug of at most 40 characters.');
+        }
+    }
+
+    /** @param array<string, mixed> $document */
+    private static function stagePortBase(array $document, string $stage, int $portBase): int
+    {
+        $staging = $document['stages']['staging'] ?? null;
+        $dualStage = is_array($staging) && ($staging['enabled'] ?? false) === true;
+
+        return $stage === 'production' && $dualStage ? $portBase + 10 : $portBase;
     }
 
     public static function assertNoLegacyFiles(string $projectRoot): void

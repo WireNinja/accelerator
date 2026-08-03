@@ -63,11 +63,12 @@ Normal durable path:
 php artisan accelerator:deploy --stage={stage}
 ```
 
-For an explicitly authorized env-only remote refresh, resolve the stage group from `.accelerator/deploy.json`, then run equivalent operations on that stage only:
+For an explicitly authorized env-only remote refresh, use the local control plane:
 
-```text
-php artisan config:cache
-sudo supervisorctl restart "{service_group}:*"
+```bash
+php artisan accelerator:env:validate --stage={stage}
+php artisan accelerator:env:diff --stage={stage} --json
+php artisan accelerator:env:push --stage={stage}
 ```
 
 Restarting only the Nightwatch agent is insufficient when Octane, Horizon, queue workers, or the scheduler also booted with stale Laravel config. Never expose the token while comparing local and remote state; compare presence or a non-reversible fingerprint only when necessary.

@@ -75,25 +75,44 @@ Accelerator publishes only its small app-owned config contract. Vendor configura
 
 Deployer v8 is the atomic release engine behind public Artisan commands. The stable project root is `/var/www/{domain}` and releases live below it with a `current` symlink.
 
+Run normal lifecycle operations from the development machine. Artisan is the public control plane, Deployer is the atomic release engine, SSH is transport, Linux commands are remote primitives, and Supervisor owns long-running services. Manual SSH is reserved for break-glass recovery.
+
 ```bash
 php artisan accelerator:configure deployment
+php artisan accelerator:configure deployment --deployment-key=waringin --port-base=9010
 php artisan accelerator:configure deployment --migrate-legacy --force --json --no-interaction
 php artisan accelerator:configure environment --stage=production
 php artisan accelerator:configure environment --stage=production --rotate-app-key --rotate-reverb-credentials
 php artisan accelerator:deploy:preflight --stage=production --json
 php artisan accelerator:deploy:status --stage=production --json
-php artisan accelerator:deploy:init --stage=production
-php artisan accelerator:deploy --stage=production
+php artisan accelerator:deploy:init --stage=production --revision=<full-commit-sha>
+php artisan accelerator:deploy --stage=production --revision=<full-commit-sha>
+php artisan accelerator:deploy:promote --from=staging --to=production
 php artisan accelerator:deploy:rollback --stage=production
 php artisan accelerator:deploy:unlock --stage=production
 php artisan accelerator:deploy:relocate --stage=production --old-root=/var/www/old.example.com
+php artisan accelerator:env:edit --stage=production
+php artisan accelerator:env:validate --stage=production --json
+php artisan accelerator:env:diff --stage=production --json
+php artisan accelerator:env:push --stage=production
+php artisan accelerator:service:status all --stage=production --json
+php artisan accelerator:service:start octane --stage=production
+php artisan accelerator:service:stop octane --stage=production
+php artisan accelerator:service:restart octane --stage=production
+php artisan accelerator:logs laravel --stage=production --lines=200
+php artisan accelerator:backup --stage=production --only=all
+php artisan accelerator:ports --host=ssh-alias --range=9000-9999 --available=20
 ```
 
 Configuration never SSHes. Changing a domain recalculates `/var/www/{domain}` and reports the exact relocation command; it never moves remote files implicitly. Remote mutators confirm stage, domain, root, and host; non-interactive mutation requires explicit force. Deployment uses committed Composer/pnpm/npm locks, installs rather than updates dependencies, backs up the database before migrations, switches releases atomically, restarts only configured services, and never auto-rolls back database migrations. A failed post-switch health check may restore the previous code symlink, but database review remains manual.
 
-`deploy:init` idempotently creates the first stage database before the normal backup-and-migrate pipeline. SQLite is created in stage-owned shared storage. Local MySQL/MariaDB and PostgreSQL databases are created through passwordless sudo and granted to an already-existing application account; Accelerator never copies or prints its password. External database servers must be provisioned explicitly. Ordinary deploys never create databases.
+`deploy:init` idempotently creates the first stage database before the normal backup-and-migrate pipeline. Pass `--revision=<full-commit-sha>` when two stages must receive the same immutable release. SQLite is created in stage-owned shared storage. Local MySQL/MariaDB and PostgreSQL databases are created through passwordless sudo and granted to an already-existing application account; Accelerator never copies or prints its password. External database servers must be provisioned explicitly. Ordinary deploys never create databases.
 
-Reconfiguring deployment preserves existing stage ports, worker counts, queue settings, service groups, and other valid tuning. Use `--ssl-email` to replace the existing ACME email explicitly. `--rotate-app-key` and `--rotate-reverb-credentials` are intentional stage-scoped credential rotations; do not use either casually on an established live stage.
+Deployment schema 2 stores one stable `deployment_key` plus one explicit `port_base`. Domains may change without renaming the deployment. Supervisor groups are derived as `acc-{deployment_key}-{stage}`; arbitrary `service_group` values are forbidden. One project reserves 20 ports: dual-stage staging uses offsets 0-9 and production uses offsets 10-19, while single-stage production uses offsets 0-9. Octane, Reverb, and Nightwatch use offsets 0, 1, and 2. Scan the host and choose the block explicitly; deployment never auto-assigns ports.
+
+The ignored local `.accelerator/environments/{stage}.env` file is canonical. `env:diff` compares it with the server without printing values. `env:push` uploads atomically, clears cached configuration, restarts only the derived stage group, and health-checks. Manual remote `.env` editing is an emergency operation because a later deploy will overwrite it.
+
+Use `--ssl-email` to replace the existing ACME email explicitly. `--rotate-app-key` and `--rotate-reverb-credentials` are intentional stage-scoped credential rotations; do not use either casually on an established live stage.
 
 Shared Laravel storage and cache paths use inherited ACLs for both the deploy user and runtime user. Releases become rollback candidates only after services pass the retried HTTPS health check; incomplete or failed releases are marked bad and never selected as rollback targets.
 
@@ -103,13 +122,15 @@ Certbot obtains or reuses certificate material through the dedicated ACME webroo
 
 The deploy recipe clones the application repository and initializes only the tracked `packages/accelerator` submodule before Composer runs. It intentionally does not recurse through unrelated submodules, so a broken or optional gitlink elsewhere cannot widen deployment scope.
 
-`deploy:init` and ordinary deploy run a read-only ownership/collision preflight before mutation. It rejects unmanaged roots, duplicate Nginx domains, duplicate Supervisor groups/programs, and occupied Octane/Reverb/Nightwatch ports. Accelerator-written roots and service files carry project/stage ownership markers, so `--force` never means “take over another project”. Dual staging/production topology uses distinct `{project}_{stage}` Supervisor groups and distinct listener ports on the same SSH host.
+`deploy:init` and ordinary deploy run a read-only ownership/collision preflight before mutation. It rejects unmanaged roots, duplicate Nginx domains, duplicate Supervisor groups/programs, and occupied Octane/Reverb/Nightwatch ports. Accelerator-written roots and service files carry deployment/stage ownership markers, so `--force` never means “take over another project”. A recognized older Accelerator-owned group for the exact same stage/domain/root may be renamed deterministically during provisioning.
 
 Dual-stage deployment runs two independent, identical instances of the same application. Code, dependencies, features, UI, and deployment behavior remain identical. Only the domain and each instance's mutable data/runtime state are separate: SQL data, uploads, cache, queues, sessions, credentials, keys, logs, and processes. Never use staging as a differently configured edition of the application.
 
+Production promotion deploys the exact Git revision from the successful, health-checked staging release. It never substitutes the latest branch head.
+
 Dual-stage projects show a persistent Filament topbar badge so local, test, and live data cannot be confused. This badge is the deliberate UI exception to the identical-instance rule. `accelerator:configure deployment` enables it automatically in local, staging, and production env files; single-production projects keep it hidden. Each env controls presentation through `ACCELERATOR_ENVIRONMENT_INDICATOR_ENABLED`, `ACCELERATOR_ENVIRONMENT_INDICATOR_LABEL`, and `ACCELERATOR_ENVIRONMENT_INDICATOR_COLOR`. Defaults are `LOCAL DATA`/`info`, `TEST DATA`/`warning`, and `LIVE DATA`/`danger`; changing the label or any valid Filament badge color does not require a package edit. Composer installation or updates deliberately never mutate these env values.
 
-Dual stages on one VPS must also have distinct `REDIS_PREFIX`, `CACHE_PREFIX`, `HORIZON_NAME`, `HORIZON_PREFIX`, and `SESSION_COOKIE` values. `accelerator:configure environment` derives those namespaces from `{project}_{stage}` so queues, cache, sessions, and Horizon state cannot cross stage boundaries even when both stages use the same Redis server.
+Dual stages on one VPS must also have distinct `REDIS_PREFIX`, `CACHE_PREFIX`, `HORIZON_NAME`, `HORIZON_PREFIX`, and `SESSION_COOKIE` values. `accelerator:configure environment` derives those namespaces from `{deployment_key}_{stage}` so queues, cache, sessions, and Horizon state cannot cross stage boundaries even when both stages use the same Redis server.
 
 `accelerator:configure environment` synchronizes stage runtime feature flags, and deployment refuses to start when Horizon, Reverb, or Nightwatch flags disagree with their stage service topology. Installed packages alone are not proof that their runtime providers are enabled.
 

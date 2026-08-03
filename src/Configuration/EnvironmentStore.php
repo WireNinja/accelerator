@@ -21,10 +21,22 @@ final readonly class EnvironmentStore
             return [];
         }
 
-        $lines = file($path, FILE_IGNORE_NEW_LINES);
+        $contents = file_get_contents($path);
+
+        if (! is_string($contents)) {
+            throw new RuntimeException("Unable to read [{$relativePath}].");
+        }
+
+        return $this->parse($contents, $relativePath);
+    }
+
+    /** @return array<string, string> */
+    public function parse(string $contents, string $label = 'environment'): array
+    {
+        $lines = preg_split('/\R/', $contents);
 
         if (! is_array($lines)) {
-            throw new RuntimeException("Unable to read [{$relativePath}].");
+            throw new RuntimeException("Unable to parse [{$label}].");
         }
 
         $values = [];
@@ -37,17 +49,17 @@ final readonly class EnvironmentStore
             }
 
             if (! str_contains($line, '=')) {
-                throw new RuntimeException(sprintf('Invalid environment line %d in [%s].', $number + 1, $relativePath));
+                throw new RuntimeException(sprintf('Invalid environment line %d in [%s].', $number + 1, $label));
             }
 
             [$key, $value] = array_map(trim(...), explode('=', $line, 2));
 
             if (preg_match('/^[A-Z][A-Z0-9_]*$/', $key) !== 1) {
-                throw new RuntimeException(sprintf('Invalid environment key on line %d in [%s].', $number + 1, $relativePath));
+                throw new RuntimeException(sprintf('Invalid environment key on line %d in [%s].', $number + 1, $label));
             }
 
             if (array_key_exists($key, $values)) {
-                throw new RuntimeException("Duplicate environment key [{$key}] in [{$relativePath}].");
+                throw new RuntimeException("Duplicate environment key [{$key}] in [{$label}].");
             }
 
             $values[$key] = $this->unquote($value);

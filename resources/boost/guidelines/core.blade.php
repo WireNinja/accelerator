@@ -34,6 +34,8 @@ Accelerator is a proprietary, batteries-included foundation for Laravel 13 Filam
 - `.accelerator/environments/{stage}.env`: ignored stage secrets.
 - `.accelerator/install-state.json`: ignored resume receipt only.
 - Deployment root is `/var/www/{domain}` with Deployer releases and `current` symlink.
+- `deployment_key` is stable; Supervisor groups are `acc-{deployment_key}-{stage}`. `port_base` reserves one 20-port block per project.
+- Normal server operations originate from local Artisan commands. Deployer, SSH, Supervisor, and Linux commands are internal implementation layers; manual SSH is break-glass only.
 - Dual stages are independent, identical application instances. Code, dependencies, features, UI, and behavior match; domain and mutable data/runtime state are isolated. The configurable `LOCAL DATA`, `TEST DATA`, or `LIVE DATA` topbar badge is the deliberate UI exception. Single-stage projects do not show it.
 
 ### Safety

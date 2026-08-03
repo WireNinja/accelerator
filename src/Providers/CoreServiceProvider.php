@@ -22,13 +22,25 @@ use WireNinja\Accelerator\Console\Agent\DoctorCommand;
 use WireNinja\Accelerator\Console\ConfigureCommand;
 use WireNinja\Accelerator\Console\ContextCommand;
 use WireNinja\Accelerator\Console\DependenciesCommand;
+use WireNinja\Accelerator\Console\Deployment\BackupCommand;
 use WireNinja\Accelerator\Console\Deployment\DeployCommand;
 use WireNinja\Accelerator\Console\Deployment\DeployInitCommand;
 use WireNinja\Accelerator\Console\Deployment\DeployPreflightCommand;
+use WireNinja\Accelerator\Console\Deployment\DeployPromoteCommand;
 use WireNinja\Accelerator\Console\Deployment\DeployRelocateCommand;
 use WireNinja\Accelerator\Console\Deployment\DeployRollbackCommand;
 use WireNinja\Accelerator\Console\Deployment\DeployStatusCommand;
 use WireNinja\Accelerator\Console\Deployment\DeployUnlockCommand;
+use WireNinja\Accelerator\Console\Deployment\EnvironmentDiffCommand;
+use WireNinja\Accelerator\Console\Deployment\EnvironmentEditCommand;
+use WireNinja\Accelerator\Console\Deployment\EnvironmentPushCommand;
+use WireNinja\Accelerator\Console\Deployment\EnvironmentValidateCommand;
+use WireNinja\Accelerator\Console\Deployment\LogsCommand;
+use WireNinja\Accelerator\Console\Deployment\PortsCommand;
+use WireNinja\Accelerator\Console\Deployment\ServiceRestartCommand;
+use WireNinja\Accelerator\Console\Deployment\ServiceStartCommand;
+use WireNinja\Accelerator\Console\Deployment\ServiceStatusCommand;
+use WireNinja\Accelerator\Console\Deployment\ServiceStopCommand;
 use WireNinja\Accelerator\Console\EnvCommand;
 use WireNinja\Accelerator\Console\FeatureListCommand;
 use WireNinja\Accelerator\Console\InstallCommand;
@@ -79,10 +91,22 @@ final class CoreServiceProvider extends ServiceProvider
             DeployCommand::class,
             DeployInitCommand::class,
             DeployPreflightCommand::class,
+            DeployPromoteCommand::class,
             DeployRelocateCommand::class,
             DeployRollbackCommand::class,
             DeployStatusCommand::class,
             DeployUnlockCommand::class,
+            EnvironmentDiffCommand::class,
+            EnvironmentEditCommand::class,
+            EnvironmentPushCommand::class,
+            EnvironmentValidateCommand::class,
+            LogsCommand::class,
+            PortsCommand::class,
+            ServiceRestartCommand::class,
+            ServiceStartCommand::class,
+            ServiceStatusCommand::class,
+            ServiceStopCommand::class,
+            BackupCommand::class,
             EnvCommand::class,
             FeatureListCommand::class,
             InstallCommand::class,

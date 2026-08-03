@@ -31,6 +31,8 @@ final class ConfigureCommand extends Command
         {--ssh-host= : SSH alias for deployment}
         {--domain= : Production domain}
         {--staging-domain= : Staging domain; empty disables staging}
+        {--deployment-key= : Stable lowercase deployment identity}
+        {--port-base= : First port in the reserved deployment block}
         {--ssl-email= : Email used for ACME certificate registration}
         {--http-runtime= : octane or fpm}
         {--rotate-app-key : Generate a new APP_KEY for the selected stage}
@@ -210,7 +212,18 @@ final class ConfigureCommand extends Command
         $reverb = ($local['BROADCAST_CONNECTION'] ?? 'log') === 'reverb';
         $nightwatch = self::truthy($local['NIGHTWATCH_ENABLED'] ?? 'false');
         $packageManager = $this->packageManager();
-        $project = is_string($current['project'] ?? null) ? $current['project'] : basename($this->laravel->basePath());
+        $legacyProject = is_string($current['project'] ?? null) ? $current['project'] : '';
+        $currentDeploymentKey = is_string($current['deployment_key'] ?? null) ? $current['deployment_key'] : $legacyProject;
+        $deploymentKey = $this->stringOption('deployment-key') ?? ($this->interactive()
+            ? text('Stable deployment key', default: $currentDeploymentKey !== '' ? $currentDeploymentKey : basename($this->laravel->basePath()), required: true)
+            : ($currentDeploymentKey !== '' ? $currentDeploymentKey : basename($this->laravel->basePath())));
+        $currentPortBase = is_int($current['port_base'] ?? null) ? $current['port_base'] : 9010;
+        $portBaseOption = $this->stringOption('port-base');
+        $portBase = $portBaseOption !== null ? filter_var($portBaseOption, FILTER_VALIDATE_INT) : $currentPortBase;
+
+        if (! is_int($portBase)) {
+            throw new RuntimeException('--port-base must be an integer.');
+        }
         $repository = is_string($current['repository'] ?? null) ? $current['repository'] : $this->gitValue(['remote', 'get-url', 'origin']);
         $branch = is_string($current['branch'] ?? null) ? $current['branch'] : ($this->gitValue(['branch', '--show-current']) ?: 'main');
         $sslEmail = $this->stringOption('ssl-email')
@@ -219,7 +232,7 @@ final class ConfigureCommand extends Command
                 : ($local['MAIL_FROM_ADDRESS'] ?? ''));
 
         DeploymentConfig::validateInstallerTargets(
-            project: $project,
+            deploymentKey: $deploymentKey,
             sshHost: $sshHost,
             repository: $repository,
             branch: $branch,
@@ -230,11 +243,12 @@ final class ConfigureCommand extends Command
         );
 
         $document = [
-            'schema' => 1,
+            'schema' => 2,
             'default_stage' => $stagingEnabled ? 'staging' : 'production',
-            'project' => $project,
+            'deployment_key' => $deploymentKey,
             'repository' => $repository,
             'branch' => $branch,
+            'port_base' => $portBase,
             'keep_releases' => is_int($current['keep_releases'] ?? null) ? $current['keep_releases'] : 5,
             'php_version' => is_string($current['php_version'] ?? null) ? $current['php_version'] : '8.5',
             'php_binary' => is_string($current['php_binary'] ?? null) ? $current['php_binary'] : 'php8.5',
@@ -242,8 +256,8 @@ final class ConfigureCommand extends Command
             'run_user' => is_string($current['run_user'] ?? null) ? $current['run_user'] : 'www-data',
             'ssl_email' => $sslEmail,
             'stages' => [
-                'staging' => $this->stageTopology($staging, 'staging', $project, $stagingEnabled, $sshHost, $stagingDomain, $runtime, $horizon, $reverb, $nightwatch, 8100, 8180, 2507),
-                'production' => $this->stageTopology($production, 'production', $project, true, $sshHost, $domain, $runtime, $horizon, $reverb, $nightwatch, 8000, 8080, 2407),
+                'staging' => $this->stageTopology($staging, $stagingEnabled, $sshHost, $stagingDomain, $runtime, $horizon, $reverb, $nightwatch),
+                'production' => $this->stageTopology($production, true, $sshHost, $domain, $runtime, $horizon, $reverb, $nightwatch),
             ],
         ];
         DeploymentConfig::validateTopologyDocument($document);
@@ -327,6 +341,8 @@ final class ConfigureCommand extends Command
             throw new RuntimeException("Deployment stage [{$stage}] is disabled.");
         }
 
+        $deployment = DeploymentConfig::load($this->laravel->basePath(), $stage, validateRuntime: false);
+
         $path = ".accelerator/environments/{$stage}.env";
         $current = $store->read($path);
         $domain = (string) $stageConfig['domain'];
@@ -335,13 +351,16 @@ final class ConfigureCommand extends Command
             'APP_DEBUG' => 'false',
             'APP_URL' => "https://{$domain}",
             'LOG_LEVEL' => 'error',
+            'OCTANE_PORT' => (string) $deployment->octanePort,
+            'REVERB_SERVER_PORT' => (string) $deployment->reverbPort,
+            'NIGHTWATCH_INGEST_URI' => "127.0.0.1:{$deployment->nightwatchPort}",
         ];
         $dualStage = collect($document['stages'] ?? [])->filter(
             static fn (mixed $configuredStage): bool => is_array($configuredStage)
                 && ($configuredStage['enabled'] ?? false) === true,
         )->count() > 1;
         $draft += $this->environmentIndicatorValues($current, $stage, $dualStage);
-        $draft += $this->stageRuntimeIdentityValues((string) $document['project'], $stage);
+        $draft += $this->stageRuntimeIdentityValues((string) $document['deployment_key'], $stage);
         $local = $store->read('.env');
 
         foreach (self::FEATURE_KEYS as $feature => $key) {
@@ -424,23 +443,21 @@ final class ConfigureCommand extends Command
     }
 
     /** @param array<string, mixed> $current @return array<string, mixed> */
-    private function stageTopology(array $current, string $stage, string $project, bool $enabled, string $sshHost, string $domain, string $runtime, bool $horizon, bool $reverb, bool $nightwatch, int $octanePort, int $reverbPort, int $nightwatchPort): array
+    private function stageTopology(array $current, bool $enabled, string $sshHost, string $domain, string $runtime, bool $horizon, bool $reverb, bool $nightwatch): array
     {
+        unset($current['service_group'], $current['octane_port'], $current['reverb_port'], $current['nightwatch_port']);
+
         return array_replace($current + [
             'enabled' => $enabled,
             'ssh_host' => $sshHost,
             'domain' => $domain,
             'root' => $domain === '' ? '' : "/var/www/{$domain}",
-            'service_group' => DeploymentConfig::defaultServiceGroup($project, $stage),
             'http_runtime' => $runtime,
             'horizon' => $horizon,
             'queue_worker' => ! $horizon,
             'reverb' => $reverb,
             'nightwatch' => $nightwatch,
             'scheduler' => true,
-            'octane_port' => $octanePort,
-            'reverb_port' => $reverbPort,
-            'nightwatch_port' => $nightwatchPort,
             'health_path' => '/up',
         ], [
             'enabled' => $enabled,

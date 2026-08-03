@@ -238,7 +238,7 @@ CONF;
 
     private function programName(string $service): string
     {
-        return $this->config->group.'_'.$service;
+        return $this->config->programName($service);
     }
 
     private function httpNginxTemplate(): string
