@@ -38,6 +38,10 @@ Accelerator never owns `/`. Laravel's welcome page, a landing page, or a redirec
 - File uploads retain the image editor and a configurable 100 MB application limit.
 - `VerticalWizard`, Advanced Choice, and the package Location Picker remain supported primitives.
 
+Google OAuth defaults to `existing_only`. Controlled self-registration uses `ACCELERATOR_OAUTH_MODE=allowed_domains`, a non-empty `ACCELERATOR_OAUTH_ALLOWED_DOMAINS`, and `ACCELERATOR_OAUTH_DEFAULT_ROLE`. Enrollment policy remains stage environment configuration rather than a mutable database setting. Re-running feature configuration preserves a valid existing OAuth mode.
+
+The Telegram option enables the Laravel notification channel and profile Chat ID/test-message UI. It does not invent business notifications, deployment alerts, or observability alerts; applications choose the events and recipients. `TELEGRAM_BOT_TOKEN` belongs in the canonical stage environment.
+
 ## Daily commands
 
 ```bash
@@ -121,6 +125,8 @@ File backups contain mutable `storage/app` data, not the Git-managed release tre
 Supervisor is the sole owner of long-running service restarts. Accelerator deliberately omits Laravel's generic post-deploy `artisan reload`, which would duplicate the restart and cannot signal Supervisor processes owned by the runtime user.
 
 Certbot obtains or reuses certificate material through the dedicated ACME webroot; it does not rewrite the Nginx virtual host. Accelerator remains the single owner and renderer of both HTTP and HTTPS configuration.
+
+Nginx forwards Livewire v4's hash-based `/livewire-{hash}/` endpoints to Laravel before applying immutable static-asset caching. Do not publish Livewire assets merely to work around a dynamic-route 404.
 
 The deploy recipe clones the application repository and initializes only the tracked `packages/accelerator` submodule before Composer runs. It intentionally does not recurse through unrelated submodules, so a broken or optional gitlink elsewhere cannot widen deployment scope.
 

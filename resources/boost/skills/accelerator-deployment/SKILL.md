@@ -49,6 +49,8 @@ Supervisor owns long-running service restarts. Do not add Laravel's generic post
 
 Certbot manages certificate material through Accelerator's ACME webroot and must not rewrite Nginx. Accelerator renders and owns the complete HTTP/HTTPS virtual host.
 
+Keep the generated Nginx exception for Livewire v4's hash-based `/livewire-{hash}/` routes before the static file-extension location. Those JavaScript and update endpoints are dynamic Laravel routes; do not fix a 404 by publishing vendor assets.
+
 Deployment clones the root repository and initializes only `packages/accelerator` before Composer. Never replace that scoped command with recursive or all-submodule initialization: unrelated gitlinks are outside Accelerator deployment scope.
 
 Never run Composer update remotely, print env contents, touch unrelated projects, auto-rollback migrations, or delete the old root during relocation. Relocation locks the project, copies into the new stable root, reprovisions Nginx/SSL/services, health-checks, and deliberately preserves the old root. Horizon and a plain queue worker are mutually exclusive. A code rollback changes the symlink and services only; database recovery is manual.

@@ -155,7 +155,10 @@ final class ConfigureCommand extends Command
             $draft[$key] = $enabled ? 'true' : 'false';
         }
 
-        $draft['ACCELERATOR_OAUTH_MODE'] = in_array('oauth', $selected, true) ? 'existing_only' : 'disabled';
+        $currentOAuthMode = $current['ACCELERATOR_OAUTH_MODE'] ?? 'disabled';
+        $draft['ACCELERATOR_OAUTH_MODE'] = in_array('oauth', $selected, true)
+            ? (in_array($currentOAuthMode, ['existing_only', 'allowed_domains'], true) ? $currentOAuthMode : 'existing_only')
+            : 'disabled';
         $draft['BROADCAST_CONNECTION'] = in_array('reverb', $selected, true) ? 'reverb' : 'log';
         $draft['SCOUT_DRIVER'] = in_array('scout', $selected, true) ? 'database' : 'collection';
         $draft['NIGHTWATCH_ENABLED'] = in_array('nightwatch', $selected, true) ? 'true' : 'false';

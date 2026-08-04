@@ -130,6 +130,10 @@ NGINX;
     {
         if ($this->config->httpRuntime === 'octane') {
             return <<<NGINX
+    location ~ ^/livewire-[a-f0-9]+/ {
+        try_files \$uri @octane;
+    }
+
     location ~* \.(?:css|js|png|jpe?g|gif|ico|svg|webp|woff2?|ttf|eot|map|txt)$ {
         try_files \$uri =404;
         expires 365d;
@@ -158,6 +162,10 @@ NGINX;
 
         return <<<NGINX
     index index.php;
+
+    location ~ ^/livewire-[a-f0-9]+/ {
+        try_files \$uri /index.php?\$query_string;
+    }
 
     location ~* \.(?:css|js|png|jpe?g|gif|ico|svg|webp|woff2?|ttf|eot|map|txt)$ {
         try_files \$uri =404;

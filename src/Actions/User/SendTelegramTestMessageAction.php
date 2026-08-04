@@ -23,6 +23,10 @@ final class SendTelegramTestMessageAction
 
     public function handle(Model&AcceleratorUser $user, string $telegramChatId): void
     {
+        if (! config('accelerator.features.telegram', false)) {
+            throw new BusinessException('Integrasi Telegram belum diaktifkan untuk environment ini.');
+        }
+
         $telegramChatId = trim($telegramChatId);
 
         if ($telegramChatId === '') {
@@ -32,7 +36,7 @@ final class SendTelegramTestMessageAction
         $botToken = $this->telegramBotConfigurator->getBotToken();
 
         if ($botToken === null) {
-            throw new BusinessException('Telegram Bot Token belum dikonfigurasi di App Settings.');
+            throw new BusinessException('TELEGRAM_BOT_TOKEN belum dikonfigurasi di environment aplikasi.');
         }
 
         $this->telegramBotConfigurator->configureClient($this->telegram);

@@ -18,7 +18,6 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Override;
 use WireNinja\Accelerator\Actions\User\SendTelegramTestMessageAction;
-use WireNinja\Accelerator\Filament\Forms\Components\BooleanCard;
 use WireNinja\Accelerator\Filament\Schemas\Components\VerticalWizard;
 use WireNinja\Accelerator\Support\UserModel;
 
@@ -151,8 +150,10 @@ class ManageProfile extends EditProfile
                                 ->disabled(),
                         ]),
                 ]),
+        ];
 
-            Step::make('Notifikasi & Telegram')
+        if (config('accelerator.features.telegram', false)) {
+            $steps[] = Step::make('Notifikasi & Telegram')
                 ->icon('lucide-send')
                 ->schema([
                     Section::make('Telegram')
@@ -183,13 +184,9 @@ class ManageProfile extends EditProfile
                                         }),
                                     true,
                                 ),
-                            BooleanCard::make('receives_product_price_telegram_notifications')
-                                ->label('Terima Notifikasi Harga Produk')
-                                ->trueLabel('Aktifkan Notifikasi Harga')
-                                ->trueDescription('Terima notifikasi Telegram saat skema harga produk dibuat, diubah, atau dihapus.'),
                         ]),
-                ]),
-        ];
+                ]);
+        }
 
         return $schema
             ->components([

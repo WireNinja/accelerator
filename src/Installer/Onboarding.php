@@ -23,9 +23,9 @@ final class Onboarding
      * @var array<string, string>
      */
     private const FEATURES = [
-        'oauth' => 'Google OAuth (existing users only)',
+        'oauth' => 'Google OAuth (safe default: existing users only)',
         'pwa' => 'Progressive Web App assets',
-        'telegram' => 'Telegram notifications',
+        'telegram' => 'Telegram notification channel',
         'horizon' => 'Horizon queue dashboard and supervisor',
         'reverb' => 'Reverb real-time broadcasting',
         'scout' => 'Scout search with the database driver',
