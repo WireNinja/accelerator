@@ -303,7 +303,11 @@ task('accelerator:nightowl-database-init', function () use ($config): void {
         file_put_contents($temporary, $sql, LOCK_EX);
         chmod($temporary, 0600);
         upload($temporary, $remote);
-        run('chmod 0600 '.escapeshellarg($remote).' && trap '.escapeshellarg('rm -f '.$remote).' EXIT; command sudo -n -u postgres psql --set=ON_ERROR_STOP=1 --file='.escapeshellarg($remote));
+        run(
+            'chmod 0600 '.escapeshellarg($remote)
+            .' && command sudo -n chown postgres:postgres '.escapeshellarg($remote)
+            .' && trap '.escapeshellarg('sudo -n rm -f '.$remote).' EXIT; command sudo -n -u postgres psql --set=ON_ERROR_STOP=1 --file='.escapeshellarg($remote),
+        );
     } finally {
         @unlink($temporary);
     }
