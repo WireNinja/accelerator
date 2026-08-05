@@ -525,6 +525,15 @@ task('accelerator:preflight', function () use ($config, $nodeEnvironment): void 
         $status = trim(run('command sudo -n supervisorctl status '.escapeshellarg($config->group.':'.$program).' 2>/dev/null || true'));
 
         if ($programService === 'nightowl' && $supervisorOwner === 'owned') {
+            $oldProgram = $config->group.'-nightwatch';
+            $oldStatus = trim(run('command sudo -n supervisorctl status '.escapeshellarg($config->group.':'.$oldProgram).' 2>/dev/null || true'));
+
+            if (str_contains($oldStatus, 'RUNNING')) {
+                $portStates[] = "{$service}:{$port}=migration-owned";
+
+                continue;
+            }
+
             $oldNightwatch = trim(run(
                 'command sudo -n grep -Fq '.escapeshellarg('[program:'.$config->group.'-nightwatch]').' '.escapeshellarg($expectedSupervisor)
                 .' && command sudo -n grep -Eq '.escapeshellarg('(--listen-on=|:)(?:127\.0\.0\.1:)?'.$port.'([^0-9]|$)').' '.escapeshellarg($expectedSupervisor)
