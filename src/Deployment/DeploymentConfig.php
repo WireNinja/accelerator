@@ -47,8 +47,10 @@ final readonly class DeploymentConfig
         public bool $reverbEnabled,
         public int $reverbPort,
         public bool $schedulerEnabled,
-        public bool $nightwatchEnabled,
-        public int $nightwatchPort,
+        public bool $nightowlEnabled,
+        public int $nightowlPort,
+        public int $nightowlUdpPort,
+        public int $nightowlHealthPort,
         public string $healthPath,
         public array $document,
     ) {}
@@ -96,7 +98,7 @@ final readonly class DeploymentConfig
         $horizonEnabled = self::bool($stageConfig, 'horizon');
         $queueWorkerEnabled = self::bool($stageConfig, 'queue_worker', ! $horizonEnabled);
         $reverbEnabled = self::bool($stageConfig, 'reverb');
-        $nightwatchEnabled = self::bool($stageConfig, 'nightwatch');
+        $nightowlEnabled = self::bool($stageConfig, 'nightowl');
 
         self::validateInstallerTargets(
             deploymentKey: $deploymentKey,
@@ -123,7 +125,7 @@ final readonly class DeploymentConfig
             self::validateRuntimeServiceFeatures($projectRoot, $stage, [
                 'ACCELERATOR_FEATURE_HORIZON' => $horizonEnabled,
                 'ACCELERATOR_FEATURE_REVERB' => $reverbEnabled,
-                'ACCELERATOR_FEATURE_NIGHTWATCH' => $nightwatchEnabled,
+                'ACCELERATOR_FEATURE_NIGHTOWL' => $nightowlEnabled,
             ]);
         }
 
@@ -160,8 +162,10 @@ final readonly class DeploymentConfig
             reverbEnabled: $reverbEnabled,
             reverbPort: $stagePortBase + 1,
             schedulerEnabled: self::bool($stageConfig, 'scheduler', true),
-            nightwatchEnabled: $nightwatchEnabled,
-            nightwatchPort: $stagePortBase + 2,
+            nightowlEnabled: $nightowlEnabled,
+            nightowlPort: $stagePortBase + 2,
+            nightowlUdpPort: $stagePortBase + 3,
+            nightowlHealthPort: $stagePortBase + 4,
             healthPath: self::string($stageConfig, 'health_path', '/up'),
             document: $document,
         );
@@ -182,10 +186,15 @@ final readonly class DeploymentConfig
         return $this->deployRoot.'/current';
     }
 
+    public function nightowlDatabaseName(): string
+    {
+        return "acc_nightowl_{$this->deploymentKey}_{$this->stage}";
+    }
+
     public function hasSupervisorPrograms(): bool
     {
         return $this->httpRuntime === 'octane' || $this->horizonEnabled || $this->queueWorkerEnabled
-            || $this->reverbEnabled || $this->schedulerEnabled || $this->nightwatchEnabled;
+            || $this->reverbEnabled || $this->schedulerEnabled || $this->nightowlEnabled;
     }
 
     /** @return list<string> */
@@ -213,8 +222,8 @@ final readonly class DeploymentConfig
             $services[] = 'scheduler';
         }
 
-        if ($this->nightwatchEnabled) {
-            $services[] = 'nightwatch';
+        if ($this->nightowlEnabled) {
+            $services[] = 'nightowl';
         }
 
         return $services;
@@ -242,8 +251,9 @@ final readonly class DeploymentConfig
             $services['reverb'] = $this->reverbPort;
         }
 
-        if ($this->nightwatchEnabled) {
-            $services['nightwatch'] = $this->nightwatchPort;
+        if ($this->nightowlEnabled) {
+            $services['nightowl'] = $this->nightowlPort;
+            $services['nightowl-health'] = $this->nightowlHealthPort;
         }
 
         return $services;
@@ -349,8 +359,9 @@ final readonly class DeploymentConfig
                 $services['reverb'] = $stagePortBase + 1;
             }
 
-            if (self::bool($stageConfig, 'nightwatch')) {
-                $services['nightwatch'] = $stagePortBase + 2;
+            if (self::bool($stageConfig, 'nightowl')) {
+                $services['nightowl'] = $stagePortBase + 2;
+                $services['nightowl-health'] = $stagePortBase + 4;
             }
 
             foreach ($services as $service => $port) {
@@ -408,8 +419,8 @@ final readonly class DeploymentConfig
 
     private static function validateDeploymentKey(string $deploymentKey): void
     {
-        if (preg_match('/^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$/', $deploymentKey) !== 1) {
-            throw new InvalidArgumentException('deployment_key must be a lowercase slug of at most 40 characters.');
+        if (preg_match('/^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?$/', $deploymentKey) !== 1) {
+            throw new InvalidArgumentException('deployment_key must be a lowercase slug of at most 39 characters.');
         }
     }
 

@@ -1,4 +1,0 @@
-interface:
-  display_name: "Accelerator Nightwatch MCP"
-  short_description: "Diagnose Nightwatch issues efficiently"
-  default_prompt: "Use $accelerator-nightwatch-mcp to inspect and diagnose the reported Nightwatch issue without changing its state."

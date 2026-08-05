@@ -19,9 +19,9 @@ Canonical stage secrets live locally. Use `accelerator:env:edit`, `accelerator:e
 
 Deployment schema 2 stores one stable `deployment_key` and one explicit `port_base`. Supervisor names and stage service ports are derived, not independently mutable. Replace ACME email only with explicit `--ssl-email`. Stage-scoped `--rotate-app-key` and `--rotate-reverb-credentials` are destructive credential rotations intended for first deployment or an explicit incident response; never rotate an established live stage implicitly.
 
-Application code calls `config()`, never `env()` outside config files. Keep Telegram/OAuth/database/Nightwatch/VAPID secrets in env files, never settings or deployment JSON. Root `/` remains userland-owned.
+Application code calls `config()`, never `env()` outside config files. Keep Telegram/OAuth/database/NightOwl/VAPID secrets in env files, never settings or deployment JSON. Root `/` remains userland-owned.
 
-Optional features are OAuth, PWA, Telegram, Horizon, Reverb, Scout, and Nightwatch. Filament, settings, RBAC, audit, and core UI are always active. Use `accelerator:env` and `config:show accelerator` for read-only inspection.
+Optional features are OAuth, PWA, Telegram, Horizon, Reverb, Scout, and NightOwl. Filament, settings, RBAC, audit, and core UI are always active. Use `accelerator:env` and `config:show accelerator` for read-only inspection.
 
 Google OAuth enrollment policy is stage configuration, not a mutable database setting. `existing_only` is the safe default; `allowed_domains` requires an explicit `ACCELERATOR_OAUTH_ALLOWED_DOMAINS` allowlist and `ACCELERATOR_OAUTH_DEFAULT_ROLE`. Feature configuration must preserve either valid mode. Telegram enables the notification transport and generic profile Chat ID/test UI only; business notifications and recipient preferences stay in userland.
 

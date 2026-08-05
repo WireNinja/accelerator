@@ -42,7 +42,9 @@
         "laravel-notification-channels/telegram": "^7.0",
         "laravel/prompts": "^0.3.21",
         "codewithdennis/filament-advanced-choice": "^2.1",
-        "codeat3/blade-simple-icons": "^8.12"
+        "codeat3/blade-simple-icons": "^8.12",
+        "laravel/head": "^0.1",
+        "nightowl/agent": "^2.1"
     },
     "require-dev": {
         "larastan/larastan": "^3.10",
@@ -54,6 +56,9 @@
     },
     "extra": {
         "laravel": {
+            "dont-discover": [
+                "nightowl/agent"
+            ],
             "providers": [
                 "WireNinja\\Accelerator\\AcceleratorServiceProvider"
             ]

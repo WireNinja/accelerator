@@ -57,11 +57,11 @@ final readonly class DeploymentRenderer
             $programs[] = $this->program('scheduler', "{$this->config->phpBinary} {$this->config->deployRoot}/current/artisan schedule:work");
         }
 
-        if ($this->config->nightwatchEnabled) {
-            $names[] = $this->programName('nightwatch');
+        if ($this->config->nightowlEnabled) {
+            $names[] = $this->programName('nightowl');
             $programs[] = $this->program(
-                'nightwatch',
-                "{$this->config->phpBinary} {$this->config->deployRoot}/current/artisan nightwatch:agent --listen-on=127.0.0.1:{$this->config->nightwatchPort} --server={$this->config->domain} --silent",
+                'nightowl',
+                "{$this->config->phpBinary} {$this->config->deployRoot}/current/artisan nightowl:agent --host=127.0.0.1 --port={$this->config->nightowlPort} --sqlite-path={$this->config->sharedPath()}/storage/nightowl/agent-buffer.sqlite",
             );
         }
 

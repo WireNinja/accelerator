@@ -45,6 +45,7 @@ final class DeployInitCommand extends Command
 
             $deployer->run('accelerator:provision', $stage);
             $deployer->run('accelerator:database-init', $stage);
+            $deployer->run('accelerator:nightowl-database-init', $stage);
             $deployer->run('deploy', $stage, $options);
 
             return self::SUCCESS;

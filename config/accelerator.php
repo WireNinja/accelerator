@@ -8,7 +8,15 @@ return [
         'horizon' => env('ACCELERATOR_FEATURE_HORIZON', false),
         'reverb' => env('ACCELERATOR_FEATURE_REVERB', false),
         'scout' => env('ACCELERATOR_FEATURE_SCOUT', false),
-        'nightwatch' => env('ACCELERATOR_FEATURE_NIGHTWATCH', false),
+        'nightowl' => env('ACCELERATOR_FEATURE_NIGHTOWL', false),
+    ],
+
+    'nightowl' => [
+        'authenticated_request_sample_rate' => (float) env('NIGHTOWL_AUTHENTICATED_REQUEST_SAMPLE_RATE', 1.0),
+    ],
+
+    'pwa' => [
+        'theme_color' => env('ACCELERATOR_PWA_THEME_COLOR', '#ffffff'),
     ],
 
     'proxy' => [

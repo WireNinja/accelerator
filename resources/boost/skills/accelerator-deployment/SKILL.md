@@ -27,11 +27,11 @@ php artisan accelerator:ports --host=ssh-alias --range=9000-9999 --available=20
 
 Before mutation, read committed `.accelerator/deploy.json`, confirm deployment key/stage/SSH alias/domain/root/derived Supervisor group, validate the matching ignored stage env, then run `accelerator:deploy:preflight`. Non-interactive mutation requires explicit force. Never guess production targets.
 
-Stage environment configuration must explicitly match Horizon, Reverb, and Nightwatch service flags in the committed topology. Use `accelerator:configure environment --stage=...`; never assume an installed package means its runtime provider is enabled.
+Stage environment configuration must explicitly match Horizon, Reverb, and NightOwl service flags in the committed topology. Use `accelerator:configure environment --stage=...`; never assume an installed package means its runtime provider is enabled.
 
 Treat dual stages as independent, identical instances of one application. Code, dependencies, features, UI, and deployment behavior must match; only domain and mutable data/runtime ownership differ. Verify SQL databases, uploads, `APP_KEY`, Reverb credentials, Redis/cache/Horizon prefixes, session cookie names, logs, and processes are instance-scoped before mutation. Separate Supervisor groups alone do not prevent one instance's worker from consuming the other instance's Redis queue.
 
-`deployment_key` is the stable machine identity. Derive Supervisor groups as `acc-{deployment_key}-{stage}`; never store arbitrary stage group names. Reserve one 20-port block per project: staging uses offsets 0-9 and production offsets 10-19; single-stage production uses offsets 0-9. Octane, Reverb, and Nightwatch use offsets 0, 1, and 2. Scan before assigning `port_base`; never auto-select ports during deployment.
+`deployment_key` is the stable machine identity. Derive Supervisor groups as `acc-{deployment_key}-{stage}`; never store arbitrary stage group names. Reserve one 20-port block per project: staging uses offsets 0-9 and production offsets 10-19; single-stage production uses offsets 0-9. Octane and Reverb use offsets 0 and 1; NightOwl reserves 2, 3, and 4. Scan before assigning `port_base`; never auto-select ports during deployment.
 
 Never merge stages into one process group. Status, restart, deploy, and rollback remain stage-scoped. Preflight rejects unmanaged roots, Nginx domain ownership conflicts, Supervisor group/program conflicts, and occupied listener ports before provision/deploy mutates the server. Accelerator ownership markers may authorize a legacy Accelerator-owned stage during the deterministic group rename; `--force` never authorizes taking over another project.
 

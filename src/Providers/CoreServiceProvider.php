@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Session;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
+use Laravel\Nightwatch\Facades\Nightwatch;
 use Livewire\LivewireManager;
 use NotificationChannels\Telegram\Telegram;
 use SessionHandlerInterface;
@@ -77,6 +78,10 @@ final class CoreServiceProvider extends ServiceProvider
         $this->configureEloquent();
         $this->configureApplicationDefaults();
         $this->configureSuperAdminGate();
+
+        if (config('accelerator.features.nightowl', false)) {
+            Nightwatch::captureDefaultVendorCommands();
+        }
 
         $this->app->make(LivewireManager::class)->propertySynthesizer(BigDecimalSynth::class);
 

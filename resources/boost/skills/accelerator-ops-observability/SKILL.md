@@ -1,6 +1,6 @@
 ---
 name: accelerator-ops-observability
-description: Diagnose Accelerator releases, runtime, logs, backups, Octane, Horizon, Reverb, Nightwatch, Nginx, and Supervisor without changing server state.
+description: Diagnose Accelerator releases, runtime, logs, backups, Octane, Horizon, Reverb, NightOwl, Nginx, and Supervisor without changing server state.
 ---
 
 # Accelerator operations observability

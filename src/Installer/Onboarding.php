@@ -29,7 +29,7 @@ final class Onboarding
         'horizon' => 'Horizon queue dashboard and supervisor',
         'reverb' => 'Reverb real-time broadcasting',
         'scout' => 'Scout search with the database driver',
-        'nightwatch' => 'Nightwatch observability collector',
+        'nightowl' => 'NightOwl self-hosted observability (authenticated users only)',
     ];
 
     /** @var list<string> */

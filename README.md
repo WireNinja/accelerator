@@ -30,7 +30,7 @@ Accelerator never owns `/`. Laravel's welcome page, a landing page, or a redirec
 ## Deliberate defaults
 
 - Filament Admin and System panels, Shield RBAC, settings, activity log, media integration, custom sidebar/topbar, and native Filament authentication/MFA are core.
-- OAuth, PWA, Telegram, Horizon, Reverb, Scout, and Nightwatch are optional runtime integrations.
+- OAuth, PWA, Telegram, Horizon, Reverb, Scout, and self-hosted NightOwl are optional runtime integrations. Laravel Nightwatch is NightOwl's internal instrumentation layer, not a parallel hosted destination.
 - Inertia, Vue, Wayfinder, Fortify, ticketing, custom telemetry, Insider, Envoy, and generated GitHub Actions are not part of Accelerator.
 - `Model::unguard()` is intentional for schema-controlled Filament forms. A project may call `Model::reguard()` in its app provider.
 - Tables default to `id desc`, cursor pagination, deferred loading, compact filters, and Indonesian formatting.
@@ -87,6 +87,7 @@ php artisan accelerator:configure deployment --deployment-key=waringin --port-ba
 php artisan accelerator:configure deployment --migrate-legacy --force --json --no-interaction
 php artisan accelerator:configure environment --stage=production
 php artisan accelerator:configure environment --stage=production --rotate-app-key --rotate-reverb-credentials
+php artisan accelerator:configure environment --stage=production --rotate-nightowl-credentials
 php artisan accelerator:deploy:preflight --stage=production --json
 php artisan accelerator:deploy:status --stage=production --json
 php artisan accelerator:deploy:init --stage=production --revision=<full-commit-sha>
@@ -110,13 +111,13 @@ php artisan accelerator:ports --host=ssh-alias --range=9000-9999 --available=20
 
 Configuration never SSHes. Changing a domain recalculates `/var/www/{domain}` and reports the exact relocation command; it never moves remote files implicitly. Remote mutators confirm stage, domain, root, and host; non-interactive mutation requires explicit force. Deployment uses committed Composer/pnpm/npm locks, installs rather than updates dependencies, backs up the database before migrations, switches releases atomically, restarts only configured services, and never auto-rolls back database migrations. A failed post-switch health check may restore the previous code symlink, but database review remains manual.
 
-`deploy:init` idempotently creates the first stage database before the normal backup-and-migrate pipeline. Pass `--revision=<full-commit-sha>` when two stages must receive the same immutable release. SQLite is created in stage-owned shared storage. Local MySQL/MariaDB and PostgreSQL databases are created through passwordless sudo and granted to an already-existing application account; Accelerator never copies or prints its password. External database servers must be provisioned explicitly. Ordinary deploys never create databases.
+`deploy:init` idempotently creates the first stage database before the normal backup-and-migrate pipeline. Pass `--revision=<full-commit-sha>` when two stages must receive the same immutable release. SQLite is created in stage-owned shared storage. Local MySQL/MariaDB and PostgreSQL application databases are created through passwordless sudo and granted to an already-existing application account; Accelerator never copies or prints its password. When NightOwl is enabled, `deploy:init` separately creates or updates a unique local PostgreSQL role and database named `acc_nightowl_{deployment_key}_{stage}`, runs `nightowl:install` once, and later deploys run `nightowl:migrate`. External database servers must be provisioned explicitly. Ordinary deploys never create credentials or databases.
 
-Deployment schema 2 stores one stable `deployment_key` plus one explicit `port_base`. Domains may change without renaming the deployment. Supervisor groups are derived as `acc-{deployment_key}-{stage}`; arbitrary `service_group` values are forbidden. One project reserves 20 ports: dual-stage staging uses offsets 0-9 and production uses offsets 10-19, while single-stage production uses offsets 0-9. Octane, Reverb, and Nightwatch use offsets 0, 1, and 2. Scan the host and choose the block explicitly; deployment never auto-assigns ports.
+Deployment schema 2 stores one stable `deployment_key` plus one explicit `port_base`. Domains may change without renaming the deployment. Supervisor groups are derived as `acc-{deployment_key}-{stage}`; arbitrary `service_group` values are forbidden. One project reserves 20 ports: dual-stage staging uses offsets 0-9 and production uses offsets 10-19, while single-stage production uses offsets 0-9. Octane and Reverb use offsets 0 and 1. NightOwl reserves TCP ingest, UDP, and health at offsets 2, 3, and 4; UDP is disabled by default. Scan the host and choose the block explicitly; deployment never auto-assigns ports.
 
 The ignored local `.accelerator/environments/{stage}.env` file is canonical. `env:diff` compares it with the server without printing values. `env:push` uploads atomically, clears cached configuration, restarts only the derived stage group, and health-checks. Manual remote `.env` editing is an emergency operation because a later deploy will overwrite it.
 
-Use `--ssl-email` to replace the existing ACME email explicitly. `--rotate-app-key` and `--rotate-reverb-credentials` are intentional stage-scoped credential rotations; do not use either casually on an established live stage.
+Use `--ssl-email` to replace the existing ACME email explicitly. `--rotate-app-key`, `--rotate-reverb-credentials`, and `--rotate-nightowl-credentials` are intentional stage-scoped credential rotations; do not use them casually on an established live stage. A NightOwl rotation becomes effective through `deploy:init`, which updates the local PostgreSQL role without printing the password.
 
 Shared Laravel storage and cache paths use inherited ACLs for both the deploy user and runtime user. Releases become rollback candidates only after services pass the retried HTTPS health check; incomplete or failed releases are marked bad and never selected as rollback targets.
 
@@ -130,7 +131,7 @@ Nginx forwards Livewire v4's hash-based `/livewire-{hash}/` endpoints to Laravel
 
 The deploy recipe clones the application repository and initializes only the tracked `packages/accelerator` submodule before Composer runs. It intentionally does not recurse through unrelated submodules, so a broken or optional gitlink elsewhere cannot widen deployment scope.
 
-`deploy:init` and ordinary deploy run a read-only ownership/collision preflight before mutation. It rejects unmanaged roots, duplicate Nginx domains, duplicate Supervisor groups/programs, and occupied Octane/Reverb/Nightwatch ports. Accelerator-written roots and service files carry deployment/stage ownership markers, so `--force` never means “take over another project”. A recognized older Accelerator-owned group for the exact same stage/domain/root may be renamed deterministically during provisioning.
+`deploy:init` and ordinary deploy run a read-only ownership/collision preflight before mutation. It rejects unmanaged roots, duplicate Nginx domains, duplicate Supervisor groups/programs, and occupied Octane/Reverb/NightOwl ports. Accelerator-written roots and service files carry deployment/stage ownership markers, so `--force` never means “take over another project”. A recognized older Accelerator-owned group or managed Nightwatch agent for the exact same stage/domain/root may be replaced deterministically during provisioning.
 
 Dual-stage deployment runs two independent, identical instances of the same application. Code, dependencies, features, UI, and deployment behavior remain identical. Only the domain and each instance's mutable data/runtime state are separate: SQL data, uploads, cache, queues, sessions, credentials, keys, logs, and processes. Never use staging as a differently configured edition of the application.
 
@@ -140,7 +141,11 @@ Dual-stage projects show a persistent Filament topbar badge so local, test, and 
 
 Dual stages on one VPS must also have distinct `REDIS_PREFIX`, `CACHE_PREFIX`, `HORIZON_NAME`, `HORIZON_PREFIX`, and `SESSION_COOKIE` values. `accelerator:configure environment` derives those namespaces from `{deployment_key}_{stage}` so queues, cache, sessions, and Horizon state cannot cross stage boundaries even when both stages use the same Redis server.
 
-`accelerator:configure environment` synchronizes stage runtime feature flags, and deployment refuses to start when Horizon, Reverb, or Nightwatch flags disagree with their stage service topology. Installed packages alone are not proof that their runtime providers are enabled.
+`accelerator:configure environment` synchronizes stage runtime feature flags, and deployment refuses to start when Horizon, Reverb, or NightOwl flags disagree with their stage service topology. Installed packages alone are not proof that their runtime providers are enabled.
+
+NightOwl records authenticated web traces only. Global Nightwatch request and exception sampling remain zero so guest traffic and bot errors are discarded; Accelerator middleware enables sampling after session authentication resolves. Authenticated request sampling defaults to `1.0` through `NIGHTOWL_AUTHENTICATED_REQUEST_SAMPLE_RATE`. Commands, scheduled tasks, jobs, queries, outgoing requests, mail, notifications, and cache events are captured at full fidelity by default. `NIGHTOWL_PARALLEL_WITH_NIGHTWATCH` must remain false.
+
+Laravel Head is always installed and rendered in Filament. PWA metadata is registered through `Head::defaults()` when the PWA feature is enabled. Userland Blade/Livewire layouts remain user-owned and should place `@head` inside their document `<head>` when they need route, runtime, social, SEO, or PWA metadata.
 
 Horizon and a plain queue worker are mutually exclusive. One VPS per stage is supported; clusters, containers, microservices, and CI orchestration are deliberately out of scope.
 
@@ -167,11 +172,11 @@ PHPStan/Larastan level 5 is the minimum. Do not add a baseline or suppress real 
 | Models/schema/casts/relations | `accelerator-model-context` |
 | Activity logging | `accelerator-activity-log` |
 | PWA/Vite assets | `accelerator-pwa-development` |
-| Nightwatch MCP triage | `accelerator-nightwatch-mcp` |
+| Self-hosted NightOwl | `accelerator-nightowl` |
 | Fresh-to-live project workflow | `accelerator-project-lifecycle` |
 | Remote mutation | `accelerator-deployment` |
 | Read-only runtime diagnosis | `accelerator-ops-observability` |
 
 Command `--help`, source/framework registry, policy, database, and runtime state are truth. Context output and skills are navigation aids.
 
-The complete opinionated lifecycle is stored in `resources/boost/skills/accelerator-project-lifecycle/references/workflow.md`. Efficient Nightwatch MCP issue resolution is stored in `resources/boost/skills/accelerator-nightwatch-mcp/references/issue-workflow.md`. Keep those references synchronized with public Artisan commands and deployment invariants; do not duplicate divergent workflows elsewhere.
+The complete opinionated lifecycle is stored in `resources/boost/skills/accelerator-project-lifecycle/references/workflow.md`. NightOwl provisioning and diagnosis are stored in `resources/boost/skills/accelerator-nightowl/references/operations.md`. Keep those references synchronized with public Artisan commands and deployment invariants; do not duplicate divergent workflows elsewhere.

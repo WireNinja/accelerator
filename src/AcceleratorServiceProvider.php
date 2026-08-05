@@ -3,9 +3,11 @@
 namespace WireNinja\Accelerator;
 
 use Illuminate\Support\ServiceProvider;
+use NightOwl\NightOwlAgentServiceProvider;
 use Override;
 use WireNinja\Accelerator\Providers\CoreServiceProvider;
 use WireNinja\Accelerator\Providers\FilamentServiceProvider;
+use WireNinja\Accelerator\Providers\HeadServiceProvider;
 use WireNinja\Accelerator\Providers\HorizonServiceProvider;
 use WireNinja\Accelerator\Providers\OAuthServiceProvider;
 use WireNinja\Accelerator\Providers\PanelServiceProvider;
@@ -21,6 +23,7 @@ class AcceleratorServiceProvider extends ServiceProvider
         'oauth' => OAuthServiceProvider::class,
         'pwa' => PwaServiceProvider::class,
         'horizon' => HorizonServiceProvider::class,
+        'nightowl' => NightOwlAgentServiceProvider::class,
     ];
 
     #[Override]
@@ -31,6 +34,7 @@ class AcceleratorServiceProvider extends ServiceProvider
 
         $this->app->register(CoreServiceProvider::class);
         $this->app->register(FilamentServiceProvider::class);
+        $this->app->register(HeadServiceProvider::class);
         $this->app->register(PanelServiceProvider::class);
 
         foreach (self::FEATURE_PROVIDERS as $feature => $provider) {

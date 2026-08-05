@@ -37,6 +37,7 @@ final class ConfigureCommand extends Command
         {--http-runtime= : octane or fpm}
         {--rotate-app-key : Generate a new APP_KEY for the selected stage}
         {--rotate-reverb-credentials : Generate new Reverb credentials for the selected stage}
+        {--rotate-nightowl-credentials : Generate a new NightOwl PostgreSQL password for the selected stage}
         {--migrate-legacy : Convert .accelerator/deploy.env to deploy.json and delete the legacy file}
         {--force : Confirm a validated non-interactive write}
         {--json : Emit a stable JSON result}';
@@ -51,7 +52,7 @@ final class ConfigureCommand extends Command
         'horizon' => 'ACCELERATOR_FEATURE_HORIZON',
         'reverb' => 'ACCELERATOR_FEATURE_REVERB',
         'scout' => 'ACCELERATOR_FEATURE_SCOUT',
-        'nightwatch' => 'ACCELERATOR_FEATURE_NIGHTWATCH',
+        'nightowl' => 'ACCELERATOR_FEATURE_NIGHTOWL',
     ];
 
     public function handle(): int
@@ -161,7 +162,8 @@ final class ConfigureCommand extends Command
             : 'disabled';
         $draft['BROADCAST_CONNECTION'] = in_array('reverb', $selected, true) ? 'reverb' : 'log';
         $draft['SCOUT_DRIVER'] = in_array('scout', $selected, true) ? 'database' : 'collection';
-        $draft['NIGHTWATCH_ENABLED'] = in_array('nightwatch', $selected, true) ? 'true' : 'false';
+        $draft['NIGHTOWL_ENABLED'] = in_array('nightowl', $selected, true) ? 'true' : 'false';
+        $draft['NIGHTWATCH_ENABLED'] = in_array('nightowl', $selected, true) ? 'true' : 'false';
 
         if (! $this->confirmDraft('.env', $current, $draft)) {
             return $this->success('features', false, []);
@@ -169,6 +171,8 @@ final class ConfigureCommand extends Command
 
         $store->merge('.env', $draft);
         $store->merge('.env.example', $draft);
+        $store->remove('.env', ['ACCELERATOR_FEATURE_NIGHTWATCH', 'NIGHTWATCH_TOKEN', 'NIGHTWATCH_INGEST_URI']);
+        $store->remove('.env.example', ['ACCELERATOR_FEATURE_NIGHTWATCH', 'NIGHTWATCH_TOKEN', 'NIGHTWATCH_INGEST_URI']);
         $this->refreshCaches();
 
         return $this->success('features', true, ['.env', '.env.example']);
@@ -213,7 +217,7 @@ final class ConfigureCommand extends Command
             : (is_string($production['http_runtime'] ?? null) ? $production['http_runtime'] : 'octane'));
         $horizon = self::truthy($local['ACCELERATOR_FEATURE_HORIZON'] ?? 'false');
         $reverb = ($local['BROADCAST_CONNECTION'] ?? 'log') === 'reverb';
-        $nightwatch = self::truthy($local['NIGHTWATCH_ENABLED'] ?? 'false');
+        $nightowl = self::truthy($local['ACCELERATOR_FEATURE_NIGHTOWL'] ?? 'false');
         $packageManager = $this->packageManager();
         $legacyProject = is_string($current['project'] ?? null) ? $current['project'] : '';
         $currentDeploymentKey = is_string($current['deployment_key'] ?? null) ? $current['deployment_key'] : $legacyProject;
@@ -259,8 +263,8 @@ final class ConfigureCommand extends Command
             'run_user' => is_string($current['run_user'] ?? null) ? $current['run_user'] : 'www-data',
             'ssl_email' => $sslEmail,
             'stages' => [
-                'staging' => $this->stageTopology($staging, $stagingEnabled, $sshHost, $stagingDomain, $runtime, $horizon, $reverb, $nightwatch),
-                'production' => $this->stageTopology($production, true, $sshHost, $domain, $runtime, $horizon, $reverb, $nightwatch),
+                'staging' => $this->stageTopology($staging, $stagingEnabled, $sshHost, $stagingDomain, $runtime, $horizon, $reverb, $nightowl),
+                'production' => $this->stageTopology($production, true, $sshHost, $domain, $runtime, $horizon, $reverb, $nightowl),
             ],
         ];
         DeploymentConfig::validateTopologyDocument($document);
@@ -356,7 +360,11 @@ final class ConfigureCommand extends Command
             'LOG_LEVEL' => 'error',
             'OCTANE_PORT' => (string) $deployment->octanePort,
             'REVERB_SERVER_PORT' => (string) $deployment->reverbPort,
-            'NIGHTWATCH_INGEST_URI' => "127.0.0.1:{$deployment->nightwatchPort}",
+            'NIGHTOWL_AGENT_HOST' => '127.0.0.1',
+            'NIGHTOWL_AGENT_PORT' => (string) $deployment->nightowlPort,
+            'NIGHTOWL_INGEST_URI' => "127.0.0.1:{$deployment->nightowlPort}",
+            'NIGHTOWL_UDP_PORT' => (string) $deployment->nightowlUdpPort,
+            'NIGHTOWL_HEALTH_PORT' => (string) $deployment->nightowlHealthPort,
         ];
         $dualStage = collect($document['stages'] ?? [])->filter(
             static fn (mixed $configuredStage): bool => is_array($configuredStage)
@@ -368,10 +376,14 @@ final class ConfigureCommand extends Command
 
         foreach (self::FEATURE_KEYS as $feature => $key) {
             $enabled = match ($feature) {
-                'horizon', 'reverb', 'nightwatch' => ($stageConfig[$feature] ?? false) === true,
+                'horizon', 'reverb', 'nightowl' => ($stageConfig[$feature] ?? false) === true,
                 default => self::truthy($local[$key] ?? 'false'),
             };
             $draft[$key] = $enabled ? 'true' : 'false';
+        }
+
+        if ($deployment->nightowlEnabled) {
+            $draft += $this->nightowlEnvironmentValues($deployment, $current);
         }
 
         if ($this->option('rotate-app-key') || ($current['APP_KEY'] ?? '') === '') {
@@ -436,6 +448,7 @@ final class ConfigureCommand extends Command
         }
 
         $store->merge($path, $draft);
+        $store->remove($path, ['ACCELERATOR_FEATURE_NIGHTWATCH', 'NIGHTWATCH_TOKEN', 'NIGHTWATCH_INGEST_URI']);
         $next = "php artisan accelerator:deploy:init --stage={$stage}";
 
         if (! $this->option('json')) {
@@ -446,9 +459,9 @@ final class ConfigureCommand extends Command
     }
 
     /** @param array<string, mixed> $current @return array<string, mixed> */
-    private function stageTopology(array $current, bool $enabled, string $sshHost, string $domain, string $runtime, bool $horizon, bool $reverb, bool $nightwatch): array
+    private function stageTopology(array $current, bool $enabled, string $sshHost, string $domain, string $runtime, bool $horizon, bool $reverb, bool $nightowl): array
     {
-        unset($current['service_group'], $current['octane_port'], $current['reverb_port'], $current['nightwatch_port']);
+        unset($current['service_group'], $current['octane_port'], $current['reverb_port'], $current['nightwatch'], $current['nightwatch_port']);
 
         return array_replace($current + [
             'enabled' => $enabled,
@@ -459,7 +472,7 @@ final class ConfigureCommand extends Command
             'horizon' => $horizon,
             'queue_worker' => ! $horizon,
             'reverb' => $reverb,
-            'nightwatch' => $nightwatch,
+            'nightowl' => $nightowl,
             'scheduler' => true,
             'health_path' => '/up',
         ], [
@@ -471,7 +484,7 @@ final class ConfigureCommand extends Command
             'horizon' => $horizon,
             'queue_worker' => ! $horizon,
             'reverb' => $reverb,
-            'nightwatch' => $nightwatch,
+            'nightowl' => $nightowl,
         ]);
     }
 
@@ -544,9 +557,11 @@ final class ConfigureCommand extends Command
         $environment['APP_URL'] = "https://{$domain}";
         $environment['APP_KEY'] = 'base64:'.base64_encode(random_bytes(32));
 
-        foreach (['DB_PASSWORD', 'GOOGLE_CLIENT_SECRET', 'NIGHTWATCH_TOKEN', 'TELEGRAM_BOT_TOKEN', 'VAPID_PRIVATE_KEY'] as $key) {
+        foreach (['DB_PASSWORD', 'GOOGLE_CLIENT_SECRET', 'NIGHTOWL_DB_PASSWORD', 'TELEGRAM_BOT_TOKEN', 'VAPID_PRIVATE_KEY'] as $key) {
             $environment[$key] = '';
         }
+
+        unset($environment['ACCELERATOR_FEATURE_NIGHTWATCH'], $environment['NIGHTWATCH_TOKEN'], $environment['NIGHTWATCH_INGEST_URI']);
 
         if (($environment['DB_CONNECTION'] ?? 'sqlite') === 'sqlite') {
             $environment['DB_DATABASE'] = "/var/www/{$domain}/shared/database/database.sqlite";
@@ -600,6 +615,49 @@ final class ConfigureCommand extends Command
             'HORIZON_NAME' => "{$project}-{$stage}",
             'HORIZON_PREFIX' => "{$prefix}_horizon:",
             'SESSION_COOKIE' => "{$prefix}_session",
+        ];
+    }
+
+    /** @param array<string, string> $current @return array<string, string> */
+    private function nightowlEnvironmentValues(DeploymentConfig $deployment, array $current): array
+    {
+        $database = $deployment->nightowlDatabaseName();
+
+        return [
+            'NIGHTOWL_ENABLED' => 'true',
+            'NIGHTOWL_PARALLEL_WITH_NIGHTWATCH' => 'false',
+            'NIGHTOWL_AGENT_HOST' => '127.0.0.1',
+            'NIGHTOWL_AGENT_PORT' => (string) $deployment->nightowlPort,
+            'NIGHTOWL_INGEST_URI' => "127.0.0.1:{$deployment->nightowlPort}",
+            'NIGHTOWL_ENABLE_UDP' => 'false',
+            'NIGHTOWL_UDP_PORT' => (string) $deployment->nightowlUdpPort,
+            'NIGHTOWL_HEALTH_ENABLED' => 'true',
+            'NIGHTOWL_HEALTH_PORT' => (string) $deployment->nightowlHealthPort,
+            'NIGHTOWL_HEALTH_REPORT_ENABLED' => 'false',
+            'NIGHTOWL_TABLE_STATS' => 'false',
+            'NIGHTOWL_DB_CONNECTION' => 'pgsql',
+            'NIGHTOWL_DB_HOST' => '127.0.0.1',
+            'NIGHTOWL_DB_PORT' => '5432',
+            'NIGHTOWL_DB_DATABASE' => $database,
+            'NIGHTOWL_DB_USERNAME' => $database,
+            'NIGHTOWL_DB_PASSWORD' => ! $this->option('rotate-nightowl-credentials') && ($current['NIGHTOWL_DB_PASSWORD'] ?? '') !== ''
+                ? $current['NIGHTOWL_DB_PASSWORD']
+                : bin2hex(random_bytes(32)),
+            'NIGHTOWL_AUTHENTICATED_REQUEST_SAMPLE_RATE' => $current['NIGHTOWL_AUTHENTICATED_REQUEST_SAMPLE_RATE'] ?? '1.0',
+            'NIGHTWATCH_ENABLED' => 'true',
+            'NIGHTWATCH_LOG_LEVEL' => 'debug',
+            'NIGHTWATCH_CAPTURE_REQUEST_PAYLOAD' => 'true',
+            'NIGHTWATCH_CAPTURE_EXCEPTION_SOURCE_CODE' => 'true',
+            'NIGHTWATCH_IGNORE_REQUEST_HEADERS' => 'false',
+            'NIGHTWATCH_IGNORE_QUERIES' => 'false',
+            'NIGHTWATCH_IGNORE_OUTGOING_REQUESTS' => 'false',
+            'NIGHTWATCH_IGNORE_CACHE_EVENTS' => 'false',
+            'NIGHTWATCH_IGNORE_MAIL' => 'false',
+            'NIGHTWATCH_IGNORE_NOTIFICATIONS' => 'false',
+            'NIGHTWATCH_REQUEST_SAMPLE_RATE' => '0.0',
+            'NIGHTWATCH_EXCEPTION_SAMPLE_RATE' => '0.0',
+            'NIGHTWATCH_COMMAND_SAMPLE_RATE' => '1.0',
+            'NIGHTWATCH_SCHEDULED_TASK_SAMPLE_RATE' => '1.0',
         ];
     }
 

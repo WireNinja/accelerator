@@ -14,7 +14,7 @@ Accelerator is a proprietary, batteries-included foundation for Laravel 13 Filam
 - PWA/Vite: `accelerator-pwa-development`
 - remote mutation: `accelerator-deployment`
 - read-only operations: `accelerator-ops-observability`
-- Nightwatch MCP issue triage: `accelerator-nightwatch-mcp`
+- self-hosted NightOwl observability: `accelerator-nightowl`
 
 ### Fixed contract
 

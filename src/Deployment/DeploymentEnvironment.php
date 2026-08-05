@@ -40,10 +40,17 @@ final readonly class DeploymentEnvironment
             'SESSION_COOKIE' => "{$prefix}_session",
             'OCTANE_PORT' => (string) $config->octanePort,
             'REVERB_SERVER_PORT' => (string) $config->reverbPort,
-            'NIGHTWATCH_INGEST_URI' => "127.0.0.1:{$config->nightwatchPort}",
+            'NIGHTOWL_AGENT_HOST' => '127.0.0.1',
+            'NIGHTOWL_AGENT_PORT' => (string) $config->nightowlPort,
+            'NIGHTOWL_INGEST_URI' => "127.0.0.1:{$config->nightowlPort}",
+            'NIGHTOWL_UDP_PORT' => (string) $config->nightowlUdpPort,
+            'NIGHTOWL_HEALTH_PORT' => (string) $config->nightowlHealthPort,
+            'NIGHTOWL_PARALLEL_WITH_NIGHTWATCH' => 'false',
+            'NIGHTWATCH_REQUEST_SAMPLE_RATE' => '0.0',
+            'NIGHTWATCH_EXCEPTION_SAMPLE_RATE' => '0.0',
             'ACCELERATOR_FEATURE_HORIZON' => $config->horizonEnabled ? 'true' : 'false',
             'ACCELERATOR_FEATURE_REVERB' => $config->reverbEnabled ? 'true' : 'false',
-            'ACCELERATOR_FEATURE_NIGHTWATCH' => $config->nightwatchEnabled ? 'true' : 'false',
+            'ACCELERATOR_FEATURE_NIGHTOWL' => $config->nightowlEnabled ? 'true' : 'false',
         ];
         $errors = [];
 
@@ -66,8 +73,26 @@ final readonly class DeploymentEnvironment
             }
         }
 
-        if ($requireExternalSecrets && $config->nightwatchEnabled && ($values['NIGHTWATCH_TOKEN'] ?? '') === '') {
-            $errors[] = 'NIGHTWATCH_TOKEN is required while Nightwatch is enabled.';
+        if ($config->nightowlEnabled) {
+            $database = $config->nightowlDatabaseName();
+
+            foreach (['NIGHTOWL_DB_DATABASE', 'NIGHTOWL_DB_USERNAME'] as $key) {
+                if (($values[$key] ?? '') !== $database) {
+                    $errors[] = "{$key} must equal the deterministic app-stage identity.";
+                }
+            }
+
+            if (($values['NIGHTOWL_DB_CONNECTION'] ?? '') !== 'pgsql') {
+                $errors[] = 'NIGHTOWL_DB_CONNECTION must equal pgsql.';
+            }
+
+            if (! in_array($values['NIGHTOWL_DB_HOST'] ?? '', ['127.0.0.1', 'localhost', '::1'], true)) {
+                $errors[] = 'NIGHTOWL_DB_HOST must target the local self-hosted PostgreSQL server.';
+            }
+
+            if ($requireExternalSecrets && ($values['NIGHTOWL_DB_PASSWORD'] ?? '') === '') {
+                $errors[] = 'NIGHTOWL_DB_PASSWORD is required while NightOwl is enabled.';
+            }
         }
 
         return $errors;

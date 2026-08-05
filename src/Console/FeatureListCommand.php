@@ -21,7 +21,7 @@ final class FeatureListCommand extends Command
     {
         $features = array_map(
             fn (string $feature): array => $this->feature($feature),
-            ['oauth', 'pwa', 'telegram', 'horizon', 'reverb', 'scout', 'nightwatch'],
+            ['oauth', 'pwa', 'telegram', 'horizon', 'reverb', 'scout', 'nightowl'],
         );
         $mismatches = array_values(array_filter(
             $features,
@@ -61,7 +61,10 @@ final class FeatureListCommand extends Command
             'horizon' => [$this->providerLoaded(HorizonServiceProvider::class), HorizonServiceProvider::class],
             'reverb' => [config('broadcasting.default') === 'reverb', 'broadcasting.default'],
             'scout' => [config('scout.driver') !== 'collection', 'scout.driver'],
-            'nightwatch' => [(bool) config('nightwatch.enabled', false), 'nightwatch.enabled'],
+            'nightowl' => [
+                (bool) config('nightowl.enabled', false) && ! (bool) config('nightowl.parallel_with_nightwatch', true),
+                'nightowl.enabled + nightowl.parallel_with_nightwatch=false',
+            ],
             default => [$enabled, 'accelerator.features.telegram'],
         };
 

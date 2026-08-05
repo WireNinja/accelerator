@@ -53,7 +53,7 @@ php artisan accelerator:env:validate --stage={stage}
 
 Configuration is local-only and never SSHes. Commit `deploy.json`; never commit stage env files.
 
-Schema 2 has one stable `deployment_key` and one `port_base`. Derive Supervisor groups as `acc-{deployment_key}-{stage}`. Reserve 20 ports: staging uses offsets 0-9, production offsets 10-19, and single-stage production uses offsets 0-9. Octane/Reverb/Nightwatch use offsets 0/1/2.
+Schema 2 has one stable `deployment_key` and one `port_base`. Derive Supervisor groups as `acc-{deployment_key}-{stage}`. Reserve 20 ports: staging uses offsets 0-9, production offsets 10-19, and single-stage production uses offsets 0-9. Octane/Reverb use offsets 0/1; NightOwl reserves TCP ingest/UDP/health at 2/3/4.
 
 ```bash
 php artisan accelerator:ports --host={ssh-alias} --range=9000-9999 --available=20

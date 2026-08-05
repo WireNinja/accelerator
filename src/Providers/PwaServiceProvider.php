@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace WireNinja\Accelerator\Providers;
 
-use Filament\Support\Facades\FilamentView;
-use Filament\View\PanelsRenderHook;
-use Illuminate\Contracts\View\View;
 use Illuminate\Support\ServiceProvider;
+use Laravel\Head\Enums\ImageType;
+use Laravel\Head\Facades\Head;
+use Laravel\Head\HeadBuilder;
 
 final class PwaServiceProvider extends ServiceProvider
 {
@@ -15,9 +15,15 @@ final class PwaServiceProvider extends ServiceProvider
     {
         $this->loadRoutesFrom(__DIR__.'/../../routes/pwa.php');
 
-        FilamentView::registerRenderHook(
-            PanelsRenderHook::HEAD_END,
-            static fn (): View => view()->file(__DIR__.'/../../resources/views/partials/pwa/head.blade.php'),
-        );
+        Head::defaults(static fn (HeadBuilder $head): HeadBuilder => $head
+            ->favicon('/favicon.ico', type: ImageType::Ico, sizes: '64x64')
+            ->icon('/favicon.svg', type: ImageType::Svg, sizes: 'any')
+            ->pwa(
+                name: (string) config('app.name'),
+                manifest: '/build/manifest.webmanifest',
+                themeColor: (string) config('accelerator.pwa.theme_color', '#ffffff'),
+                appleTouchIcon: '/apple-touch-icon-180x180.png',
+                appleWebAppStatusBarStyle: 'default',
+            ));
     }
 }

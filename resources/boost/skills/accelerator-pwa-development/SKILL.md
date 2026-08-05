@@ -5,7 +5,7 @@ description: Configure Accelerator PWA manifest, icons, service worker, source i
 
 # Accelerator PWA
 
-Reuse `@wireninja/vite-plugin-laravel-pwa` and `vite-plugin-pwa`. Keep one padded square `public/favicon.svg`; configure name, short name, description, theme color, and registration behavior in Vite.
+Reuse `@wireninja/vite-plugin-laravel-pwa` and `vite-plugin-pwa`. Keep one padded square `public/favicon.svg`; configure name, short name, description, theme color, and registration behavior in Vite. Laravel Head owns document tags: Accelerator registers Filament's `@head` hook and PWA defaults; userland Blade/Livewire layouts must place `@head` inside their own `<head>`.
 
 ```bash
 pnpm exec laravel-pwa icons

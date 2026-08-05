@@ -17,7 +17,7 @@ final readonly class InstallPlan
         'horizon',
         'reverb',
         'scout',
-        'nightwatch',
+        'nightowl',
     ];
 
     /**

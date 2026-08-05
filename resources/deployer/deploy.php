@@ -277,6 +277,63 @@ task('accelerator:database-init', function () use ($config): void {
     throw new RuntimeException("Unsupported deployment database driver [{$driver}].");
 });
 
+task('accelerator:nightowl-database-init', function () use ($config): void {
+    if (! $config->nightowlEnabled) {
+        return;
+    }
+
+    $environment = (new EnvironmentStore($config->projectRoot))->read(
+        '.accelerator/environments/'.$config->stage.'.env',
+    );
+    $database = $config->nightowlDatabaseName();
+    $username = $environment['NIGHTOWL_DB_USERNAME'] ?? '';
+    $password = $environment['NIGHTOWL_DB_PASSWORD'] ?? '';
+
+    if ($username !== $database || $password === '') {
+        throw new RuntimeException('NightOwl PostgreSQL identity is invalid. Re-run accelerator:configure environment for this stage.');
+    }
+
+    $identifier = '"'.str_replace('"', '""', $database).'"';
+    $literal = "'".str_replace("'", "''", $password)."'";
+    $sql = "DO \$\$\nBEGIN\n    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '{$database}') THEN\n        CREATE ROLE {$identifier} LOGIN;\n    END IF;\nEND\n\$\$;\nALTER ROLE {$identifier} WITH LOGIN PASSWORD {$literal};\n";
+    $temporary = sys_get_temp_dir().'/accelerator-nightowl-'.bin2hex(random_bytes(8)).'.sql';
+    $remote = '/tmp/'.$config->group.'-nightowl-init.sql';
+
+    try {
+        file_put_contents($temporary, $sql, LOCK_EX);
+        chmod($temporary, 0600);
+        upload($temporary, $remote);
+        run('chmod 0600 '.escapeshellarg($remote).' && trap '.escapeshellarg('rm -f '.$remote).' EXIT; command sudo -n -u postgres psql --set=ON_ERROR_STOP=1 --file='.escapeshellarg($remote));
+    } finally {
+        @unlink($temporary);
+    }
+
+    $databaseExists = trim(run(
+        'command sudo -n -u postgres psql --tuples-only --no-align --command='.escapeshellarg(
+            "SELECT 1 FROM pg_database WHERE datname = '{$database}';",
+        ),
+    ));
+
+    if ($databaseExists !== '1') {
+        run('command sudo -n -u postgres createdb --owner='.escapeshellarg($username).' '.escapeshellarg($database));
+    } else {
+        run('command sudo -n -u postgres psql --set=ON_ERROR_STOP=1 --command='.escapeshellarg("ALTER DATABASE {$identifier} OWNER TO {$identifier};"));
+    }
+});
+
+task('accelerator:nightowl-schema', function () use ($config): void {
+    if (! $config->nightowlEnabled) {
+        return;
+    }
+
+    $marker = $config->sharedPath().'/.nightowl-installed';
+    $command = test('[ -f '.escapeshellarg($marker).' ]') ? 'nightowl:migrate' : 'nightowl:install';
+
+    cd('{{release_path}}');
+    run('{{bin/php}} artisan '.$command.' --no-interaction', forceOutput: true);
+    run('touch '.escapeshellarg($marker));
+});
+
 task('accelerator:services', function () use ($config): void {
     if ($config->hasSupervisorPrograms()) {
         run('command sudo -n supervisorctl restart '.$config->group.':*');
@@ -328,6 +385,11 @@ task('accelerator:preflight', function () use ($config, $nodeEnvironment): void 
 
     if ($config->hasSupervisorPrograms()) {
         $requiredSudoCommands[] = 'supervisorctl';
+    }
+
+    if ($config->nightowlEnabled) {
+        $requiredSudoCommands[] = 'psql';
+        $requiredSudoCommands[] = 'createdb';
     }
 
     foreach (array_unique($requiredCommands) as $command) {
@@ -454,8 +516,23 @@ task('accelerator:preflight', function () use ($config, $nodeEnvironment): void 
             continue;
         }
 
-        $program = $config->programName($service);
+        $programService = str_starts_with($service, 'nightowl') ? 'nightowl' : $service;
+        $program = $config->programName($programService);
         $status = trim(run('command sudo -n supervisorctl status '.escapeshellarg($config->group.':'.$program).' 2>/dev/null || true'));
+
+        if ($programService === 'nightowl' && $supervisorOwner === 'owned') {
+            $oldNightwatch = trim(run(
+                'command sudo -n grep -Fq '.escapeshellarg('[program:'.$config->group.'-nightwatch]').' '.escapeshellarg($expectedSupervisor)
+                .' && command sudo -n grep -Eq '.escapeshellarg('(--listen-on=|:)(?:127\.0\.0\.1:)?'.$port.'([^0-9]|$)').' '.escapeshellarg($expectedSupervisor)
+                .' && echo yes || echo no',
+            )) === 'yes';
+
+            if ($oldNightwatch) {
+                $portStates[] = "{$service}:{$port}=migration-owned";
+
+                continue;
+            }
+        }
 
         if ($supervisorOwner === 'legacy-owned') {
             $legacyOwnsPort = trim(run('command sudo -n grep -Eq '.escapeshellarg('(--port=|:)(?:127\\.0\\.0\\.1:)?'.$port.'([^0-9]|$)').' '.escapeshellarg($legacySupervisor).' && echo yes || echo no')) === 'yes';
@@ -571,6 +648,7 @@ task('deploy', [
 before('deploy:shared', 'accelerator:environment');
 after('deploy:update_code', 'accelerator:submodule');
 after('deploy:vendors', 'accelerator:frontend');
+after('deploy:vendors', 'accelerator:nightowl-schema');
 before('artisan:migrate', 'accelerator:backup');
 before('accelerator:backup', 'accelerator:runtime-acl');
 after('deploy:symlink', 'accelerator:activate-release');

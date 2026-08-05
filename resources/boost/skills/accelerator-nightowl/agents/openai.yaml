@@ -1,0 +1,4 @@
+interface:
+  display_name: "Accelerator NightOwl"
+  short_description: "Operate self-hosted NightOwl observability"
+  default_prompt: "Use $accelerator-nightowl to configure or diagnose this app's self-hosted NightOwl integration."

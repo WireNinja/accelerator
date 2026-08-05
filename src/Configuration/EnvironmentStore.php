@@ -133,6 +133,27 @@ final readonly class EnvironmentStore
         }
     }
 
+    /** @param list<string> $keys */
+    public function remove(string $relativePath, array $keys): void
+    {
+        $path = $this->path($relativePath);
+        $contents = is_file($path) ? file_get_contents($path) : false;
+
+        if (! is_string($contents)) {
+            throw new RuntimeException("Unable to read [{$relativePath}].");
+        }
+
+        foreach ($keys as $key) {
+            if (preg_match('/^[A-Z][A-Z0-9_]*$/', $key) !== 1) {
+                throw new RuntimeException("Invalid environment key [{$key}].");
+            }
+
+            $contents = (string) preg_replace('/^(?:#\s*)?'.preg_quote($key, '/').'=.*$\R?/m', '', $contents);
+        }
+
+        $this->write($relativePath, rtrim($contents).PHP_EOL);
+    }
+
     /** @param array<string, string> $values */
     public function replace(string $relativePath, array $values): void
     {

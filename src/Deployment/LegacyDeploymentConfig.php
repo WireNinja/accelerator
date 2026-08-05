@@ -85,7 +85,7 @@ final class LegacyDeploymentConfig
             'queue_processes' => self::integer($values, $prefix.'QUEUE_WORKER_PROCESSES', 1),
             'reverb' => self::boolean($values, $prefix.'REVERB_ENABLED'),
             'scheduler' => self::boolean($values, $prefix.'SCHEDULER_ENABLED', true),
-            'nightwatch' => self::boolean($values, $prefix.'NIGHTWATCH_ENABLED'),
+            'nightowl' => self::boolean($values, $prefix.'NIGHTWATCH_ENABLED'),
             'health_path' => '/up',
         ];
     }

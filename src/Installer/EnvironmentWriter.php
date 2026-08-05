@@ -52,7 +52,7 @@ final readonly class EnvironmentWriter
             'horizon' => $this->context->hasFeature('horizon'),
             'queue_worker' => ! $this->context->hasFeature('horizon'),
             'reverb' => $this->context->hasFeature('reverb'),
-            'nightwatch' => $this->context->hasFeature('nightwatch'),
+            'nightowl' => $this->context->hasFeature('nightowl'),
             'scheduler' => true,
             'health_path' => '/up',
         ];
@@ -121,14 +121,15 @@ final readonly class EnvironmentWriter
             'QUEUE_CONNECTION' => $cacheDriver,
             'BROADCAST_CONNECTION' => $this->context->hasFeature('reverb') ? 'reverb' : 'log',
             'SCOUT_DRIVER' => $this->context->hasFeature('scout') ? 'database' : 'collection',
-            'NIGHTWATCH_ENABLED' => $this->context->boolean($this->context->hasFeature('nightwatch')),
+            'NIGHTOWL_ENABLED' => $this->context->boolean($this->context->hasFeature('nightowl')),
+            'NIGHTWATCH_ENABLED' => $this->context->boolean($this->context->hasFeature('nightowl')),
             'ACCELERATOR_FEATURE_OAUTH' => $this->context->boolean($this->context->hasFeature('oauth')),
             'ACCELERATOR_FEATURE_PWA' => $this->context->boolean($this->context->hasFeature('pwa')),
             'ACCELERATOR_FEATURE_TELEGRAM' => $this->context->boolean($this->context->hasFeature('telegram')),
             'ACCELERATOR_FEATURE_HORIZON' => $this->context->boolean($this->context->hasFeature('horizon')),
             'ACCELERATOR_FEATURE_REVERB' => $this->context->boolean($this->context->hasFeature('reverb')),
             'ACCELERATOR_FEATURE_SCOUT' => $this->context->boolean($this->context->hasFeature('scout')),
-            'ACCELERATOR_FEATURE_NIGHTWATCH' => $this->context->boolean($this->context->hasFeature('nightwatch')),
+            'ACCELERATOR_FEATURE_NIGHTOWL' => $this->context->boolean($this->context->hasFeature('nightowl')),
             'ACCELERATOR_OAUTH_MODE' => $this->context->hasFeature('oauth') ? 'existing_only' : 'disabled',
             'ACCELERATOR_UPLOAD_MAX_MB' => '100',
             'ACCELERATOR_UI_DENSITY' => 'compact',
@@ -189,7 +190,47 @@ final readonly class EnvironmentWriter
         $stagePortBase = $this->context->plan->portBase + ($stage === 'production' && $this->context->plan->deploymentMode === 'dual' ? 10 : 0);
         $contents = $this->setEnvironmentValue($contents, 'OCTANE_PORT', (string) $stagePortBase);
         $contents = $this->setEnvironmentValue($contents, 'REVERB_SERVER_PORT', (string) ($stagePortBase + 1));
-        $contents = $this->setEnvironmentValue($contents, 'NIGHTWATCH_INGEST_URI', '127.0.0.1:'.($stagePortBase + 2));
+        $contents = $this->setEnvironmentValue($contents, 'NIGHTOWL_AGENT_PORT', (string) ($stagePortBase + 2));
+        $contents = $this->setEnvironmentValue($contents, 'NIGHTOWL_INGEST_URI', '127.0.0.1:'.($stagePortBase + 2));
+        $contents = $this->setEnvironmentValue($contents, 'NIGHTOWL_UDP_PORT', (string) ($stagePortBase + 3));
+        $contents = $this->setEnvironmentValue($contents, 'NIGHTOWL_HEALTH_PORT', (string) ($stagePortBase + 4));
+
+        if ($this->context->hasFeature('nightowl')) {
+            $nightowlDatabase = "acc_nightowl_{$this->context->plan->deploymentKey}_{$stage}";
+
+            foreach ([
+                'NIGHTOWL_ENABLED' => 'true',
+                'NIGHTOWL_PARALLEL_WITH_NIGHTWATCH' => 'false',
+                'NIGHTOWL_AGENT_HOST' => '127.0.0.1',
+                'NIGHTOWL_ENABLE_UDP' => 'false',
+                'NIGHTOWL_HEALTH_ENABLED' => 'true',
+                'NIGHTOWL_HEALTH_REPORT_ENABLED' => 'false',
+                'NIGHTOWL_TABLE_STATS' => 'false',
+                'NIGHTOWL_DB_CONNECTION' => 'pgsql',
+                'NIGHTOWL_DB_HOST' => '127.0.0.1',
+                'NIGHTOWL_DB_PORT' => '5432',
+                'NIGHTOWL_DB_DATABASE' => $nightowlDatabase,
+                'NIGHTOWL_DB_USERNAME' => $nightowlDatabase,
+                'NIGHTOWL_DB_PASSWORD' => bin2hex(random_bytes(32)),
+                'NIGHTOWL_AUTHENTICATED_REQUEST_SAMPLE_RATE' => '1.0',
+                'NIGHTWATCH_ENABLED' => 'true',
+                'NIGHTWATCH_LOG_LEVEL' => 'debug',
+                'NIGHTWATCH_CAPTURE_REQUEST_PAYLOAD' => 'true',
+                'NIGHTWATCH_CAPTURE_EXCEPTION_SOURCE_CODE' => 'true',
+                'NIGHTWATCH_IGNORE_REQUEST_HEADERS' => 'false',
+                'NIGHTWATCH_IGNORE_QUERIES' => 'false',
+                'NIGHTWATCH_IGNORE_OUTGOING_REQUESTS' => 'false',
+                'NIGHTWATCH_IGNORE_CACHE_EVENTS' => 'false',
+                'NIGHTWATCH_IGNORE_MAIL' => 'false',
+                'NIGHTWATCH_IGNORE_NOTIFICATIONS' => 'false',
+                'NIGHTWATCH_REQUEST_SAMPLE_RATE' => '0.0',
+                'NIGHTWATCH_EXCEPTION_SAMPLE_RATE' => '0.0',
+                'NIGHTWATCH_COMMAND_SAMPLE_RATE' => '1.0',
+                'NIGHTWATCH_SCHEDULED_TASK_SAMPLE_RATE' => '1.0',
+            ] as $key => $value) {
+                $contents = $this->setEnvironmentValue($contents, $key, $value);
+            }
+        }
 
         if ($this->context->plan->database === 'sqlite') {
             $contents = $this->setEnvironmentValue($contents, 'DB_DATABASE', rtrim($deployRoot, '/').'/shared/database/database.sqlite');
@@ -217,7 +258,7 @@ final readonly class EnvironmentWriter
             }
         }
 
-        foreach (['DB_PASSWORD', 'GOOGLE_CLIENT_SECRET', 'NIGHTWATCH_TOKEN', 'TELEGRAM_BOT_TOKEN', 'VAPID_PRIVATE_KEY'] as $key) {
+        foreach (['DB_PASSWORD', 'GOOGLE_CLIENT_SECRET', 'TELEGRAM_BOT_TOKEN', 'VAPID_PRIVATE_KEY'] as $key) {
             $contents = $this->setEnvironmentValue($contents, $key, '');
         }
 
