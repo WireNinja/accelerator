@@ -532,7 +532,7 @@ final class ConfigureCommand extends Command
 
         $contents = preg_replace('/^\/\.accelerator\/[ \t]*$\R?/m', '', $contents) ?? $contents;
 
-        foreach (['/.accelerator/install-state.json', '/.accelerator/environments/', '/.accelerator/restore-state/'] as $entry) {
+        foreach (['/.accelerator/install-state.json', '/.accelerator/environments/', '/.accelerator/restore-state/', '/storage/framework/accelerator-backup-state.json'] as $entry) {
             if (! preg_match('/^'.preg_quote($entry, '/').'$/m', $contents)) {
                 $contents = rtrim($contents).PHP_EOL.$entry.PHP_EOL;
             }
