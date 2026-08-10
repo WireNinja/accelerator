@@ -27,6 +27,7 @@ Treat public Artisan commands as the only user/AI interface. Deployer is the int
 - Single-stage projects hide the environment badge.
 - Dual-stage projects show `LOCAL DATA`, `TEST DATA`, and `LIVE DATA` badges.
 - A code rollback never reverses database migrations.
+- Data restore requires an exact stage-owned backup and matching active Git revision.
 - Dual-stage production receives the exact successful staging revision through `accelerator:deploy:promote`.
 
-Read [references/workflow.md](references/workflow.md) before producing a full install-to-domain plan or executing a multi-phase lifecycle.
+Read [references/workflow.md](references/workflow.md) before producing a full install-to-domain plan or executing a multi-phase lifecycle. Read `../accelerator-deployment/references/backup-restore.md` before any data restore.

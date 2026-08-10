@@ -12,6 +12,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Schedule;
 use Illuminate\Support\Facades\Session;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
@@ -19,11 +20,18 @@ use Laravel\Nightwatch\Facades\Nightwatch;
 use Livewire\LivewireManager;
 use NotificationChannels\Telegram\Telegram;
 use SessionHandlerInterface;
+use Spatie\Backup\Tasks\Monitor\HealthChecks\MaximumAgeInDays;
+use Spatie\Backup\Tasks\Monitor\HealthChecks\MaximumStorageInMegabytes;
 use WireNinja\Accelerator\Console\Agent\DoctorCommand;
 use WireNinja\Accelerator\Console\ConfigureCommand;
 use WireNinja\Accelerator\Console\ContextCommand;
 use WireNinja\Accelerator\Console\DependenciesCommand;
+use WireNinja\Accelerator\Console\Deployment\BackupCleanupCommand;
 use WireNinja\Accelerator\Console\Deployment\BackupCommand;
+use WireNinja\Accelerator\Console\Deployment\BackupListCommand;
+use WireNinja\Accelerator\Console\Deployment\BackupRestoreCommand;
+use WireNinja\Accelerator\Console\Deployment\BackupStatusCommand;
+use WireNinja\Accelerator\Console\Deployment\BackupVerifyCommand;
 use WireNinja\Accelerator\Console\Deployment\DeployCommand;
 use WireNinja\Accelerator\Console\Deployment\DeployInitCommand;
 use WireNinja\Accelerator\Console\Deployment\DeployPreflightCommand;
@@ -37,7 +45,9 @@ use WireNinja\Accelerator\Console\Deployment\EnvironmentEditCommand;
 use WireNinja\Accelerator\Console\Deployment\EnvironmentPushCommand;
 use WireNinja\Accelerator\Console\Deployment\EnvironmentValidateCommand;
 use WireNinja\Accelerator\Console\Deployment\LogsCommand;
+use WireNinja\Accelerator\Console\Deployment\NotifyTestCommand;
 use WireNinja\Accelerator\Console\Deployment\PortsCommand;
+use WireNinja\Accelerator\Console\Deployment\RuntimeBackupCommand;
 use WireNinja\Accelerator\Console\Deployment\ServiceRestartCommand;
 use WireNinja\Accelerator\Console\Deployment\ServiceStartCommand;
 use WireNinja\Accelerator\Console\Deployment\ServiceStatusCommand;
@@ -46,7 +56,6 @@ use WireNinja\Accelerator\Console\EnvCommand;
 use WireNinja\Accelerator\Console\FeatureListCommand;
 use WireNinja\Accelerator\Console\InstallCommand;
 use WireNinja\Accelerator\Console\ProvisionAdminCommand;
-use WireNinja\Accelerator\Console\Vps\BackupStatusCommand;
 use WireNinja\Accelerator\Contracts\AcceleratorUser;
 use WireNinja\Accelerator\Livewire\Synthesizers\BigDecimalSynth;
 use WireNinja\Accelerator\Support\OctaneTableSessionHandler;
@@ -75,6 +84,7 @@ final class CoreServiceProvider extends ServiceProvider
         $this->configureTrustedProxy();
         $this->registerCustomSessionDriver();
         $this->configureBackup();
+        $this->configureBackupSchedule();
         $this->configureEloquent();
         $this->configureApplicationDefaults();
         $this->configureSuperAdminGate();
@@ -113,11 +123,17 @@ final class CoreServiceProvider extends ServiceProvider
             ServiceStatusCommand::class,
             ServiceStopCommand::class,
             BackupCommand::class,
+            BackupCleanupCommand::class,
+            BackupListCommand::class,
+            BackupRestoreCommand::class,
+            BackupStatusCommand::class,
+            BackupVerifyCommand::class,
+            RuntimeBackupCommand::class,
+            NotifyTestCommand::class,
             EnvCommand::class,
             FeatureListCommand::class,
             InstallCommand::class,
             ProvisionAdminCommand::class,
-            BackupStatusCommand::class,
         ]);
     }
 
@@ -150,10 +166,56 @@ final class CoreServiceProvider extends ServiceProvider
 
     private function configureBackup(): void
     {
-        $this->app['config']->set(
-            'backup.backup.source.files.include',
-            $this->app['config']->get('accelerator.backup.include', [storage_path('app')]),
-        );
+        $config = $this->app['config'];
+        $config->set('backup.backup.name', $config->get('accelerator.backup.name', $config->get('app.name')));
+        $config->set('backup.backup.source.files.include', $config->get('accelerator.backup.include', [storage_path('app')]));
+        $config->set('backup.backup.source.files.relative_path', base_path());
+        $config->set('backup.backup.source.files.exclude', array_values(array_unique([
+            ...(array) $config->get('backup.backup.source.files.exclude', []),
+            storage_path('app/backup-temp'),
+            storage_path('framework/accelerator-restore'),
+            storage_path('app/private/'.$config->get('accelerator.backup.name')),
+            storage_path('app/'.$config->get('accelerator.backup.name')),
+        ])));
+        $config->set('backup.backup.destination.disks', $config->get('accelerator.backup.disks', ['local']));
+        $config->set('backup.backup.verify_backup', true);
+        $config->set('backup.notifications.notifications', []);
+        $config->set('backup.monitor_backups', [[
+            'name' => $config->get('accelerator.backup.name', $config->get('app.name')),
+            'disks' => $config->get('accelerator.backup.disks', ['local']),
+            'health_checks' => [
+                MaximumAgeInDays::class => $config->get('accelerator.backup.maximum_age_days', 2),
+                MaximumStorageInMegabytes::class => $config->get('accelerator.backup.maximum_storage_megabytes', 5000),
+            ],
+        ]]);
+
+        foreach ((array) $config->get('accelerator.backup.retention', []) as $key => $value) {
+            $config->set("backup.cleanup.default_strategy.{$key}", $value);
+        }
+    }
+
+    private function configureBackupSchedule(): void
+    {
+        if (! $this->app->isProduction() || ! config('accelerator.backup.enabled', true)) {
+            return;
+        }
+
+        $backupTime = (string) config('accelerator.backup.time', '02:00');
+        $parsed = CarbonImmutable::createFromFormat('H:i', $backupTime, config('app.timezone'));
+
+        if (! $parsed instanceof CarbonImmutable || $parsed->format('H:i') !== $backupTime) {
+            return;
+        }
+
+        Schedule::command('accelerator:backup:runtime cleanup --json --no-interaction')
+            ->dailyAt($parsed->subHour()->format('H:i'))
+            ->withoutOverlapping(360);
+        Schedule::command('accelerator:backup:runtime create --only=all --json --no-interaction')
+            ->dailyAt($backupTime)
+            ->withoutOverlapping(360);
+        Schedule::command('accelerator:backup:runtime status --json --no-interaction')
+            ->dailyAt($parsed->addHour()->format('H:i'))
+            ->withoutOverlapping(360);
     }
 
     /**

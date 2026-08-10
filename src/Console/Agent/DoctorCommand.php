@@ -250,19 +250,41 @@ final class DoctorCommand extends Command
         }
 
         try {
-            $config = DeploymentConfig::load(base_path());
-            $stageEnvironment = ".accelerator/environments/{$config->stage}.env";
-            $this->assert('Deployment', 'Topology', "{$config->stage}: {$config->domain}", true, 'Deployment topology is invalid.');
-            $this->assert('Deployment', 'Identity', $config->deploymentKey, $config->group === DeploymentConfig::serviceGroup($config->deploymentKey, $config->stage), 'Supervisor identity must be derived from deployment_key.');
-            $this->assert('Deployment', 'Port block', "{$config->portBase}-".($config->portBase + 19), true, 'Deployment port block is invalid.');
-            $this->assert('Deployment', 'Stable root', $config->deployRoot, $config->deployRoot === "/var/www/{$config->domain}", 'Deployment root must match the domain.');
-            $this->assert('Deployment', 'Stage environment', $stageEnvironment, is_file(base_path($stageEnvironment)), "Missing {$stageEnvironment}.");
-            $this->assert('Deployment', 'Queue topology', $config->horizonEnabled ? 'horizon' : 'queue-worker', $config->horizonEnabled xor $config->queueWorkerEnabled, 'Exactly one queue worker topology must be enabled.');
-            $environmentErrors = (new DeploymentEnvironment(base_path()))->validate($config, requireExternalSecrets: false);
-            $this->assert('Deployment', 'Stage environment contract', $environmentErrors === [] ? 'valid' : 'invalid', $environmentErrors === [], implode(' ', $environmentErrors));
+            $default = DeploymentConfig::load(base_path());
+            $stages = array_keys(array_filter(
+                is_array($default->document['stages'] ?? null) ? $default->document['stages'] : [],
+                static fn (mixed $stage): bool => is_array($stage) && ($stage['enabled'] ?? false) === true,
+            ));
+
+            foreach ($stages as $stage) {
+                if (is_string($stage)) {
+                    $this->inspectDeploymentStage(DeploymentConfig::load(base_path(), $stage));
+                }
+            }
         } catch (Throwable $exception) {
             $this->record('Deployment', 'Topology', 'invalid', 'error', $this->redact($exception->getMessage()));
         }
+    }
+
+    private function inspectDeploymentStage(DeploymentConfig $config): void
+    {
+        $stageEnvironment = ".accelerator/environments/{$config->stage}.env";
+        $label = "Deployment {$config->stage}";
+        $this->assert($label, 'Topology', "{$config->stage}: {$config->domain}", true, 'Deployment topology is invalid.');
+        $this->assert($label, 'Identity', $config->deploymentKey, $config->group === DeploymentConfig::serviceGroup($config->deploymentKey, $config->stage), 'Supervisor identity must be derived from deployment_key.');
+        $this->assert($label, 'Port block', "{$config->portBase}-".($config->portBase + 19), true, 'Deployment port block is invalid.');
+        $this->assert($label, 'Stable root', $config->deployRoot, $config->deployRoot === "/var/www/{$config->domain}", 'Deployment root must match the domain.');
+        $this->assert($label, 'Stage environment', $stageEnvironment, is_file(base_path($stageEnvironment)), "Missing {$stageEnvironment}.");
+        $this->assert($label, 'Queue topology', $config->horizonEnabled ? 'horizon' : 'queue-worker', $config->horizonEnabled xor $config->queueWorkerEnabled, 'Exactly one queue worker topology must be enabled.');
+        $environment = new DeploymentEnvironment(base_path());
+        $environmentErrors = $environment->validate($config, requireExternalSecrets: false);
+        $this->assert($label, 'Stage environment contract', $environmentErrors === [] ? 'valid' : 'invalid', $environmentErrors === [], implode(' ', $environmentErrors));
+        $values = $environment->read($config);
+        $telegramConfigured = ($values['ACCELERATOR_TELEGRAM_BOT_TOKEN'] ?? '') !== '' && ($values['ACCELERATOR_TELEGRAM_CHAT_ID'] ?? '') !== '';
+        $this->assert($label, 'Operator Telegram', $telegramConfigured ? 'configured' : 'not configured', $telegramConfigured, 'Operational alerts are disabled. Configure both ACCELERATOR_TELEGRAM_BOT_TOKEN and ACCELERATOR_TELEGRAM_CHAT_ID.', 'warning');
+        $disks = array_filter(array_map('trim', explode(',', $values['ACCELERATOR_BACKUP_DISKS'] ?? 'local')));
+        $offsite = array_values(array_diff($disks, ['local']));
+        $this->assert($label, 'Backup durability', $offsite === [] ? 'same VPS only' : 'offsite: '.implode(', ', $offsite), $offsite !== [], 'Local-only backups do not survive total VPS loss.', 'warning');
     }
 
     private function inspectSecurity(): void

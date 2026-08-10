@@ -45,7 +45,7 @@ NIGHTOWL_AUTHENTICATED_REQUEST_SAMPLE_RATE=1.0
 
 1. Confirm the exact stage release and `acc-{key}-{stage}` Supervisor group.
 2. Confirm the `nightowl` program is running and inspect its log.
-3. Probe loopback health at the configured `NIGHTOWL_HEALTH_PORT` from the VPS.
+3. Probe loopback health at `http://127.0.0.1:{NIGHTOWL_HEALTH_PORT}/status` from the VPS.
 4. Confirm the deterministic PostgreSQL database exists and the configured role can connect, without printing credentials.
 5. Run `php artisan nightowl:migrate --no-interaction` through a normal deploy when schema drift is reported.
 6. Treat Grafana as a consumer outside Accelerator. Diagnose or mutate it only with explicit user scope.

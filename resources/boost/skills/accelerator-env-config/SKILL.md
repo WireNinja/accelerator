@@ -17,6 +17,8 @@ Use `php artisan accelerator:configure application|features|deployment|environme
 
 Canonical stage secrets live locally. Use `accelerator:env:edit`, `accelerator:env:validate`, and the read-only `accelerator:env:diff`. `accelerator:env:push` is a separate authorized deployment operation: it uploads atomically, clears cached configuration, restarts only the exact stage group, and health-checks. Never edit remote `.env` during normal operation.
 
+Each stage owns its backup enablement, deterministic daily time, Laravel filesystem destinations, age/storage limits, optional native archive password, and operator Telegram pair. Preserve these values during reconfiguration. `ACCELERATOR_TELEGRAM_*` is operational alerting; it is not user/profile `TELEGRAM_BOT_TOKEN`. Local-only backup is valid but cannot survive total VPS loss. See `../accelerator-deployment/references/backup-restore.md` before changing this contract.
+
 Deployment schema 2 stores one stable `deployment_key` and one explicit `port_base`. Supervisor names and stage service ports are derived, not independently mutable. Replace ACME email only with explicit `--ssl-email`. Stage-scoped `--rotate-app-key` and `--rotate-reverb-credentials` are destructive credential rotations intended for first deployment or an explicit incident response; never rotate an established live stage implicitly.
 
 Application code calls `config()`, never `env()` outside config files. Keep Telegram/OAuth/database/NightOwl/VAPID secrets in env files, never settings or deployment JSON. Root `/` remains userland-owned.

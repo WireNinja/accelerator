@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace WireNinja\Accelerator\Console;
 
+use Composer\InstalledVersions;
 use Illuminate\Console\Command;
 use JsonException;
 use WireNinja\Accelerator\Providers\HorizonServiceProvider;
@@ -27,12 +28,14 @@ final class FeatureListCommand extends Command
             $features,
             static fn (array $feature): bool => $feature['enabled'] !== $feature['runtime_loaded'],
         ));
+        $backup = $this->backupCapability();
 
         if ($this->option('json')) {
             $this->output->writeln(json_encode([
                 'schema' => 1,
                 'status' => $mismatches === [] ? 'OK' : 'MISMATCH',
                 'features' => $features,
+                'backup' => $backup,
             ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
 
             return $mismatches === [] ? self::SUCCESS : self::FAILURE;
@@ -47,6 +50,13 @@ final class FeatureListCommand extends Command
             ],
             $features,
         ));
+        $this->table(['Backup capability', 'State'], [
+            ['Engine installed', $backup['engine_installed'] ? 'yes' : 'no'],
+            ['Schedule enabled', $backup['scheduled'] ? 'yes' : 'no'],
+            ['Offsite destination', $backup['offsite_destination'] ? 'yes' : 'no'],
+            ['Operator Telegram', $backup['operator_telegram'] ? 'configured' : 'not configured'],
+            ['Last backup health', $backup['last_backup_health']],
+        ]);
 
         return $mismatches === [] ? self::SUCCESS : self::FAILURE;
     }
@@ -80,5 +90,23 @@ final class FeatureListCommand extends Command
     private function providerLoaded(string $provider): bool
     {
         return app()->getProvider($provider) !== null;
+    }
+
+    /** @return array{engine_installed: bool, scheduled: bool, offsite_destination: bool, operator_telegram: bool, last_backup_health: string} */
+    private function backupCapability(): array
+    {
+        $disks = (array) config('accelerator.backup.disks', ['local']);
+        $statePath = storage_path('framework/accelerator-backup-state.json');
+        $state = is_file($statePath) ? json_decode((string) file_get_contents($statePath), true) : null;
+        $lastResult = is_array($state) && is_string($state['result'] ?? null) ? $state['result'] : 'unknown';
+
+        return [
+            'engine_installed' => InstalledVersions::isInstalled('spatie/laravel-backup'),
+            'scheduled' => (bool) config('accelerator.backup.enabled', true),
+            'offsite_destination' => array_values(array_diff($disks, ['local'])) !== [],
+            'operator_telegram' => filled(config('accelerator.operations.telegram.bot_token'))
+                && filled(config('accelerator.operations.telegram.chat_id')),
+            'last_backup_health' => $lastResult,
+        ];
     }
 }

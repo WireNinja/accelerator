@@ -7,6 +7,7 @@ namespace WireNinja\Accelerator\Console\Deployment;
 use Illuminate\Console\Command;
 use RuntimeException;
 use WireNinja\Accelerator\Console\Deployment\Concerns\ConfirmsDeployment;
+use WireNinja\Accelerator\Console\Deployment\Concerns\NotifiesDeploymentOperation;
 use WireNinja\Accelerator\Deployment\Deployer;
 use WireNinja\Accelerator\Deployment\DeploymentConfig;
 use WireNinja\Accelerator\Deployment\DeploymentEnvironment;
@@ -15,6 +16,7 @@ use WireNinja\Accelerator\Deployment\DeploymentOutput;
 final class DeployPromoteCommand extends Command
 {
     use ConfirmsDeployment;
+    use NotifiesDeploymentOperation;
 
     protected $signature = 'accelerator:deploy:promote {--from=staging} {--to=production} {--force}';
 
@@ -22,9 +24,11 @@ final class DeployPromoteCommand extends Command
 
     public function handle(): int
     {
+        $to = (string) $this->option('to');
+        $startedAt = microtime(true);
+
         try {
             $from = (string) $this->option('from');
-            $to = (string) $this->option('to');
 
             if ($from === $to) {
                 throw new RuntimeException('Promotion source and target stages must differ.');
@@ -67,9 +71,11 @@ final class DeployPromoteCommand extends Command
             }
 
             $this->components->info("Promoted {$revision} from {$from} to {$to}.");
+            $this->notifyOperation($to, 'deploy promote', 'success', $startedAt, ['revision' => $revision, 'source_stage' => $from]);
 
             return self::SUCCESS;
         } catch (RuntimeException $exception) {
+            $this->notifyOperation($to, 'deploy promote', 'failed', $startedAt, ['error' => $exception->getMessage()]);
             $this->components->error($exception->getMessage());
 
             return self::FAILURE;

@@ -373,6 +373,7 @@ final class ConfigureCommand extends Command
         $draft += $this->environmentIndicatorValues($current, $stage, $dualStage);
         $draft += $this->stageRuntimeIdentityValues((string) $document['deployment_key'], $stage);
         $local = $store->read('.env');
+        $draft += $this->backupEnvironmentValues($deployment, $current, $local);
 
         foreach (self::FEATURE_KEYS as $feature => $key) {
             $enabled = match ($feature) {
@@ -557,7 +558,7 @@ final class ConfigureCommand extends Command
         $environment['APP_URL'] = "https://{$domain}";
         $environment['APP_KEY'] = 'base64:'.base64_encode(random_bytes(32));
 
-        foreach (['DB_PASSWORD', 'GOOGLE_CLIENT_SECRET', 'NIGHTOWL_DB_PASSWORD', 'TELEGRAM_BOT_TOKEN', 'VAPID_PRIVATE_KEY'] as $key) {
+        foreach (['DB_PASSWORD', 'GOOGLE_CLIENT_SECRET', 'NIGHTOWL_DB_PASSWORD', 'TELEGRAM_BOT_TOKEN', 'ACCELERATOR_TELEGRAM_BOT_TOKEN', 'ACCELERATOR_TELEGRAM_CHAT_ID', 'VAPID_PRIVATE_KEY'] as $key) {
             $environment[$key] = '';
         }
 
@@ -615,6 +616,35 @@ final class ConfigureCommand extends Command
             'HORIZON_NAME' => "{$project}-{$stage}",
             'HORIZON_PREFIX' => "{$prefix}_horizon:",
             'SESSION_COOKIE' => "{$prefix}_session",
+        ];
+    }
+
+    /**
+     * @param  array<string, string>  $current
+     * @param  array<string, string>  $local
+     * @return array<string, string>
+     */
+    private function backupEnvironmentValues(DeploymentConfig $deployment, array $current, array $local): array
+    {
+        $time = $current['ACCELERATOR_BACKUP_TIME'] ?? sprintf('02:%02d', $deployment->octanePort % 60);
+
+        if (preg_match('/^(?:[01]\d|2[0-3]):[0-5]\d$/', $time) !== 1) {
+            $time = sprintf('02:%02d', $deployment->octanePort % 60);
+        }
+
+        return [
+            'ACCELERATOR_DEPLOYMENT_KEY' => $deployment->deploymentKey,
+            'ACCELERATOR_DEPLOYMENT_STAGE' => $deployment->stage,
+            'ACCELERATOR_DEPLOY_ROOT' => $deployment->deployRoot,
+            'ACCELERATOR_BACKUP_ENABLED' => $current['ACCELERATOR_BACKUP_ENABLED'] ?? 'true',
+            'ACCELERATOR_BACKUP_NAME' => "acc-{$deployment->deploymentKey}-{$deployment->stage}",
+            'ACCELERATOR_BACKUP_DISKS' => $current['ACCELERATOR_BACKUP_DISKS'] ?? 'local',
+            'ACCELERATOR_BACKUP_TIME' => $time,
+            'ACCELERATOR_BACKUP_MAXIMUM_AGE_DAYS' => $current['ACCELERATOR_BACKUP_MAXIMUM_AGE_DAYS'] ?? '2',
+            'ACCELERATOR_BACKUP_MAXIMUM_STORAGE_MEGABYTES' => $current['ACCELERATOR_BACKUP_MAXIMUM_STORAGE_MEGABYTES'] ?? '5000',
+            'ACCELERATOR_TELEGRAM_BOT_TOKEN' => $current['ACCELERATOR_TELEGRAM_BOT_TOKEN'] ?? $local['ACCELERATOR_TELEGRAM_BOT_TOKEN'] ?? '',
+            'ACCELERATOR_TELEGRAM_CHAT_ID' => $current['ACCELERATOR_TELEGRAM_CHAT_ID'] ?? $local['ACCELERATOR_TELEGRAM_CHAT_ID'] ?? '',
+            'ACCELERATOR_TELEGRAM_NOTIFY_SUCCESSES' => $current['ACCELERATOR_TELEGRAM_NOTIFY_SUCCESSES'] ?? 'false',
         ];
     }
 

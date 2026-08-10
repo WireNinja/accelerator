@@ -7,6 +7,7 @@ namespace WireNinja\Accelerator\Console\Deployment;
 use Illuminate\Console\Command;
 use RuntimeException;
 use WireNinja\Accelerator\Console\Deployment\Concerns\ConfirmsDeployment;
+use WireNinja\Accelerator\Console\Deployment\Concerns\NotifiesDeploymentOperation;
 use WireNinja\Accelerator\Deployment\Deployer;
 use WireNinja\Accelerator\Deployment\DeploymentConfig;
 use WireNinja\Accelerator\Deployment\DeploymentEnvironment;
@@ -14,6 +15,7 @@ use WireNinja\Accelerator\Deployment\DeploymentEnvironment;
 final class DeployInitCommand extends Command
 {
     use ConfirmsDeployment;
+    use NotifiesDeploymentOperation;
 
     protected $signature = 'accelerator:deploy:init {--stage=production} {--revision= : Exact Git commit to deploy} {--force}';
 
@@ -21,8 +23,10 @@ final class DeployInitCommand extends Command
 
     public function handle(): int
     {
+        $stage = (string) $this->option('stage');
+        $startedAt = microtime(true);
+
         try {
-            $stage = (string) $this->option('stage');
             $config = DeploymentConfig::load(base_path(), $stage);
             (new DeploymentEnvironment(base_path()))->assertValid($config);
             $deployer = new Deployer(base_path());
@@ -47,9 +51,11 @@ final class DeployInitCommand extends Command
             $deployer->run('accelerator:database-init', $stage);
             $deployer->run('accelerator:nightowl-database-init', $stage);
             $deployer->run('deploy', $stage, $options);
+            $this->notifyOperation($stage, 'deploy init', 'success', $startedAt);
 
             return self::SUCCESS;
         } catch (RuntimeException $exception) {
+            $this->notifyOperation($stage, 'deploy init', 'failed', $startedAt, ['error' => $exception->getMessage()]);
             $this->components->error($exception->getMessage());
 
             return self::FAILURE;

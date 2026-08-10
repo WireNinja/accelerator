@@ -22,6 +22,12 @@ php artisan accelerator:service:stop octane --stage=production
 php artisan accelerator:service:restart octane --stage=production
 php artisan accelerator:logs laravel --stage=production --lines=200
 php artisan accelerator:backup --stage=production --only=all
+php artisan accelerator:backup:list --stage=production --json
+php artisan accelerator:backup:status --stage=production --json
+php artisan accelerator:backup:verify --stage=production --backup=<exact-id> --json
+php artisan accelerator:backup:cleanup --stage=production
+php artisan accelerator:backup:restore --stage=production --backup=<exact-id> --only=all
+php artisan accelerator:notify:test --stage=production --json
 php artisan accelerator:ports --host=ssh-alias --range=9000-9999 --available=20
 ```
 
@@ -43,6 +49,8 @@ Runtime/deploy writable paths use inherited ACLs. A release is rollback-eligible
 
 File backups include mutable `storage/app` by default. Never replace that with the release root: code belongs in Git, while release-tree backups leak `.env` and archive disposable vendors/build artifacts. Add another path only through `accelerator.backup.include` when the application truly owns mutable data there.
 
+Read [references/backup-restore.md](references/backup-restore.md) before backup configuration, restore, or an operational-alert change. Restore is destructive: require exact archive identity, target confirmation, revision equality, verified emergency backup, stage lock, stage-only maintenance/process isolation, and post-restore health. Never guess the newest archive or cross stages.
+
 For dual stages, deploy to staging first and promote only its marked-successful exact Git revision. Never promote a branch head that differs from the revision the client reviewed.
 
 Supervisor owns long-running service restarts. Do not add Laravel's generic post-deploy `artisan reload`; it duplicates the stage-scoped restart and may not signal processes owned by the runtime user.
@@ -53,6 +61,6 @@ Keep the generated Nginx exception for Livewire v4's hash-based `/livewire-{hash
 
 Deployment clones the root repository and initializes only `packages/accelerator` before Composer. Never replace that scoped command with recursive or all-submodule initialization: unrelated gitlinks are outside Accelerator deployment scope.
 
-Never run Composer update remotely, print env contents, touch unrelated projects, auto-rollback migrations, or delete the old root during relocation. Relocation locks the project, copies into the new stable root, reprovisions Nginx/SSL/services, health-checks, and deliberately preserves the old root. Horizon and a plain queue worker are mutually exclusive. A code rollback changes the symlink and services only; database recovery is manual.
+Never run Composer update remotely, print env contents, touch unrelated projects, auto-rollback migrations, or delete the old root during relocation. Relocation locks the project, copies into the new stable root, reprovisions Nginx/SSL/services, health-checks, and deliberately preserves the old root. Horizon and a plain queue worker are mutually exclusive. A code rollback changes the symlink and services only; data recovery uses the explicit backup restore command.
 
 Use `accelerator-ops-observability` for diagnosis before mutation.

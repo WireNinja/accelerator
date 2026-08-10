@@ -51,6 +51,10 @@ final readonly class DeploymentEnvironment
             'ACCELERATOR_FEATURE_HORIZON' => $config->horizonEnabled ? 'true' : 'false',
             'ACCELERATOR_FEATURE_REVERB' => $config->reverbEnabled ? 'true' : 'false',
             'ACCELERATOR_FEATURE_NIGHTOWL' => $config->nightowlEnabled ? 'true' : 'false',
+            'ACCELERATOR_DEPLOYMENT_KEY' => $config->deploymentKey,
+            'ACCELERATOR_DEPLOYMENT_STAGE' => $config->stage,
+            'ACCELERATOR_DEPLOY_ROOT' => $config->deployRoot,
+            'ACCELERATOR_BACKUP_NAME' => "acc-{$config->deploymentKey}-{$config->stage}",
         ];
         $errors = [];
 
@@ -71,6 +75,35 @@ final readonly class DeploymentEnvironment
             if (($values[$required] ?? '') === '') {
                 $errors[] = "{$required} is required.";
             }
+        }
+
+        if (! in_array($values['ACCELERATOR_BACKUP_ENABLED'] ?? '', ['true', 'false'], true)) {
+            $errors[] = 'ACCELERATOR_BACKUP_ENABLED must be true or false.';
+        }
+
+        if (preg_match('/^(?:[01]\d|2[0-3]):[0-5]\d$/', $values['ACCELERATOR_BACKUP_TIME'] ?? '') !== 1) {
+            $errors[] = 'ACCELERATOR_BACKUP_TIME must use 24-hour HH:MM format.';
+        }
+
+        if (trim($values['ACCELERATOR_BACKUP_DISKS'] ?? '') === '') {
+            $errors[] = 'ACCELERATOR_BACKUP_DISKS must contain at least one configured filesystem disk.';
+        }
+
+        foreach (['ACCELERATOR_BACKUP_MAXIMUM_AGE_DAYS', 'ACCELERATOR_BACKUP_MAXIMUM_STORAGE_MEGABYTES'] as $key) {
+            if (filter_var($values[$key] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]) === false) {
+                $errors[] = "{$key} must be a positive integer.";
+            }
+        }
+
+        if (! in_array($values['ACCELERATOR_TELEGRAM_NOTIFY_SUCCESSES'] ?? '', ['true', 'false'], true)) {
+            $errors[] = 'ACCELERATOR_TELEGRAM_NOTIFY_SUCCESSES must be true or false.';
+        }
+
+        $operatorTelegramToken = trim($values['ACCELERATOR_TELEGRAM_BOT_TOKEN'] ?? '');
+        $operatorTelegramChatId = trim($values['ACCELERATOR_TELEGRAM_CHAT_ID'] ?? '');
+
+        if (($operatorTelegramToken === '') !== ($operatorTelegramChatId === '')) {
+            $errors[] = 'ACCELERATOR_TELEGRAM_BOT_TOKEN and ACCELERATOR_TELEGRAM_CHAT_ID must both be present or both be absent.';
         }
 
         if ($config->nightowlEnabled) {

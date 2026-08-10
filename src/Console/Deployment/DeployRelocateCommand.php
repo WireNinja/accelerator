@@ -7,12 +7,14 @@ namespace WireNinja\Accelerator\Console\Deployment;
 use Illuminate\Console\Command;
 use RuntimeException;
 use WireNinja\Accelerator\Console\Deployment\Concerns\ConfirmsDeployment;
+use WireNinja\Accelerator\Console\Deployment\Concerns\NotifiesDeploymentOperation;
 use WireNinja\Accelerator\Deployment\Deployer;
 use WireNinja\Accelerator\Deployment\DeploymentConfig;
 
 final class DeployRelocateCommand extends Command
 {
     use ConfirmsDeployment;
+    use NotifiesDeploymentOperation;
 
     protected $signature = 'accelerator:deploy:relocate {old-root} {--stage=production} {--force}';
 
@@ -20,8 +22,10 @@ final class DeployRelocateCommand extends Command
 
     public function handle(): int
     {
+        $stage = (string) $this->option('stage');
+        $startedAt = microtime(true);
+
         try {
-            $stage = (string) $this->option('stage');
             $oldRoot = rtrim((string) $this->argument('old-root'), '/');
             $config = DeploymentConfig::load(base_path(), $stage);
 
@@ -34,9 +38,11 @@ final class DeployRelocateCommand extends Command
             }
 
             (new Deployer(base_path()))->run('accelerator:relocate', $stage, ['-o', "old_root={$oldRoot}"]);
+            $this->notifyOperation($stage, 'deploy relocate', 'success', $startedAt, ['old_root' => $oldRoot]);
 
             return self::SUCCESS;
         } catch (RuntimeException $exception) {
+            $this->notifyOperation($stage, 'deploy relocate', 'failed', $startedAt, ['error' => $exception->getMessage()]);
             $this->components->error($exception->getMessage());
 
             return self::FAILURE;

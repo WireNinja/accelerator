@@ -37,6 +37,9 @@ set('update_code_strategy', 'clone');
 set('old_root', '');
 option('service', null, InputOption::VALUE_REQUIRED, 'Configured stage service', 'all');
 option('backup-mode', null, InputOption::VALUE_REQUIRED, 'all, database, or files', 'all');
+option('backup-action', null, InputOption::VALUE_REQUIRED, 'Accelerator backup runtime action', 'list');
+option('backup-id', null, InputOption::VALUE_REQUIRED, 'Exact Accelerator backup ID', '');
+option('backup-disk', null, InputOption::VALUE_REQUIRED, 'Exact configured backup disk', '');
 option('lines', null, InputOption::VALUE_REQUIRED, 'Log lines to read', '200');
 set('rollback_candidate', function (): string {
     $currentRelease = basename(run('readlink {{current_path}}'));
@@ -112,25 +115,294 @@ task('accelerator:frontend', function () use ($config, $nodeEnvironment): void {
     }
 });
 
-task('accelerator:backup', function (): void {
-    cd('{{release_path}}');
-    run('{{bin/php}} artisan backup:run --only-db --disable-notifications --no-interaction');
+task('accelerator:backup', function () use ($config): void {
+    $arguments = ['accelerator:backup:runtime', 'create', '--only=database', '--no-interaction'];
+
+    if (test('[ -f '.$config->currentPath().'/REVISION ]')) {
+        $revision = trim(run('cat '.escapeshellarg($config->currentPath().'/REVISION')));
+
+        if (preg_match('/^[a-f0-9]{40,64}$/i', $revision) !== 1) {
+            throw new RuntimeException('Active release has an invalid revision marker; pre-migration backup aborted.');
+        }
+
+        $arguments[] = "--revision={$revision}";
+    }
+
+    run('cd {{release_path}} && command sudo -n -u '.escapeshellarg($config->runUser)
+        .' '.escapeshellarg($config->phpBinary)
+        .' '.implode(' ', array_map(escapeshellarg(...), $arguments)), forceOutput: true);
 });
 
-task('accelerator:backup-manual', function () use ($config): void {
+task('accelerator:backup-runtime', function () use ($config): void {
+    $action = (string) input()->getOption('backup-action');
     $mode = (string) input()->getOption('backup-mode');
+    $backupId = (string) input()->getOption('backup-id');
+    $disk = (string) input()->getOption('backup-disk');
+
+    if (! in_array($action, ['create', 'list', 'status', 'verify', 'cleanup', 'prepare', 'discard', 'post-restore-health', 'notify-test', 'restore-started', 'restore-succeeded', 'restore-failed'], true)) {
+        throw new RuntimeException('backup-action is invalid.');
+    }
 
     if (! in_array($mode, ['all', 'database', 'files'], true)) {
         throw new RuntimeException('backup-mode must be all, database, or files.');
     }
 
-    invoke('accelerator:runtime-acl');
-    $only = match ($mode) {
-        'database' => ' --only-db',
-        'files' => ' --only-files',
-        default => '',
+    if (in_array($action, ['create', 'cleanup'], true)) {
+        invoke('accelerator:runtime-acl');
+    }
+
+    $arguments = [
+        'accelerator:backup:runtime',
+        $action,
+        "--only={$mode}",
+        '--no-interaction',
+    ];
+
+    if ($backupId !== '') {
+        $arguments[] = "--backup={$backupId}";
+    }
+
+    if ($disk !== '') {
+        $arguments[] = "--disk={$disk}";
+    }
+
+    $command = implode(' ', array_map(escapeshellarg(...), $arguments));
+    run('cd '.escapeshellarg($config->currentPath()).' && command sudo -n -u '.escapeshellarg($config->runUser).' '.escapeshellarg($config->phpBinary).' '.$command.' || true', forceOutput: true);
+});
+
+task('accelerator:backup-restore', function () use ($config): void {
+    $mode = (string) input()->getOption('backup-mode');
+    $backupId = (string) input()->getOption('backup-id');
+    $disk = (string) input()->getOption('backup-disk');
+
+    if (! in_array($mode, ['all', 'database', 'files'], true)) {
+        throw new RuntimeException('backup-mode must be all, database, or files.');
+    }
+
+    if (preg_match('/^[a-z0-9][a-z0-9._-]*$/i', $backupId) !== 1) {
+        throw new RuntimeException('A safe exact backup ID is required for restore.');
+    }
+
+    $environment = (new EnvironmentStore($config->projectRoot))->read(
+        '.accelerator/environments/'.$config->stage.'.env',
+    );
+    $driver = $environment['DB_CONNECTION'] ?? 'sqlite';
+    $database = $environment['DB_DATABASE'] ?? '';
+    $username = $environment['DB_USERNAME'] ?? '';
+    $host = $environment['DB_HOST'] ?? '';
+    $socket = $environment['DB_SOCKET'] ?? '';
+    $requiredCommands = in_array($mode, ['all', 'files'], true) ? ['rsync'] : [];
+
+    if (in_array($mode, ['all', 'database'], true)) {
+        $requiredCommands[] = match ($driver) {
+            'sqlite' => 'sqlite3',
+            'mysql', 'mariadb' => 'mysql',
+            'pgsql' => 'psql',
+            default => throw new RuntimeException("Unsupported restore database driver [{$driver}]."),
+        };
+    }
+
+    foreach (array_unique($requiredCommands) as $requiredCommand) {
+        if (trim(run('command sudo -n sh -c '.escapeshellarg('command -v '.escapeshellarg($requiredCommand).' >/dev/null 2>&1').' && echo yes || echo no')) !== 'yes') {
+            throw new RuntimeException("Required restore command [{$requiredCommand}] is unavailable through passwordless sudo.");
+        }
+    }
+    $decode = static function (string $output): array {
+        if (preg_match('/ACCELERATOR_BACKUP_RESULT=([A-Za-z0-9+\/=]+)/', $output, $matches) !== 1) {
+            throw new RuntimeException('Backup runtime returned no machine-readable result.');
+        }
+
+        $json = base64_decode($matches[1], true);
+        $result = is_string($json) ? json_decode($json, true) : null;
+
+        if (! is_array($result) || ($result['status'] ?? 'ERROR') !== 'OK') {
+            throw new RuntimeException(is_array($result) && is_string($result['error'] ?? null)
+                ? $result['error']
+                : 'Backup runtime operation failed.');
+        }
+
+        return $result;
     };
-    run('cd '.escapeshellarg($config->currentPath()).' && command sudo -n -u '.escapeshellarg($config->runUser).' '.escapeshellarg($config->phpBinary).' artisan backup:run'.$only.' --disable-notifications --no-interaction', forceOutput: true);
+    $runtime = static function (string $action, string $mode, string $backupId = '', string $disk = '') use ($config): string {
+        $arguments = ['accelerator:backup:runtime', $action, "--only={$mode}", '--no-interaction'];
+
+        if ($backupId !== '') {
+            $arguments[] = "--backup={$backupId}";
+        }
+
+        if ($disk !== '') {
+            $arguments[] = "--disk={$disk}";
+        }
+
+        return 'cd '.escapeshellarg($config->currentPath())
+            .' && command sudo -n -u '.escapeshellarg($config->runUser)
+            .' '.escapeshellarg($config->phpBinary)
+            .' '.implode(' ', array_map(escapeshellarg(...), $arguments));
+    };
+    $maintenance = false;
+    $phase = 'preflight';
+
+    invoke('accelerator:preflight');
+    invoke('deploy:lock');
+
+    try {
+        $phase = 'archive verification';
+        invoke('accelerator:runtime-acl');
+        $prepared = $decode(run($runtime('prepare', $mode, $backupId, $disk), forceOutput: true));
+        $databaseDump = is_string($prepared['database_dump'] ?? null) ? $prepared['database_dump'] : '';
+        $filesPath = is_string($prepared['files_path'] ?? null) ? $prepared['files_path'] : '';
+        $expectedPreparationRoot = $config->currentPath().'/storage/framework/accelerator-restore/'.$backupId;
+
+        foreach (array_filter([$databaseDump, $filesPath]) as $preparedPath) {
+            if (! str_starts_with($preparedPath, $expectedPreparationRoot.'/')) {
+                throw new RuntimeException('Restore preparation returned a path outside the stage-owned temporary directory.');
+            }
+        }
+
+        $phase = 'emergency backup';
+        $emergency = $decode(run($runtime('create', 'all'), forceOutput: true));
+        $phase = 'maintenance and process isolation';
+        run($runtime('restore-started', $mode, $backupId).' || true', forceOutput: true);
+        $maintenanceSecret = bin2hex(random_bytes(24));
+        run('cd '.escapeshellarg($config->currentPath())
+            .' && command sudo -n -u '.escapeshellarg($config->runUser)
+            .' '.escapeshellarg($config->phpBinary).' artisan down --secret='.escapeshellarg($maintenanceSecret).' --no-interaction');
+        $maintenance = true;
+
+        if ($config->hasSupervisorPrograms()) {
+            run('command sudo -n supervisorctl stop '.escapeshellarg($config->group.':*').' || true');
+        }
+
+        if (in_array($mode, ['all', 'database'], true)) {
+            $phase = 'database restore';
+            if ($databaseDump === '') {
+                throw new RuntimeException('Prepared restore contains no database dump.');
+            }
+
+            if ($driver === 'sqlite') {
+                $expected = $config->sharedPath().'/database/database.sqlite';
+
+                if ($database !== $expected) {
+                    throw new RuntimeException("SQLite restore target must be [{$expected}].");
+                }
+
+                $temporaryDatabase = $expected.'.accelerator-restore';
+                run('command rm -f '.escapeshellarg($temporaryDatabase)
+                    .' && command sqlite3 '.escapeshellarg($temporaryDatabase).' < '.escapeshellarg($databaseDump)
+                    .' && command sqlite3 '.escapeshellarg($temporaryDatabase).' "PRAGMA integrity_check;" | grep -Fxq ok'
+                    .' && command chmod 0660 '.escapeshellarg($temporaryDatabase)
+                    .' && command mv -f '.escapeshellarg($temporaryDatabase).' '.escapeshellarg($expected));
+            } else {
+                foreach (['database' => $database, 'username' => $username] as $label => $value) {
+                    if (preg_match('/^[a-z0-9_]+$/i', $value) !== 1) {
+                        throw new RuntimeException("Deployment {$label} must contain only letters, numbers, and underscores.");
+                    }
+                }
+
+                if ($socket === '' && ! in_array($host, ['127.0.0.1', 'localhost', '::1'], true)) {
+                    throw new RuntimeException('Automatic restore is limited to a database on the deployment host.');
+                }
+
+                if (in_array($driver, ['mysql', 'mariadb'], true)) {
+                    $grantee = "'".$username."'@%";
+                    $grantCount = trim(run('command sudo -n mysql --batch --skip-column-names --execute='.escapeshellarg(
+                        'SELECT COUNT(*) FROM information_schema.SCHEMA_PRIVILEGES WHERE TABLE_SCHEMA = '.$sqlString($database).' AND GRANTEE LIKE '.$sqlString($grantee).';',
+                    )));
+
+                    if (! ctype_digit($grantCount) || (int) $grantCount < 1) {
+                        throw new RuntimeException("MySQL database [{$database}] is not proven to belong to account [{$username}].");
+                    }
+
+                    $identifier = '`'.str_replace('`', '``', $database).'`';
+                    run('command sudo -n mysql --execute='.escapeshellarg("DROP DATABASE IF EXISTS {$identifier}; CREATE DATABASE {$identifier} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"));
+                    run('command sudo -n sh -c '.escapeshellarg('mysql '.escapeshellarg($database).' < '.escapeshellarg($databaseDump)));
+                } elseif ($driver === 'pgsql') {
+                    $sqlString = static fn (string $value): string => "'".str_replace("'", "''", $value)."'";
+                    $roleExists = trim(run('command sudo -n -u postgres psql --tuples-only --no-align --command='.escapeshellarg(
+                        'SELECT 1 FROM pg_roles WHERE rolname = '.$sqlString($username).';',
+                    )));
+
+                    if ($roleExists !== '1') {
+                        throw new RuntimeException("PostgreSQL role [{$username}] does not exist.");
+                    }
+
+                    $owner = trim(run('command sudo -n -u postgres psql --tuples-only --no-align --command='.escapeshellarg(
+                        'SELECT pg_catalog.pg_get_userbyid(datdba) FROM pg_database WHERE datname = '.$sqlString($database).';',
+                    )));
+
+                    if ($owner !== $username) {
+                        throw new RuntimeException("PostgreSQL database [{$database}] is not owned by [{$username}].");
+                    }
+
+                    run('command sudo -n -u postgres psql --set=ON_ERROR_STOP=1 --command='.escapeshellarg(
+                        'SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '.$sqlString($database).' AND pid <> pg_backend_pid();',
+                    ));
+                    run('command sudo -n -u postgres dropdb --if-exists '.escapeshellarg($database));
+                    run('command sudo -n -u postgres createdb --owner='.escapeshellarg($username).' '.escapeshellarg($database));
+                    $remoteDump = '/tmp/'.$config->group.'-'.$backupId.'.sql';
+                    run('command sudo -n install -m 0600 -o postgres -g postgres '.escapeshellarg($databaseDump).' '.escapeshellarg($remoteDump));
+                    run('trap '.escapeshellarg('sudo -n rm -f '.$remoteDump).' EXIT; command sudo -n -u postgres psql --set=ON_ERROR_STOP=1 --dbname='.escapeshellarg($database).' --file='.escapeshellarg($remoteDump));
+                } else {
+                    throw new RuntimeException("Unsupported restore database driver [{$driver}].");
+                }
+            }
+        }
+
+        if (in_array($mode, ['all', 'files'], true)) {
+            $phase = 'mutable file restore';
+            if ($filesPath === '') {
+                throw new RuntimeException('Prepared restore contains no storage/app tree.');
+            }
+
+            $backupName = (string) ($environment['ACCELERATOR_BACKUP_NAME'] ?? '');
+
+            if (preg_match('/^[a-z0-9][a-z0-9._-]*$/i', $backupName) !== 1) {
+                throw new RuntimeException('ACCELERATOR_BACKUP_NAME is invalid for file restoration.');
+            }
+
+            run('command sudo -n rsync -a --delete '
+                .'--exclude='.escapeshellarg('/private/'.$backupName.'/')
+                .' --exclude='.escapeshellarg('/'.$backupName.'/')
+                .' '.escapeshellarg(rtrim($filesPath, '/').'/')
+                .' '.escapeshellarg($config->sharedPath().'/storage/app/'));
+            invoke('accelerator:runtime-acl');
+        }
+
+        $phase = 'cache and service recovery';
+        run('cd '.escapeshellarg($config->currentPath())
+            .' && command sudo -n -u '.escapeshellarg($config->runUser)
+            .' '.escapeshellarg($config->phpBinary).' artisan optimize:clear --no-interaction'
+            .' && command sudo -n -u '.escapeshellarg($config->runUser)
+            .' '.escapeshellarg($config->phpBinary).' artisan optimize --no-interaction'
+            .' && command sudo -n -u '.escapeshellarg($config->runUser)
+            .' '.escapeshellarg($config->phpBinary).' artisan up --no-interaction');
+        $maintenance = false;
+        invoke('accelerator:services');
+        $phase = 'post-restore health';
+        invoke('accelerator:health');
+        $decode(run($runtime('post-restore-health', $mode), forceOutput: true));
+
+        if ($config->hasSupervisorPrograms()) {
+            run('command sudo -n supervisorctl status '.escapeshellarg($config->group.':*')." | awk '\$2 != \"RUNNING\" { failed=1 } END { exit failed }'");
+        }
+
+        if ($config->nightowlEnabled) {
+            run('curl --fail --silent --show-error --max-time 10 http://127.0.0.1:'.$config->nightowlHealthPort.'/status >/dev/null');
+        }
+
+        run($runtime('restore-succeeded', $mode, $backupId).' || true', forceOutput: true);
+        run($runtime('discard', $mode, $backupId).' || true', forceOutput: true);
+        writeln('Emergency pre-restore backup: '.($emergency['backup_id'] ?? 'unknown'));
+    } catch (Throwable $exception) {
+        run($runtime('restore-failed', $mode, $backupId).' || true', forceOutput: true);
+
+        throw new RuntimeException(
+            "Restore failed during {$phase}".($maintenance ? ' while the stage remains in maintenance mode with its Supervisor group stopped.' : ' before maintenance mode was enabled.').' '.$exception->getMessage(),
+            previous: $exception,
+        );
+    } finally {
+        invoke('deploy:unlock');
+    }
 });
 
 foreach (['status', 'start', 'stop', 'restart'] as $operation) {

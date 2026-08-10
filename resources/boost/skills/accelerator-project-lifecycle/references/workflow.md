@@ -159,6 +159,7 @@ php artisan accelerator:service:status all --stage=staging --json
 php artisan accelerator:service:restart octane --stage=staging
 php artisan accelerator:logs laravel --stage=staging --lines=200
 php artisan accelerator:backup --stage=staging --only=all
+php artisan accelerator:backup:status --stage=staging --json
 ```
 
 The ignored local stage env is canonical. Do not routinely edit remote `.env`; a later deploy would overwrite it.
@@ -217,7 +218,15 @@ php artisan accelerator:deploy:rollback --stage={stage}
 php artisan accelerator:deploy:unlock --stage={stage}
 ```
 
-Use unlock only for a confirmed stale lock. Treat database recovery as a separate, explicit operation.
+Use unlock only for a confirmed stale lock. Treat data recovery as a separate, explicit operation.
+
+```bash
+php artisan accelerator:backup:list --stage={stage} --json
+php artisan accelerator:backup:verify --stage={stage} --backup=<exact-id> --json
+php artisan accelerator:backup:restore --stage={stage} --backup=<exact-id> --only=all
+```
+
+Restore never changes code or runs migrations. Read `../../accelerator-deployment/references/backup-restore.md` before using it. Every deployed stage independently schedules full backup, cleanup, and verified health monitoring.
 
 ## 10. Ongoing deploy loop
 

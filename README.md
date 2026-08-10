@@ -106,6 +106,12 @@ php artisan accelerator:service:stop octane --stage=production
 php artisan accelerator:service:restart octane --stage=production
 php artisan accelerator:logs laravel --stage=production --lines=200
 php artisan accelerator:backup --stage=production --only=all
+php artisan accelerator:backup:list --stage=production --json
+php artisan accelerator:backup:status --stage=production --json
+php artisan accelerator:backup:verify --stage=production --backup=<exact-id> --json
+php artisan accelerator:backup:cleanup --stage=production
+php artisan accelerator:backup:restore --stage=production --backup=<exact-id> --only=all
+php artisan accelerator:notify:test --stage=production --json
 php artisan accelerator:ports --host=ssh-alias --range=9000-9999 --available=20
 ```
 
@@ -121,7 +127,11 @@ Use `--ssl-email` to replace the existing ACME email explicitly. `--rotate-app-k
 
 Shared Laravel storage and cache paths use inherited ACLs for both the deploy user and runtime user. Releases become rollback candidates only after services pass the retried HTTPS health check; incomplete or failed releases are marked bad and never selected as rollback targets.
 
-File backups contain mutable `storage/app` data, not the Git-managed release tree. This keeps uploads recoverable without archiving dependencies, build output, or the `.env` secret symlink. Applications may override the include list through `accelerator.backup.include` when they own additional mutable paths.
+File backups contain mutable `storage/app` data, not the Git-managed release tree. This keeps uploads recoverable without archiving dependencies, build output, or the `.env` secret symlink. Applications may override the include list through `accelerator.backup.include` when they own additional mutable paths. Each archive receives a stage-owned checksum manifest. Daily full backup, cleanup, and verified health monitoring run at deterministic per-stage times; the mandatory pre-migration database backup remains separate.
+
+Restore requires an exact backup ID and matching deployment key, stage, checksum, components, and active Git revision. It creates an emergency full backup before mutation, locks deployment, isolates only the selected stage, restores the supported local database and/or mutable files, then verifies HTTPS and services. It never changes code, runs migrations, restores across stages, or touches NightOwl. Local-disk backup is convenient but does not survive total VPS loss; configure an S3-compatible Laravel filesystem disk for offsite durability.
+
+`ACCELERATOR_TELEGRAM_BOT_TOKEN` and `ACCELERATOR_TELEGRAM_CHAT_ID` are stage-owned operator credentials for backup/deployment failures and mandatory restore lifecycle alerts. They are separate from user/profile Telegram configuration. Success noise is disabled by default. See `resources/boost/skills/accelerator-deployment/references/backup-restore.md` for the exact operational contract.
 
 Supervisor is the sole owner of long-running service restarts. Accelerator deliberately omits Laravel's generic post-deploy `artisan reload`, which would duplicate the restart and cannot signal Supervisor processes owned by the runtime user.
 
@@ -179,4 +189,4 @@ PHPStan/Larastan level 5 is the minimum. Do not add a baseline or suppress real 
 
 Command `--help`, source/framework registry, policy, database, and runtime state are truth. Context output and skills are navigation aids.
 
-The complete opinionated lifecycle is stored in `resources/boost/skills/accelerator-project-lifecycle/references/workflow.md`. NightOwl provisioning and diagnosis are stored in `resources/boost/skills/accelerator-nightowl/references/operations.md`. Keep those references synchronized with public Artisan commands and deployment invariants; do not duplicate divergent workflows elsewhere.
+The complete opinionated lifecycle is stored in `resources/boost/skills/accelerator-project-lifecycle/references/workflow.md`. Backup/restore operations are stored in `resources/boost/skills/accelerator-deployment/references/backup-restore.md`. NightOwl provisioning and diagnosis are stored in `resources/boost/skills/accelerator-nightowl/references/operations.md`. Keep those references synchronized with public Artisan commands and deployment invariants; do not duplicate divergent workflows elsewhere.

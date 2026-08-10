@@ -6,38 +6,39 @@ namespace WireNinja\Accelerator\Console\Deployment;
 
 use Illuminate\Console\Command;
 use RuntimeException;
-use WireNinja\Accelerator\Console\Deployment\Concerns\ConfirmsDeployment;
 use WireNinja\Accelerator\Console\Deployment\Concerns\RendersBackupResult;
 use WireNinja\Accelerator\Deployment\DeploymentConfig;
 use WireNinja\Accelerator\Deployment\DeploymentEnvironment;
 use WireNinja\Accelerator\Deployment\RemoteBackup;
 
-final class BackupCommand extends Command
+final class BackupVerifyCommand extends Command
 {
-    use ConfirmsDeployment;
     use RendersBackupResult;
 
-    protected $signature = 'accelerator:backup {--stage=production} {--only=all : all, database, or files} {--force} {--json}';
+    protected $signature = 'accelerator:backup:verify {--stage=production} {--backup= : Exact backup ID} {--disk=} {--json}';
 
-    protected $description = 'Run a stage-scoped application backup as the runtime user';
+    protected $description = 'Verify a stage-owned backup checksum and archive';
 
     public function handle(): int
     {
         try {
             $stage = (string) $this->option('stage');
-            $mode = (string) $this->option('only');
             $config = DeploymentConfig::load(base_path(), $stage);
             (new DeploymentEnvironment(base_path()))->assertValid($config);
+            $backupId = (string) $this->option('backup');
 
-            if (! in_array($mode, ['all', 'database', 'files'], true)) {
-                throw new RuntimeException('--only must be all, database, or files.');
+            if ($backupId === '') {
+                throw new RuntimeException('--backup is required.');
             }
 
-            if (! $this->confirmed("Back up {$mode} data for", $config)) {
-                return self::FAILURE;
+            $options = ["--backup-id={$backupId}"];
+            $disk = $this->option('disk');
+
+            if (is_string($disk) && $disk !== '') {
+                $options[] = "--backup-disk={$disk}";
             }
 
-            $result = (new RemoteBackup(base_path()))->run($stage, 'create', ["--backup-mode={$mode}"]);
+            $result = (new RemoteBackup(base_path()))->run($stage, 'verify', $options);
             $this->renderBackupResult($result);
 
             return self::SUCCESS;

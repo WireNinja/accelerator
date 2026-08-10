@@ -140,6 +140,16 @@ final readonly class EnvironmentWriter
                 && $this->context->plan->deploymentMode === 'dual' ? '"LOCAL DATA"' : '',
             'ACCELERATOR_ENVIRONMENT_INDICATOR_COLOR' => $this->context->plan->deploy
                 && $this->context->plan->deploymentMode === 'dual' ? 'info' : 'warning',
+            'ACCELERATOR_BACKUP_ENABLED' => 'true',
+            'ACCELERATOR_BACKUP_NAME' => 'local',
+            'ACCELERATOR_BACKUP_DISKS' => 'local',
+            'ACCELERATOR_BACKUP_TIME' => '02:00',
+            'ACCELERATOR_BACKUP_MAXIMUM_AGE_DAYS' => '2',
+            'ACCELERATOR_BACKUP_MAXIMUM_STORAGE_MEGABYTES' => '5000',
+            'ACCELERATOR_DEPLOYMENT_KEY' => 'local',
+            'ACCELERATOR_DEPLOYMENT_STAGE' => 'local',
+            'ACCELERATOR_DEPLOY_ROOT' => '',
+            'ACCELERATOR_TELEGRAM_NOTIFY_SUCCESSES' => 'false',
             'GOOGLE_REDIRECT_URI' => rtrim($plan->appUrl, '/').'/auth/google/callback',
             'VITE_APP_NAME' => '"'.addcslashes($plan->appName, '"\\').'"',
         ];
@@ -188,6 +198,16 @@ final readonly class EnvironmentWriter
         $contents = $this->setEnvironmentValue($contents, 'HORIZON_PREFIX', "{$prefix}_horizon:");
         $contents = $this->setEnvironmentValue($contents, 'SESSION_COOKIE', "{$prefix}_session");
         $stagePortBase = $this->context->plan->portBase + ($stage === 'production' && $this->context->plan->deploymentMode === 'dual' ? 10 : 0);
+        $contents = $this->setEnvironmentValue($contents, 'ACCELERATOR_DEPLOYMENT_KEY', $this->context->plan->deploymentKey);
+        $contents = $this->setEnvironmentValue($contents, 'ACCELERATOR_DEPLOYMENT_STAGE', $stage);
+        $contents = $this->setEnvironmentValue($contents, 'ACCELERATOR_DEPLOY_ROOT', $deployRoot);
+        $contents = $this->setEnvironmentValue($contents, 'ACCELERATOR_BACKUP_ENABLED', 'true');
+        $contents = $this->setEnvironmentValue($contents, 'ACCELERATOR_BACKUP_NAME', "acc-{$this->context->plan->deploymentKey}-{$stage}");
+        $contents = $this->setEnvironmentValue($contents, 'ACCELERATOR_BACKUP_DISKS', 'local');
+        $contents = $this->setEnvironmentValue($contents, 'ACCELERATOR_BACKUP_TIME', sprintf('02:%02d', $stagePortBase % 60));
+        $contents = $this->setEnvironmentValue($contents, 'ACCELERATOR_BACKUP_MAXIMUM_AGE_DAYS', '2');
+        $contents = $this->setEnvironmentValue($contents, 'ACCELERATOR_BACKUP_MAXIMUM_STORAGE_MEGABYTES', '5000');
+        $contents = $this->setEnvironmentValue($contents, 'ACCELERATOR_TELEGRAM_NOTIFY_SUCCESSES', 'false');
         $contents = $this->setEnvironmentValue($contents, 'OCTANE_PORT', (string) $stagePortBase);
         $contents = $this->setEnvironmentValue($contents, 'REVERB_SERVER_PORT', (string) ($stagePortBase + 1));
         $contents = $this->setEnvironmentValue($contents, 'NIGHTOWL_AGENT_PORT', (string) ($stagePortBase + 2));

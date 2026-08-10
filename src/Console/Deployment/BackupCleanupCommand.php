@@ -12,32 +12,27 @@ use WireNinja\Accelerator\Deployment\DeploymentConfig;
 use WireNinja\Accelerator\Deployment\DeploymentEnvironment;
 use WireNinja\Accelerator\Deployment\RemoteBackup;
 
-final class BackupCommand extends Command
+final class BackupCleanupCommand extends Command
 {
     use ConfirmsDeployment;
     use RendersBackupResult;
 
-    protected $signature = 'accelerator:backup {--stage=production} {--only=all : all, database, or files} {--force} {--json}';
+    protected $signature = 'accelerator:backup:cleanup {--stage=production} {--force} {--json}';
 
-    protected $description = 'Run a stage-scoped application backup as the runtime user';
+    protected $description = 'Apply stage backup retention and remove orphan manifests';
 
     public function handle(): int
     {
         try {
             $stage = (string) $this->option('stage');
-            $mode = (string) $this->option('only');
             $config = DeploymentConfig::load(base_path(), $stage);
             (new DeploymentEnvironment(base_path()))->assertValid($config);
 
-            if (! in_array($mode, ['all', 'database', 'files'], true)) {
-                throw new RuntimeException('--only must be all, database, or files.');
-            }
-
-            if (! $this->confirmed("Back up {$mode} data for", $config)) {
+            if (! $this->confirmed('Clean retained backups for', $config)) {
                 return self::FAILURE;
             }
 
-            $result = (new RemoteBackup(base_path()))->run($stage, 'create', ["--backup-mode={$mode}"]);
+            $result = (new RemoteBackup(base_path()))->run($stage, 'cleanup');
             $this->renderBackupResult($result);
 
             return self::SUCCESS;

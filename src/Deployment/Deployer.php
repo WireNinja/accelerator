@@ -6,6 +6,7 @@ namespace WireNinja\Accelerator\Deployment;
 
 use RuntimeException;
 use Symfony\Component\Process\Process;
+use Throwable;
 
 final readonly class Deployer
 {
@@ -28,7 +29,11 @@ final readonly class Deployer
         $process->setTimeout(null);
 
         if ($capture) {
-            $process->mustRun();
+            try {
+                $process->mustRun();
+            } catch (Throwable $exception) {
+                throw new RuntimeException("Deployer task [{$task}] failed.", previous: $exception);
+            }
 
             return trim($process->getOutput());
         }

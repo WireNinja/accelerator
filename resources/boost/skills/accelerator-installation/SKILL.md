@@ -22,4 +22,6 @@ Supply-chain policy is mandatory: one lockfile, seven-day minimum release age, n
 
 Files: `.env` local runtime, committed `.accelerator/deploy.json` non-secret topology, ignored stage envs, and ignored install receipt. Never treat the receipt as config.
 
+A fresh deployment-enabled install writes a working per-stage daily backup schedule, local destination, explicit retention/health limits, and stable backup identity. Operator Telegram and offsite storage remain optional. Verify their presence through doctor/feature output; use `accelerator:notify:test` only after credentials are configured. Detailed operations live in `../accelerator-deployment/references/backup-restore.md`.
+
 Verify command discovery, doctor JSON, Composer validation/audit, PHPStan level 5, pnpm/npm frozen install, frontend build, caches, Super Admin access, RBAC, and root-route ownership. Do not run this installer on WSS or any existing app.
