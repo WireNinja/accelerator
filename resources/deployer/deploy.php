@@ -261,10 +261,17 @@ task('accelerator:backup-restore', function () use ($config): void {
         $prepared = $decode(run($runtime('prepare', $mode, $backupId, $disk), forceOutput: true));
         $databaseDump = is_string($prepared['database_dump'] ?? null) ? $prepared['database_dump'] : '';
         $filesPath = is_string($prepared['files_path'] ?? null) ? $prepared['files_path'] : '';
-        $expectedPreparationRoot = $config->currentPath().'/storage/framework/accelerator-restore/'.$backupId;
+        $expectedPreparationRoot = $config->sharedPath().'/storage/framework/accelerator-restore/'.$backupId;
+        $canonicalPreparationRoot = trim(run('command readlink -f -- '.escapeshellarg($expectedPreparationRoot)));
+
+        if ($canonicalPreparationRoot === '') {
+            throw new RuntimeException('Unable to resolve the stage-owned restore preparation directory.');
+        }
 
         foreach (array_filter([$databaseDump, $filesPath]) as $preparedPath) {
-            if (! str_starts_with($preparedPath, $expectedPreparationRoot.'/')) {
+            $canonicalPreparedPath = trim(run('command readlink -f -- '.escapeshellarg($preparedPath)));
+
+            if ($canonicalPreparedPath === '' || ! str_starts_with($canonicalPreparedPath, $canonicalPreparationRoot.'/')) {
                 throw new RuntimeException('Restore preparation returned a path outside the stage-owned temporary directory.');
             }
         }
