@@ -193,6 +193,7 @@ task('accelerator:backup-restore', function () use ($config): void {
     $host = $environment['DB_HOST'] ?? '';
     $socket = $environment['DB_SOCKET'] ?? '';
     $maintenanceSecret = getenv('ACCELERATOR_RESTORE_SECRET');
+    $sqlString = static fn (string $value): string => "'".str_replace("'", "''", $value)."'";
 
     if (! is_string($maintenanceSecret) || preg_match('/^[a-f0-9]{48}$/', $maintenanceSecret) !== 1) {
         throw new RuntimeException('A valid local maintenance bypass receipt is required for restore.');
@@ -338,7 +339,6 @@ task('accelerator:backup-restore', function () use ($config): void {
                     run('command sudo -n mysql --execute='.escapeshellarg("DROP DATABASE IF EXISTS {$identifier}; CREATE DATABASE {$identifier} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"));
                     run('command sudo -n sh -c '.escapeshellarg('mysql '.escapeshellarg($database).' < '.escapeshellarg($databaseDump)));
                 } elseif ($driver === 'pgsql') {
-                    $sqlString = static fn (string $value): string => "'".str_replace("'", "''", $value)."'";
                     $roleExists = trim(run('command sudo -n -u postgres psql --tuples-only --no-align --command='.escapeshellarg(
                         'SELECT 1 FROM pg_roles WHERE rolname = '.$sqlString($username).';',
                     )));
@@ -647,6 +647,12 @@ task('accelerator:services', function () use ($config): void {
     }
 });
 
+task('accelerator:maintenance-up', function () use ($config): void {
+    run('cd '.escapeshellarg($config->currentPath())
+        .' && command sudo -n -u '.escapeshellarg($config->runUser)
+        .' '.escapeshellarg($config->phpBinary).' artisan up --no-interaction');
+});
+
 task('accelerator:supervisor-load', function () use ($config): void {
     if ($config->hasSupervisorPrograms()) {
         run('command sudo -n supervisorctl reread && command sudo -n supervisorctl update');
@@ -868,6 +874,7 @@ task('accelerator:preflight', function () use ($config, $nodeEnvironment): void 
 
 task('accelerator:activate-release', function (): void {
     invoke('accelerator:supervisor-load');
+    invoke('accelerator:maintenance-up');
     invoke('accelerator:services');
     invoke('accelerator:health-or-restore');
     run('touch {{release_path}}/ACCELERATOR_SUCCESSFUL_RELEASE');
