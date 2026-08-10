@@ -10,6 +10,7 @@ use WireNinja\Accelerator\Console\Deployment\Concerns\ConfirmsDeployment;
 use WireNinja\Accelerator\Console\Deployment\Concerns\NotifiesDeploymentOperation;
 use WireNinja\Accelerator\Deployment\Deployer;
 use WireNinja\Accelerator\Deployment\DeploymentConfig;
+use WireNinja\Accelerator\Deployment\DeploymentOutput;
 
 final class DeployRollbackCommand extends Command
 {
@@ -32,9 +33,14 @@ final class DeployRollbackCommand extends Command
                 return self::FAILURE;
             }
 
-            (new Deployer(base_path()))->run('rollback', $stage);
+            $deployer = new Deployer(base_path());
+            $deployer->run('rollback', $stage);
             $this->components->warn('Release symlink rolled back. Database migrations were not reversed; review schema compatibility manually.');
-            $this->notifyOperation($stage, 'deploy rollback', 'success', $startedAt);
+            $deployedRevision = DeploymentOutput::markers(
+                $deployer->run('accelerator:revision', $stage, capture: true),
+                'ACCELERATOR_REVISION',
+            )['revision'] ?? null;
+            $this->notifyOperation($stage, 'deploy rollback', 'success', $startedAt, ['revision' => $deployedRevision]);
 
             return self::SUCCESS;
         } catch (RuntimeException $exception) {

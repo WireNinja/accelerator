@@ -110,6 +110,7 @@ final readonly class BackupManager
                     'created_at' => is_array($manifest) ? ($manifest['created_at'] ?? null) : date(DATE_ATOM, $disk->lastModified($path)),
                     'revision' => is_array($manifest) ? ($manifest['revision'] ?? null) : null,
                     'mode' => is_array($manifest) ? ($manifest['mode'] ?? null) : null,
+                    'encrypted' => is_array($manifest) ? ($manifest['encrypted'] ?? null) : null,
                     'manifest' => is_array($manifest),
                 ];
             }
@@ -669,12 +670,13 @@ final readonly class BackupManager
     {
         $path = storage_path('framework/accelerator-backup-state.json');
         File::ensureDirectoryExists(dirname($path), 0700);
-        File::put($path, json_encode([
-            'result' => $result,
+        $state = $this->lifecycleState() ?? [];
+        $state[$result === 'success' ? 'last_success' : 'last_failure'] = [
             'backup_id' => $backupId,
             'occurred_at' => now('UTC')->toIso8601String(),
             'error' => $error,
-        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE).PHP_EOL, true);
+        ];
+        File::put($path, json_encode($state, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE).PHP_EOL, true);
         File::chmod($path, 0600);
     }
 

@@ -11,6 +11,7 @@ use WireNinja\Accelerator\Console\Deployment\Concerns\NotifiesDeploymentOperatio
 use WireNinja\Accelerator\Deployment\Deployer;
 use WireNinja\Accelerator\Deployment\DeploymentConfig;
 use WireNinja\Accelerator\Deployment\DeploymentEnvironment;
+use WireNinja\Accelerator\Deployment\DeploymentOutput;
 
 final class DeployInitCommand extends Command
 {
@@ -51,7 +52,11 @@ final class DeployInitCommand extends Command
             $deployer->run('accelerator:database-init', $stage);
             $deployer->run('accelerator:nightowl-database-init', $stage);
             $deployer->run('deploy', $stage, $options);
-            $this->notifyOperation($stage, 'deploy init', 'success', $startedAt);
+            $deployedRevision = DeploymentOutput::markers(
+                $deployer->run('accelerator:revision', $stage, capture: true),
+                'ACCELERATOR_REVISION',
+            )['revision'] ?? null;
+            $this->notifyOperation($stage, 'deploy init', 'success', $startedAt, ['revision' => $deployedRevision]);
 
             return self::SUCCESS;
         } catch (RuntimeException $exception) {

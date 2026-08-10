@@ -98,7 +98,13 @@ final class FeatureListCommand extends Command
         $disks = (array) config('accelerator.backup.disks', ['local']);
         $statePath = storage_path('framework/accelerator-backup-state.json');
         $state = is_file($statePath) ? json_decode((string) file_get_contents($statePath), true) : null;
-        $lastResult = is_array($state) && is_string($state['result'] ?? null) ? $state['result'] : 'unknown';
+        $lastResult = is_array($state) && is_array($state['last_success'] ?? null) ? 'healthy' : 'unknown';
+
+        if (is_array($state) && is_array($state['last_failure'] ?? null)) {
+            $successAt = is_array($state['last_success'] ?? null) ? (string) ($state['last_success']['occurred_at'] ?? '') : '';
+            $failureAt = (string) ($state['last_failure']['occurred_at'] ?? '');
+            $lastResult = $failureAt > $successAt ? 'unhealthy' : $lastResult;
+        }
 
         return [
             'engine_installed' => InstalledVersions::isInstalled('spatie/laravel-backup'),

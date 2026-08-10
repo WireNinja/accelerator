@@ -11,6 +11,7 @@ use WireNinja\Accelerator\Console\Deployment\Concerns\NotifiesDeploymentOperatio
 use WireNinja\Accelerator\Deployment\Deployer;
 use WireNinja\Accelerator\Deployment\DeploymentConfig;
 use WireNinja\Accelerator\Deployment\DeploymentEnvironment;
+use WireNinja\Accelerator\Deployment\DeploymentOutput;
 
 final class DeployCommand extends Command
 {
@@ -48,7 +49,11 @@ final class DeployCommand extends Command
             }
 
             $deployer->run('deploy', $stage, $options);
-            $this->notifyOperation($stage, 'deploy', 'success', $startedAt, ['revision' => is_string($revision) ? $revision : null]);
+            $deployedRevision = DeploymentOutput::markers(
+                $deployer->run('accelerator:revision', $stage, capture: true),
+                'ACCELERATOR_REVISION',
+            )['revision'] ?? null;
+            $this->notifyOperation($stage, 'deploy', 'success', $startedAt, ['revision' => $deployedRevision]);
 
             return self::SUCCESS;
         } catch (RuntimeException $exception) {

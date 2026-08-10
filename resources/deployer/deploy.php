@@ -241,6 +241,10 @@ task('accelerator:backup-restore', function () use ($config): void {
     };
     $maintenance = false;
     $phase = 'preflight';
+    $restoreServices = array_values(array_filter(
+        $config->supervisorServices(),
+        static fn (string $service): bool => $service !== 'nightowl',
+    ));
 
     invoke('accelerator:preflight');
     invoke('deploy:lock');
@@ -269,8 +273,10 @@ task('accelerator:backup-restore', function () use ($config): void {
             .' '.escapeshellarg($config->phpBinary).' artisan down --secret='.escapeshellarg($maintenanceSecret).' --no-interaction');
         $maintenance = true;
 
-        if ($config->hasSupervisorPrograms()) {
-            run('command sudo -n supervisorctl stop '.escapeshellarg($config->group.':*').' || true');
+        foreach (['scheduler', 'horizon', 'queue', 'reverb', 'octane'] as $service) {
+            if (in_array($service, $restoreServices, true)) {
+                run('command sudo -n supervisorctl stop '.escapeshellarg($config->group.':'.$config->programName($service)));
+            }
         }
 
         if (in_array($mode, ['all', 'database'], true)) {
@@ -377,7 +383,13 @@ task('accelerator:backup-restore', function () use ($config): void {
             .' && command sudo -n -u '.escapeshellarg($config->runUser)
             .' '.escapeshellarg($config->phpBinary).' artisan up --no-interaction');
         $maintenance = false;
-        invoke('accelerator:services');
+        foreach ($restoreServices as $service) {
+            run('command sudo -n supervisorctl restart '.escapeshellarg($config->group.':'.$config->programName($service)));
+        }
+
+        if ($config->httpRuntime === 'fpm') {
+            run('command sudo -n systemctl reload '.$config->fpmService);
+        }
         $phase = 'post-restore health';
         invoke('accelerator:health');
         $decode(run($runtime('post-restore-health', $mode), forceOutput: true));
@@ -397,7 +409,7 @@ task('accelerator:backup-restore', function () use ($config): void {
         run($runtime('restore-failed', $mode, $backupId).' || true', forceOutput: true);
 
         throw new RuntimeException(
-            "Restore failed during {$phase}".($maintenance ? ' while the stage remains in maintenance mode with its Supervisor group stopped.' : ' before maintenance mode was enabled.').' '.$exception->getMessage(),
+            "Restore failed during {$phase}".($maintenance ? ' while the stage remains in maintenance mode with its application writer processes stopped.' : ' before maintenance mode was enabled.').' '.$exception->getMessage(),
             previous: $exception,
         );
     } finally {
