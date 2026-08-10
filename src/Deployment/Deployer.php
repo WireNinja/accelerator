@@ -12,8 +12,11 @@ final readonly class Deployer
 {
     public function __construct(private string $projectRoot) {}
 
-    /** @param list<string> $options */
-    public function run(string $task, string $stage, array $options = [], bool $capture = false): string
+    /**
+     * @param  list<string>  $options
+     * @param  array<string, string>  $environment
+     */
+    public function run(string $task, string $stage, array $options = [], bool $capture = false, array $environment = []): string
     {
         $binary = $this->projectRoot.'/vendor/bin/dep';
 
@@ -25,6 +28,7 @@ final readonly class Deployer
         $process = new Process([$binary, '--file='.$recipe, $task, $stage, ...$options], $this->projectRoot, [
             'ACCELERATOR_PROJECT_ROOT' => $this->projectRoot,
             'ACCELERATOR_DEPLOY_STAGE' => $stage,
+            ...$environment,
         ]);
         $process->setTimeout(null);
 

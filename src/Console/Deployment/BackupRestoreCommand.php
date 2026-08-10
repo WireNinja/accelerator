@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace WireNinja\Accelerator\Console\Deployment;
 
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\File;
 use JsonException;
 use RuntimeException;
 use WireNinja\Accelerator\Console\Deployment\Concerns\ConfirmsDeployment;
@@ -34,6 +35,7 @@ final class BackupRestoreCommand extends Command
         $stage = (string) $this->option('stage');
         $startedAt = microtime(true);
         $restoreDelegated = false;
+        $receiptPath = null;
 
         try {
             $backupId = (string) $this->option('backup');
@@ -110,8 +112,16 @@ final class BackupRestoreCommand extends Command
                 $options[] = "--backup-disk={$disk}";
             }
 
+            $maintenanceSecret = bin2hex(random_bytes(24));
+            $receiptPath = $this->writeRestoreReceipt($config, $backupId, $mode, $maintenanceSecret);
             $restoreDelegated = true;
-            $deployer->run('accelerator:backup-restore', $stage, $options);
+            $deployer->run(
+                'accelerator:backup-restore',
+                $stage,
+                $options,
+                environment: ['ACCELERATOR_RESTORE_SECRET' => $maintenanceSecret],
+            );
+            File::delete($receiptPath);
 
             if ($this->option('json')) {
                 $this->writeJson([
@@ -136,9 +146,18 @@ final class BackupRestoreCommand extends Command
             }
 
             if ($this->option('json')) {
-                $this->writeJson(['schema' => 1, 'status' => 'ERROR', 'error' => $exception->getMessage()]);
+                $this->writeJson([
+                    'schema' => 1,
+                    'status' => 'ERROR',
+                    'error' => $exception->getMessage(),
+                    'restore_receipt' => is_string($receiptPath) && is_file($receiptPath) ? $receiptPath : null,
+                ]);
             } else {
                 $this->components->error($exception->getMessage());
+
+                if (is_string($receiptPath) && is_file($receiptPath)) {
+                    $this->components->warn("Maintenance bypass receipt retained locally at {$receiptPath}.");
+                }
             }
 
             return self::FAILURE;
@@ -153,5 +172,36 @@ final class BackupRestoreCommand extends Command
         } catch (JsonException $exception) {
             $this->components->error($exception->getMessage());
         }
+    }
+
+    private function writeRestoreReceipt(DeploymentConfig $config, string $backupId, string $mode, string $maintenanceSecret): string
+    {
+        $directory = base_path('.accelerator/restore-state');
+        File::ensureDirectoryExists($directory, 0700);
+        $path = "{$directory}/{$config->stage}.json";
+
+        try {
+            $contents = json_encode([
+                'schema' => 1,
+                'deployment_key' => $config->deploymentKey,
+                'stage' => $config->stage,
+                'domain' => $config->domain,
+                'root' => $config->deployRoot,
+                'backup_id' => $backupId,
+                'mode' => $mode,
+                'maintenance_secret' => $maintenanceSecret,
+                'created_at' => now('UTC')->toIso8601String(),
+            ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR).PHP_EOL;
+        } catch (JsonException $exception) {
+            throw new RuntimeException('Unable to encode the local restore receipt.', previous: $exception);
+        }
+
+        if (File::put($path, $contents, true) === false) {
+            throw new RuntimeException('Unable to write the local restore receipt.');
+        }
+
+        File::chmod($path, 0600);
+
+        return $path;
     }
 }

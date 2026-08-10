@@ -191,6 +191,11 @@ task('accelerator:backup-restore', function () use ($config): void {
     $username = $environment['DB_USERNAME'] ?? '';
     $host = $environment['DB_HOST'] ?? '';
     $socket = $environment['DB_SOCKET'] ?? '';
+    $maintenanceSecret = getenv('ACCELERATOR_RESTORE_SECRET');
+
+    if (! is_string($maintenanceSecret) || preg_match('/^[a-f0-9]{48}$/', $maintenanceSecret) !== 1) {
+        throw new RuntimeException('A valid local maintenance bypass receipt is required for restore.');
+    }
     $requiredCommands = in_array($mode, ['all', 'files'], true) ? ['rsync'] : [];
 
     if (in_array($mode, ['all', 'database'], true)) {
@@ -267,7 +272,6 @@ task('accelerator:backup-restore', function () use ($config): void {
         $emergency = $decode(run($runtime('create', 'all'), forceOutput: true));
         $phase = 'maintenance and process isolation';
         run($runtime('restore-started', $mode, $backupId).' || true', forceOutput: true);
-        $maintenanceSecret = bin2hex(random_bytes(24));
         run('cd '.escapeshellarg($config->currentPath())
             .' && command sudo -n -u '.escapeshellarg($config->runUser)
             .' '.escapeshellarg($config->phpBinary).' artisan down --secret='.escapeshellarg($maintenanceSecret).' --no-interaction');

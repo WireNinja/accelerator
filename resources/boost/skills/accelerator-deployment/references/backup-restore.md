@@ -53,11 +53,11 @@ Before restore, resolve and display exact SSH host, deployment key, stage, domai
 2. Verify exact archive identity, checksum, components, and active-revision equality before mutation.
 3. Acquire the stage deployment lock.
 4. Create and verify an emergency full backup of current data; abort if it fails.
-5. Alert restore started, enter maintenance, and stop only the exact stage Supervisor group.
+5. Write a mode-`0600`, Git-ignored local maintenance-bypass receipt under `.accelerator/restore-state/`, alert restore started, enter maintenance, and stop only the exact stage application-writer processes. NightOwl remains running because its database is separate.
 6. Restore the stage-owned local SQLite, MySQL/MariaDB, or PostgreSQL database with native tools when requested.
 7. Restore only manifest-owned mutable `storage/app` data when requested; preserve backup archives and ACLs.
 8. Clear/rebuild Laravel caches without migrations, restart the exact stage, leave maintenance, and run HTTPS/service health.
-9. Alert success and report the emergency backup ID.
+9. Alert success, report the emergency backup ID, and delete the local receipt. A failed restore retains the receipt for explicit recovery.
 
 External database hosts are not automatic restore targets. A failure after maintenance begins intentionally leaves that stage isolated; inspect the reported phase and emergency backup. Never touch another stage, domain, database, root, Nginx vhost, Supervisor group, or NightOwl database. NightOwl/Grafana are separate and are never restored here.
 

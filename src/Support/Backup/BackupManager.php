@@ -59,6 +59,7 @@ final readonly class BackupManager
                 $path = $this->findPath($diskName, $filename);
                 $manifest = $this->manifest($backupId, $path, $diskName, $mode, $revision);
                 $this->writeManifest($diskName, $path, $manifest);
+                $this->protectArtifact($diskName, $path);
                 $backups[] = $this->verify($backupId, $diskName);
             }
 
@@ -544,6 +545,19 @@ final readonly class BackupManager
 
         if (! Storage::disk($diskName)->put($archivePath.'.accelerator.json', $contents)) {
             throw new RuntimeException("Unable to write backup manifest on disk [{$diskName}].");
+        }
+    }
+
+    private function protectArtifact(string $diskName, string $archivePath): void
+    {
+        $disk = Storage::disk($diskName);
+
+        foreach ([$archivePath, $archivePath.'.accelerator.json'] as $path) {
+            try {
+                $disk->setVisibility($path, 'private');
+            } catch (Throwable $exception) {
+                throw new RuntimeException("Unable to make backup artifact [{$path}] private on disk [{$diskName}].", previous: $exception);
+            }
         }
     }
 
