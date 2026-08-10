@@ -627,6 +627,12 @@ final class ConfigureCommand extends Command
     private function backupEnvironmentValues(DeploymentConfig $deployment, array $current, array $local): array
     {
         $time = $current['ACCELERATOR_BACKUP_TIME'] ?? sprintf('02:%02d', $deployment->octanePort % 60);
+        $operatorTelegramToken = trim($current['ACCELERATOR_TELEGRAM_BOT_TOKEN'] ?? '') !== ''
+            ? $current['ACCELERATOR_TELEGRAM_BOT_TOKEN']
+            : ($local['ACCELERATOR_TELEGRAM_BOT_TOKEN'] ?? '');
+        $operatorTelegramChatId = trim($current['ACCELERATOR_TELEGRAM_CHAT_ID'] ?? '') !== ''
+            ? $current['ACCELERATOR_TELEGRAM_CHAT_ID']
+            : ($local['ACCELERATOR_TELEGRAM_CHAT_ID'] ?? '');
 
         if (preg_match('/^(?:[01]\d|2[0-3]):[0-5]\d$/', $time) !== 1) {
             $time = sprintf('02:%02d', $deployment->octanePort % 60);
@@ -642,8 +648,8 @@ final class ConfigureCommand extends Command
             'ACCELERATOR_BACKUP_TIME' => $time,
             'ACCELERATOR_BACKUP_MAXIMUM_AGE_DAYS' => $current['ACCELERATOR_BACKUP_MAXIMUM_AGE_DAYS'] ?? '2',
             'ACCELERATOR_BACKUP_MAXIMUM_STORAGE_MEGABYTES' => $current['ACCELERATOR_BACKUP_MAXIMUM_STORAGE_MEGABYTES'] ?? '5000',
-            'ACCELERATOR_TELEGRAM_BOT_TOKEN' => $current['ACCELERATOR_TELEGRAM_BOT_TOKEN'] ?? $local['ACCELERATOR_TELEGRAM_BOT_TOKEN'] ?? '',
-            'ACCELERATOR_TELEGRAM_CHAT_ID' => $current['ACCELERATOR_TELEGRAM_CHAT_ID'] ?? $local['ACCELERATOR_TELEGRAM_CHAT_ID'] ?? '',
+            'ACCELERATOR_TELEGRAM_BOT_TOKEN' => $operatorTelegramToken,
+            'ACCELERATOR_TELEGRAM_CHAT_ID' => $operatorTelegramChatId,
             'ACCELERATOR_TELEGRAM_NOTIFY_SUCCESSES' => $current['ACCELERATOR_TELEGRAM_NOTIFY_SUCCESSES'] ?? 'false',
         ];
     }
