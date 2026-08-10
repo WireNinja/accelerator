@@ -116,7 +116,7 @@ task('accelerator:frontend', function () use ($config, $nodeEnvironment): void {
 });
 
 task('accelerator:backup', function () use ($config): void {
-    $arguments = ['accelerator:backup:runtime', 'create', '--only=database', '--no-interaction'];
+    $arguments = ['artisan', 'accelerator:backup:runtime', 'create', '--only=database', '--no-interaction'];
 
     if (test('[ -f '.$config->currentPath().'/REVISION ]')) {
         $revision = trim(run('cat '.escapeshellarg($config->currentPath().'/REVISION')));
@@ -152,6 +152,7 @@ task('accelerator:backup-runtime', function () use ($config): void {
     }
 
     $arguments = [
+        'artisan',
         'accelerator:backup:runtime',
         $action,
         "--only={$mode}",
@@ -229,7 +230,7 @@ task('accelerator:backup-restore', function () use ($config): void {
         return $result;
     };
     $runtime = static function (string $action, string $mode, string $backupId = '', string $disk = '') use ($config): string {
-        $arguments = ['accelerator:backup:runtime', $action, "--only={$mode}", '--no-interaction'];
+        $arguments = ['artisan', 'accelerator:backup:runtime', $action, "--only={$mode}", '--no-interaction'];
 
         if ($backupId !== '') {
             $arguments[] = "--backup={$backupId}";
