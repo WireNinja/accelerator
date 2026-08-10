@@ -16,13 +16,22 @@ Do not copy `getActivitylogOptions()` into models and do not use `logAll()` with
 
 ## Relationship changes
 
-Normal model events do not capture `sync`/`attach`/`detach` differences. For Filament create/edit pages that save configured relationships, use `LogsResourceRelationshipActivity`. For custom domain actions:
+Normal model events do not capture `sync`/`attach`/`detach` differences. For Filament create/edit pages that save configured relationships, use `LogsResourceRelationshipActivity`. Inject the logger into custom domain Actions or Services:
 
 ```php
-$logger = resolve(RelationshipActivityLogger::class);
-$before = $logger->snapshot($record);
-// relationship mutation
-$logger->logIfChanged($record, $before);
+final class UpdateOrderItems
+{
+    public function __construct(
+        private RelationshipActivityLogger $activityLogger,
+    ) {}
+
+    public function handle(Order $order, array $items): void
+    {
+        $before = $this->activityLogger->snapshot($order);
+        $order->items()->sync($items);
+        $this->activityLogger->logIfChanged($order, $before);
+    }
+}
 ```
 
 Keep `ActivitiesRelationManager` read-only and group it with native `RelationGroup` when exposing audit history.

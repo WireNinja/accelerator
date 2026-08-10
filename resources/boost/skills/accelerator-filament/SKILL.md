@@ -13,11 +13,15 @@ description: Build or review Accelerator Filament v5 panels, resources, forms, t
 4. Make authorization policy-driven; UI visibility is not security.
 5. Run the focused resource verifier if present, then static analysis and the affected authenticated page.
 
+For an end-to-end model-backed business feature, activate `accelerator-feature-development`; this skill owns Filament-specific implementation details, not the whole domain workflow.
+
 Context output is navigation, not truth. Do not add UI code merely to satisfy a scanner.
 
 ## Resource truth
 
 Filament's registered panel/resource is authoritative. Use `accelerator:make-resource` for deterministic scaffolding. Navigation groups come from app-owned `App\Enums\System\NavigationGroup`; keep each resource icon, label, policy, and panel placement in the resource itself. Do not recreate `BetterResource` or a resource registry enum.
+
+Run migrations before using `accelerator:make-resource --generate`. Schema-driven generation requires the current database table and may not be combined with `--migration`.
 
 Custom Shield abilities belong in a permission-specific declaration, not navigation metadata. Super Admin bypass/access must remain valid after Shield regeneration.
 
@@ -30,7 +34,7 @@ Custom Shield abilities belong in a permission-specific declaration, not navigat
 - Block unsafe self-mutation and protect Super Admin targets explicitly.
 - Run `shield:safe-regenerate` only through the Accelerator-safe workflow.
 
-Bulk actions remain forbidden for this distribution because auditability and per-record authorization are preferred.
+Bulk actions are disabled by default because auditability and per-record authorization are preferred. Add one only for an explicit business need with policy checks, per-record safety, activity logging, bounded workload, and a clear partial-failure strategy.
 
 ## Global defaults
 

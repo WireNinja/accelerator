@@ -51,7 +51,9 @@ php artisan accelerator:dependencies --json
 php artisan accelerator:feature:list --json
 php artisan accelerator:context model User
 php artisan accelerator:context resource user
-php artisan accelerator:make-resource Product --panel=admin --group='Master Data' --icon=lucide-package --model --migration --factory --json
+php artisan make:model Product --migration --factory --no-interaction
+php artisan migrate --no-interaction
+php artisan accelerator:make-resource Product --panel=admin --group='Master Data' --icon=lucide-package --generate --json
 php artisan accelerator:verify-resource product --compact
 php artisan accelerator:configure
 composer phpstan
@@ -59,7 +61,7 @@ pnpm audit
 pnpm run build
 ```
 
-`accelerator:make-resource` delegates generation to Filament, applies only navigation metadata requested by the caller, regenerates Shield safely, and verifies registration/model/policy invariants. Resource labels, icons, policies, and panel placement remain readable in the resource itself. Navigation group label/icon/order is app-owned in `App\Enums\System\NavigationGroup`.
+`accelerator:make-resource` delegates generation to Filament, applies only navigation metadata requested by the caller, regenerates Shield safely, and verifies registration/model/policy invariants. Finish and migrate the schema before using `--generate`; Accelerator rejects combining `--generate` with `--migration`. Resource labels, icons, policies, and panel placement remain readable in the resource itself. Navigation group label/icon/order is app-owned in `App\Enums\System\NavigationGroup`.
 
 ## Configuration ownership
 
@@ -178,6 +180,7 @@ PHPStan/Larastan level 5 is the minimum. Do not add a baseline or suppress real 
 | Fresh install/resume | `accelerator-installation` |
 | Existing-app migration | `accelerator-breaking-changes` |
 | Env/features/deploy topology | `accelerator-env-config` |
+| End-to-end business feature | `accelerator-feature-development` |
 | Filament/Shield/resources/UI | `accelerator-filament` |
 | Models/schema/casts/relations | `accelerator-model-context` |
 | Activity logging | `accelerator-activity-log` |
@@ -189,4 +192,4 @@ PHPStan/Larastan level 5 is the minimum. Do not add a baseline or suppress real 
 
 Command `--help`, source/framework registry, policy, database, and runtime state are truth. Context output and skills are navigation aids.
 
-The complete opinionated lifecycle is stored in `resources/boost/skills/accelerator-project-lifecycle/references/workflow.md`. Backup/restore operations are stored in `resources/boost/skills/accelerator-deployment/references/backup-restore.md`. NightOwl provisioning and diagnosis are stored in `resources/boost/skills/accelerator-nightowl/references/operations.md`. Keep those references synchronized with public Artisan commands and deployment invariants; do not duplicate divergent workflows elsewhere.
+The daily schema-to-RBAC business workflow is stored in `resources/boost/skills/accelerator-feature-development/SKILL.md`. The complete opinionated lifecycle is stored in `resources/boost/skills/accelerator-project-lifecycle/references/workflow.md`. Backup/restore operations are stored in `resources/boost/skills/accelerator-deployment/references/backup-restore.md`. NightOwl provisioning and diagnosis are stored in `resources/boost/skills/accelerator-nightowl/references/operations.md`. Keep those references synchronized with public Artisan commands and deployment invariants; do not duplicate divergent workflows elsewhere.

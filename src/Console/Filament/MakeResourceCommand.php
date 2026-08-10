@@ -24,7 +24,7 @@ use UnitEnum;
     {--group= : NavigationGroup case, value, or label}
     {--icon= : Registered Blade icon name}
     {--label= : Singular model label}
-    {--generate : Generate fields from the database}
+    {--generate : Generate fields from an existing migrated database table}
     {--view : Generate a view page}
     {--soft-deletes : Add soft-delete support}
     {--model : Create the model}
@@ -42,6 +42,10 @@ final class MakeResourceCommand extends Command
         $label = $this->stringOption('label');
 
         try {
+            if ($this->option('generate') && $this->option('migration')) {
+                throw new RuntimeException('--generate requires an existing migrated table and cannot be combined with --migration. Create and migrate the schema first.');
+            }
+
             if ($icon !== null) {
                 $icons->svg($icon);
             }

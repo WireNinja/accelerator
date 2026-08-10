@@ -9,6 +9,7 @@ Accelerator is a proprietary, batteries-included foundation for Laravel 13 Filam
 - existing-app migration: `accelerator-breaking-changes`
 - env/features/deploy topology: `accelerator-env-config`
 - Filament/Shield/resources/UI: `accelerator-filament`
+- end-to-end business features: `accelerator-feature-development`
 - models/schema/casts/relations: `accelerator-model-context`
 - audit logging: `accelerator-activity-log`
 - PWA/Vite: `accelerator-pwa-development`
@@ -26,6 +27,25 @@ Accelerator is a proprietary, batteries-included foundation for Laravel 13 Filam
 - Inertia, Vue, Wayfinder, Fortify, ticketing, custom telemetry, Insider, Envoy, and generated GitHub Actions are absent.
 - `Model::unguard()`, searchable/preloaded Selects, overrideable table defaults, image editing, 100 MB uploads, VerticalWizard, and LocationPicker are intentional.
 - Use native Laravel/Filament/package behavior before creating Accelerator abstractions.
+
+### Solo-developer execution contract
+
+- Inspect repository state, installed versions, sibling conventions, and available commands before asking questions. Ask only when a missing decision materially changes business behavior, data design, authorization, security, destructive scope, cost, or external state.
+- The owner controls product intent and final trade-offs. Verify technical claims and challenge conflicts with concrete repository or version evidence.
+- Keep simple CRUD native. Extract a named Action for a real business operation and a Service for a reusable capability or integration; do not generate architecture ceremonially.
+- Prefer native framework behavior, then existing dependencies, then a small direct implementation. Add a dependency only when it removes meaningful complexity and is maintained, compatible, narrowly scoped, and supply-chain acceptable.
+- Use constructor injection in application classes. Add interfaces only at real external or replaceable boundaries.
+- Comments explain why, invariants, non-obvious constraints, or important trade-offs. Never narrate obvious code. Use PHPDoc for contracts and static-analysis shapes, not giant model documentation.
+- Do not create, modify, or delete test files unless the owner explicitly requests tests in the current prompt. Existing relevant tests may run because they are read-only. Otherwise prefer Pint, PHPStan/Larastan, Accelerator verifiers, command diagnostics, and focused authenticated UI checks. This project rule overrides generic Boost guidance that would require creating or updating tests for every change.
+- Inspect Git status before editing and committing. Commit all approved task changes, but never silently include unrelated work or secrets. Use `git add -A` only after every detected change is confirmed for the checkpoint.
+- If an implementation mistake occurs, state it plainly, report concrete impact, recover safely, and do not claim success without evidence.
+
+### Application architecture invariants
+
+- Treat all backend code as Octane-sensitive: no request-derived state in static properties or singletons; use scoped bindings and method-time request/auth resolution.
+- Policies are the authorization boundary. Filament visibility is not security; Shield regeneration must use Accelerator's safe workflow.
+- Multi-write business invariants belong in transactions with database constraints or locks where races are possible. Durable side effects run after commit.
+- `Model::unguard()` is intentional application-wide behavior. Do not add noisy `$fillable` arrays merely to simulate protection; validate and authorize at input and action boundaries.
 
 ### Configuration boundaries
 
