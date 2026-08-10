@@ -179,7 +179,8 @@ final class CoreServiceProvider extends ServiceProvider
         ])));
         $config->set('backup.backup.destination.disks', $config->get('accelerator.backup.disks', ['local']));
         $config->set('backup.backup.verify_backup', true);
-        $config->set('backup.notifications.notifications', []);
+        $nativeNotifications = (array) $config->get('backup.notifications.notifications', []);
+        $config->set('backup.notifications.notifications', array_fill_keys(array_keys($nativeNotifications), []));
         $config->set('backup.monitor_backups', [[
             'name' => $config->get('accelerator.backup.name', $config->get('app.name')),
             'disks' => $config->get('accelerator.backup.disks', ['local']),

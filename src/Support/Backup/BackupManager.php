@@ -134,7 +134,6 @@ final readonly class BackupManager
     public function status(bool $verifyNewest = false): array
     {
         $monitorHealthy = Artisan::call('backup:monitor', [
-            '--disable-notifications' => true,
             '--no-interaction' => true,
         ]) === 0;
         $inventory = $this->inventory();
@@ -150,7 +149,7 @@ final readonly class BackupManager
             $newest = $backups[0] ?? null;
             $totalSize = array_sum(array_column($backups, 'size_bytes'));
             $ageDays = is_array($newest) && is_string($newest['created_at'] ?? null)
-                ? (int) floor(now()->diffInDays($newest['created_at']))
+                ? (int) floor(abs(now()->diffInDays($newest['created_at'])))
                 : null;
             $destinationHealthy = is_array($newest)
                 && ($newest['manifest'] ?? false) === true
