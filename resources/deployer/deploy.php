@@ -392,14 +392,14 @@ task('accelerator:backup-restore', function () use ($config): void {
         $phase = 'cache and service recovery';
         run('cd '.escapeshellarg($config->currentPath())
             .' && command sudo -n -u '.escapeshellarg($config->runUser)
-            .' '.escapeshellarg($config->phpBinary).' artisan optimize:clear --no-interaction'
+            .' '.escapeshellarg($config->phpBinary).' artisan cache:clear --no-interaction'
             .' && command sudo -n -u '.escapeshellarg($config->runUser)
-            .' '.escapeshellarg($config->phpBinary).' artisan optimize --no-interaction'
+            .' '.escapeshellarg($config->phpBinary).' artisan view:clear --no-interaction'
             .' && command sudo -n -u '.escapeshellarg($config->runUser)
             .' '.escapeshellarg($config->phpBinary).' artisan up --no-interaction');
         $maintenance = false;
         foreach ($restoreServices as $service) {
-            run('command sudo -n supervisorctl restart '.escapeshellarg($config->group.':'.$config->programName($service)));
+            run('command sudo -n supervisorctl start '.escapeshellarg($config->group.':'.$config->programName($service)));
         }
 
         if ($config->httpRuntime === 'fpm') {
