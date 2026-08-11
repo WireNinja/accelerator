@@ -65,6 +65,8 @@ final class CoreServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
+        $this->configureBackupFilesystem();
+
         if (! config('accelerator.features.telegram')) {
             return;
         }
@@ -167,6 +169,14 @@ final class CoreServiceProvider extends ServiceProvider
     private function configureBackup(): void
     {
         $config = $this->app['config'];
+        $disks = array_values(array_filter((array) $config->get('accelerator.backup.disks', ['local']), is_string(...)));
+
+        if ($config->get('accelerator.backup.s3.enabled', true)) {
+            $disks[] = (string) $config->get('accelerator.backup.s3.disk', 'accelerator-s3');
+        }
+
+        $disks = array_values(array_unique($disks));
+        $config->set('accelerator.backup.disks', $disks);
         $config->set('backup.backup.name', $config->get('accelerator.backup.name', $config->get('app.name')));
         $config->set('backup.backup.source.files.include', $config->get('accelerator.backup.include', [storage_path('app')]));
         $config->set('backup.backup.source.files.relative_path', base_path());
@@ -177,13 +187,13 @@ final class CoreServiceProvider extends ServiceProvider
             storage_path('app/private/'.$config->get('accelerator.backup.name')),
             storage_path('app/'.$config->get('accelerator.backup.name')),
         ])));
-        $config->set('backup.backup.destination.disks', $config->get('accelerator.backup.disks', ['local']));
+        $config->set('backup.backup.destination.disks', $disks);
         $config->set('backup.backup.verify_backup', true);
         $nativeNotifications = (array) $config->get('backup.notifications.notifications', []);
         $config->set('backup.notifications.notifications', array_fill_keys(array_keys($nativeNotifications), []));
         $config->set('backup.monitor_backups', [[
             'name' => $config->get('accelerator.backup.name', $config->get('app.name')),
-            'disks' => $config->get('accelerator.backup.disks', ['local']),
+            'disks' => $disks,
             'health_checks' => [
                 MaximumAgeInDays::class => $config->get('accelerator.backup.maximum_age_days', 2),
                 MaximumStorageInMegabytes::class => $config->get('accelerator.backup.maximum_storage_megabytes', 5000),
@@ -193,6 +203,33 @@ final class CoreServiceProvider extends ServiceProvider
         foreach ((array) $config->get('accelerator.backup.retention', []) as $key => $value) {
             $config->set("backup.cleanup.default_strategy.{$key}", $value);
         }
+    }
+
+    private function configureBackupFilesystem(): void
+    {
+        if (! config('accelerator.backup.s3.enabled', true)) {
+            return;
+        }
+
+        $deploymentKey = (string) config('accelerator.operations.deployment_key', 'local');
+        $stage = (string) config('accelerator.operations.stage', 'local');
+        $prefix = trim((string) config('accelerator.backup.s3.prefix', 'accelerator'), '/');
+        $root = implode('/', array_filter([$prefix, $deploymentKey, $stage]));
+        $disk = (string) config('accelerator.backup.s3.disk', 'accelerator-s3');
+
+        config()->set("filesystems.disks.{$disk}", [
+            'driver' => 's3',
+            'key' => config('accelerator.backup.s3.access_key_id'),
+            'secret' => config('accelerator.backup.s3.secret_access_key'),
+            'region' => config('accelerator.backup.s3.region', 'auto'),
+            'bucket' => config('accelerator.backup.s3.bucket'),
+            'endpoint' => config('accelerator.backup.s3.endpoint'),
+            'root' => $root,
+            'use_path_style_endpoint' => false,
+            'throw' => true,
+            'report' => true,
+            'visibility' => 'private',
+        ]);
     }
 
     private function configureBackupSchedule(): void

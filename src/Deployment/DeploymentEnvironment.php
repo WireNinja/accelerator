@@ -89,6 +89,14 @@ final readonly class DeploymentEnvironment
             $errors[] = 'ACCELERATOR_BACKUP_DISKS must contain at least one configured filesystem disk.';
         }
 
+        $s3Enabled = $values['ACCELERATOR_BACKUP_S3_ENABLED'] ?? 'true';
+
+        if (! in_array($s3Enabled, ['true', 'false'], true)) {
+            $errors[] = 'ACCELERATOR_BACKUP_S3_ENABLED must be true or false.';
+        } elseif ($s3Enabled === 'true') {
+            $errors = [...$errors, ...$this->validateS3Backup($values, $requireExternalSecrets)];
+        }
+
         foreach (['ACCELERATOR_BACKUP_MAXIMUM_AGE_DAYS', 'ACCELERATOR_BACKUP_MAXIMUM_STORAGE_MEGABYTES'] as $key) {
             if (filter_var($values[$key] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]) === false) {
                 $errors[] = "{$key} must be a positive integer.";
@@ -126,6 +134,44 @@ final readonly class DeploymentEnvironment
             if ($requireExternalSecrets && ($values['NIGHTOWL_DB_PASSWORD'] ?? '') === '') {
                 $errors[] = 'NIGHTOWL_DB_PASSWORD is required while NightOwl is enabled.';
             }
+        }
+
+        return $errors;
+    }
+
+    /** @param array<string, string> $values @return list<string> */
+    private function validateS3Backup(array $values, bool $requireExternalSecrets): array
+    {
+        $errors = [];
+        $required = ['ACCELERATOR_BACKUP_S3_BUCKET', 'ACCELERATOR_BACKUP_S3_ENDPOINT', 'ACCELERATOR_BACKUP_S3_REGION', 'ACCELERATOR_BACKUP_S3_PREFIX'];
+
+        if ($requireExternalSecrets) {
+            $required = [...$required, 'ACCELERATOR_BACKUP_S3_ACCESS_KEY_ID', 'ACCELERATOR_BACKUP_S3_SECRET_ACCESS_KEY'];
+        }
+
+        foreach ($required as $key) {
+            if (trim($values[$key] ?? '') === '') {
+                $errors[] = "{$key} is required while S3 backup is enabled.";
+            }
+        }
+
+        $endpoint = trim($values['ACCELERATOR_BACKUP_S3_ENDPOINT'] ?? '');
+
+        if ($endpoint !== '' && (filter_var($endpoint, FILTER_VALIDATE_URL) === false || parse_url($endpoint, PHP_URL_SCHEME) !== 'https')) {
+            $errors[] = 'ACCELERATOR_BACKUP_S3_ENDPOINT must be an absolute HTTPS URL.';
+        }
+
+        $bucket = trim($values['ACCELERATOR_BACKUP_S3_BUCKET'] ?? '');
+
+        if ($bucket !== '' && preg_match('/^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/', $bucket) !== 1) {
+            $errors[] = 'ACCELERATOR_BACKUP_S3_BUCKET must be a valid lowercase S3 bucket name.';
+        }
+
+        $prefix = trim($values['ACCELERATOR_BACKUP_S3_PREFIX'] ?? '');
+        $segments = explode('/', trim($prefix, '/'));
+
+        if ($prefix !== '' && ($prefix !== trim($prefix, '/') || in_array('..', $segments, true) || preg_match('#^[A-Za-z0-9._/-]+$#', $prefix) !== 1)) {
+            $errors[] = 'ACCELERATOR_BACKUP_S3_PREFIX must be a safe relative object prefix.';
         }
 
         return $errors;

@@ -10,18 +10,31 @@ Each ignored `.accelerator/environments/{stage}.env` owns:
 ACCELERATOR_BACKUP_ENABLED=true
 ACCELERATOR_BACKUP_NAME=acc-{deployment_key}-{stage}
 ACCELERATOR_BACKUP_DISKS=local
+ACCELERATOR_BACKUP_S3_ENABLED=true
+ACCELERATOR_BACKUP_S3_ACCESS_KEY_ID=
+ACCELERATOR_BACKUP_S3_SECRET_ACCESS_KEY=
+ACCELERATOR_BACKUP_S3_REGION=auto
+ACCELERATOR_BACKUP_S3_BUCKET=db-backup
+ACCELERATOR_BACKUP_S3_ENDPOINT=https://ACCOUNT_ID.r2.cloudflarestorage.com
+ACCELERATOR_BACKUP_S3_PREFIX=accelerator
 ACCELERATOR_BACKUP_TIME=02:10
 ACCELERATOR_BACKUP_MAXIMUM_AGE_DAYS=2
 ACCELERATOR_BACKUP_MAXIMUM_STORAGE_MEGABYTES=5000
 ACCELERATOR_TELEGRAM_BOT_TOKEN=
 ACCELERATOR_TELEGRAM_CHAT_ID=
 ACCELERATOR_TELEGRAM_NOTIFY_SUCCESSES=false
+
 # BACKUP_ARCHIVE_PASSWORD=
+
 ```
 
 The `ACCELERATOR_TELEGRAM_*` pair is the stage operator channel for deployment and backup incidents. It is independent from user/profile `TELEGRAM_BOT_TOKEN`. Missing operator credentials produce a doctor warning but do not block operations. Telegram delivery is best-effort and never changes the primary operation result.
 
-`local` is zero-configuration but does not survive total VPS loss. Add a configured S3-compatible Laravel disk to `ACCELERATOR_BACKUP_DISKS` for offsite durability. Do not store credentials in `deploy.json`.
+`ACCELERATOR_BACKUP_DISKS` lists ordinary Laravel destinations and keeps `local` for fast VPS-side restores. `ACCELERATOR_BACKUP_S3_ENABLED=true` additionally activates Accelerator's private `accelerator-s3` disk, so each archive and manifest are written to both local storage and the S3-compatible destination. Fresh deployed stages default this flag to `true`; explicitly use `false` for a low-criticality project that accepts total-VPS-loss risk.
+
+Cloudflare R2 uses the account endpoint and region `auto`. The runtime needs only an R2 S3 Access Key ID and Secret Access Key with Object Read & Write access to the selected bucket; it does not use the general Cloudflare API token. Credentials must support listing, reading, writing, and deleting objects because verification, restore, and retention cleanup use all four capabilities. Keep all values in the ignored stage env, never `deploy.json`.
+
+With the default prefix, object keys are isolated as `accelerator/{deployment_key}/{stage}/acc-{deployment_key}-{stage}/...`. A single bucket can therefore safely hold many projects and both stages without collisions. Do not add `accelerator-s3` manually to `ACCELERATOR_BACKUP_DISKS`; the boolean flag owns it.
 
 ## Public workflow
 

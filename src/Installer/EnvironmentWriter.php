@@ -143,6 +143,13 @@ final readonly class EnvironmentWriter
             'ACCELERATOR_BACKUP_ENABLED' => 'true',
             'ACCELERATOR_BACKUP_NAME' => 'local',
             'ACCELERATOR_BACKUP_DISKS' => 'local',
+            'ACCELERATOR_BACKUP_S3_ENABLED' => 'false',
+            'ACCELERATOR_BACKUP_S3_ACCESS_KEY_ID' => '',
+            'ACCELERATOR_BACKUP_S3_SECRET_ACCESS_KEY' => '',
+            'ACCELERATOR_BACKUP_S3_REGION' => 'auto',
+            'ACCELERATOR_BACKUP_S3_BUCKET' => '',
+            'ACCELERATOR_BACKUP_S3_ENDPOINT' => '',
+            'ACCELERATOR_BACKUP_S3_PREFIX' => 'accelerator',
             'ACCELERATOR_BACKUP_TIME' => '02:00',
             'ACCELERATOR_BACKUP_MAXIMUM_AGE_DAYS' => '2',
             'ACCELERATOR_BACKUP_MAXIMUM_STORAGE_MEGABYTES' => '5000',
@@ -204,6 +211,13 @@ final readonly class EnvironmentWriter
         $contents = $this->setEnvironmentValue($contents, 'ACCELERATOR_BACKUP_ENABLED', 'true');
         $contents = $this->setEnvironmentValue($contents, 'ACCELERATOR_BACKUP_NAME', "acc-{$this->context->plan->deploymentKey}-{$stage}");
         $contents = $this->setEnvironmentValue($contents, 'ACCELERATOR_BACKUP_DISKS', 'local');
+        $contents = $this->setEnvironmentValue($contents, 'ACCELERATOR_BACKUP_S3_ENABLED', 'true');
+        $contents = $this->setEnvironmentValue($contents, 'ACCELERATOR_BACKUP_S3_ACCESS_KEY_ID', '');
+        $contents = $this->setEnvironmentValue($contents, 'ACCELERATOR_BACKUP_S3_SECRET_ACCESS_KEY', '');
+        $contents = $this->setEnvironmentValue($contents, 'ACCELERATOR_BACKUP_S3_REGION', 'auto');
+        $contents = $this->setEnvironmentValue($contents, 'ACCELERATOR_BACKUP_S3_BUCKET', '');
+        $contents = $this->setEnvironmentValue($contents, 'ACCELERATOR_BACKUP_S3_ENDPOINT', '');
+        $contents = $this->setEnvironmentValue($contents, 'ACCELERATOR_BACKUP_S3_PREFIX', 'accelerator');
         $contents = $this->setEnvironmentValue($contents, 'ACCELERATOR_BACKUP_TIME', sprintf('02:%02d', $stagePortBase % 60));
         $contents = $this->setEnvironmentValue($contents, 'ACCELERATOR_BACKUP_MAXIMUM_AGE_DAYS', '2');
         $contents = $this->setEnvironmentValue($contents, 'ACCELERATOR_BACKUP_MAXIMUM_STORAGE_MEGABYTES', '5000');

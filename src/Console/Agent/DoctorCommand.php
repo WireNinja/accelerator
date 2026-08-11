@@ -283,8 +283,28 @@ final class DoctorCommand extends Command
         $telegramConfigured = ($values['ACCELERATOR_TELEGRAM_BOT_TOKEN'] ?? '') !== '' && ($values['ACCELERATOR_TELEGRAM_CHAT_ID'] ?? '') !== '';
         $this->assert($label, 'Operator Telegram', $telegramConfigured ? 'configured' : 'not configured', $telegramConfigured, 'Operational alerts are disabled. Configure both ACCELERATOR_TELEGRAM_BOT_TOKEN and ACCELERATOR_TELEGRAM_CHAT_ID.', 'warning');
         $disks = array_filter(array_map('trim', explode(',', $values['ACCELERATOR_BACKUP_DISKS'] ?? 'local')));
+        $s3Enabled = ($values['ACCELERATOR_BACKUP_S3_ENABLED'] ?? 'true') === 'true';
+
+        if ($s3Enabled) {
+            $disks[] = 'accelerator-s3';
+        }
+
         $offsite = array_values(array_diff($disks, ['local']));
         $this->assert($label, 'Backup durability', $offsite === [] ? 'same VPS only' : 'offsite: '.implode(', ', $offsite), $offsite !== [], 'Local-only backups do not survive total VPS loss.', 'warning');
+        $s3Configured = collect([
+            'ACCELERATOR_BACKUP_S3_ACCESS_KEY_ID',
+            'ACCELERATOR_BACKUP_S3_SECRET_ACCESS_KEY',
+            'ACCELERATOR_BACKUP_S3_BUCKET',
+            'ACCELERATOR_BACKUP_S3_ENDPOINT',
+        ])->every(static fn (string $key): bool => trim($values[$key] ?? '') !== '');
+        $this->assert(
+            $label,
+            'S3 credentials',
+            $s3Enabled ? ($s3Configured ? 'configured' : 'incomplete') : 'disabled',
+            ! $s3Enabled || $s3Configured,
+            'S3 backup is enabled but its stage-owned credentials, bucket, or endpoint are incomplete.',
+            'warning',
+        );
     }
 
     private function inspectSecurity(): void

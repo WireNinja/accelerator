@@ -558,9 +558,15 @@ final class ConfigureCommand extends Command
         $environment['APP_URL'] = "https://{$domain}";
         $environment['APP_KEY'] = 'base64:'.base64_encode(random_bytes(32));
 
-        foreach (['DB_PASSWORD', 'GOOGLE_CLIENT_SECRET', 'NIGHTOWL_DB_PASSWORD', 'TELEGRAM_BOT_TOKEN', 'ACCELERATOR_TELEGRAM_BOT_TOKEN', 'ACCELERATOR_TELEGRAM_CHAT_ID', 'VAPID_PRIVATE_KEY'] as $key) {
+        foreach (['DB_PASSWORD', 'GOOGLE_CLIENT_SECRET', 'NIGHTOWL_DB_PASSWORD', 'TELEGRAM_BOT_TOKEN', 'ACCELERATOR_TELEGRAM_BOT_TOKEN', 'ACCELERATOR_TELEGRAM_CHAT_ID', 'ACCELERATOR_BACKUP_S3_ACCESS_KEY_ID', 'ACCELERATOR_BACKUP_S3_SECRET_ACCESS_KEY', 'VAPID_PRIVATE_KEY'] as $key) {
             $environment[$key] = '';
         }
+
+        $environment['ACCELERATOR_BACKUP_S3_ENABLED'] = 'true';
+        $environment['ACCELERATOR_BACKUP_S3_REGION'] = 'auto';
+        $environment['ACCELERATOR_BACKUP_S3_BUCKET'] ??= '';
+        $environment['ACCELERATOR_BACKUP_S3_ENDPOINT'] ??= '';
+        $environment['ACCELERATOR_BACKUP_S3_PREFIX'] = $environment['ACCELERATOR_BACKUP_S3_PREFIX'] ?? 'accelerator';
 
         unset($environment['ACCELERATOR_FEATURE_NIGHTWATCH'], $environment['NIGHTWATCH_TOKEN'], $environment['NIGHTWATCH_INGEST_URI']);
 
@@ -645,6 +651,13 @@ final class ConfigureCommand extends Command
             'ACCELERATOR_BACKUP_ENABLED' => $current['ACCELERATOR_BACKUP_ENABLED'] ?? 'true',
             'ACCELERATOR_BACKUP_NAME' => "acc-{$deployment->deploymentKey}-{$deployment->stage}",
             'ACCELERATOR_BACKUP_DISKS' => $current['ACCELERATOR_BACKUP_DISKS'] ?? 'local',
+            'ACCELERATOR_BACKUP_S3_ENABLED' => $current['ACCELERATOR_BACKUP_S3_ENABLED'] ?? 'true',
+            'ACCELERATOR_BACKUP_S3_ACCESS_KEY_ID' => $current['ACCELERATOR_BACKUP_S3_ACCESS_KEY_ID'] ?? '',
+            'ACCELERATOR_BACKUP_S3_SECRET_ACCESS_KEY' => $current['ACCELERATOR_BACKUP_S3_SECRET_ACCESS_KEY'] ?? '',
+            'ACCELERATOR_BACKUP_S3_REGION' => $current['ACCELERATOR_BACKUP_S3_REGION'] ?? 'auto',
+            'ACCELERATOR_BACKUP_S3_BUCKET' => $current['ACCELERATOR_BACKUP_S3_BUCKET'] ?? '',
+            'ACCELERATOR_BACKUP_S3_ENDPOINT' => $current['ACCELERATOR_BACKUP_S3_ENDPOINT'] ?? '',
+            'ACCELERATOR_BACKUP_S3_PREFIX' => $current['ACCELERATOR_BACKUP_S3_PREFIX'] ?? 'accelerator',
             'ACCELERATOR_BACKUP_TIME' => $time,
             'ACCELERATOR_BACKUP_MAXIMUM_AGE_DAYS' => $current['ACCELERATOR_BACKUP_MAXIMUM_AGE_DAYS'] ?? '2',
             'ACCELERATOR_BACKUP_MAXIMUM_STORAGE_MEGABYTES' => $current['ACCELERATOR_BACKUP_MAXIMUM_STORAGE_MEGABYTES'] ?? '5000',
@@ -704,7 +717,7 @@ final class ConfigureCommand extends Command
 
         foreach ($draft as $key => $value) {
             if (($current[$key] ?? null) !== $value) {
-                $sensitive = preg_match('/(?:KEY|PASSWORD|SECRET|TOKEN)$/', $key) === 1;
+                $sensitive = preg_match('/(?:KEY(?:_ID)?|PASSWORD|SECRET|TOKEN)$/', $key) === 1;
                 $rows[] = [
                     $key,
                     $sensitive && isset($current[$key]) ? '[redacted]' : ($current[$key] ?? '[blank]'),

@@ -44,6 +44,7 @@
         "codewithdennis/filament-advanced-choice": "^2.1",
         "codeat3/blade-simple-icons": "^8.12",
         "laravel/head": "^0.1",
+        "league/flysystem-aws-s3-v3": "^3.35",
         "nightowl/agent": "^2.1"
     },
     "require-dev": {
