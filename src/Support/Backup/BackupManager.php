@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace WireNinja\Accelerator\Support\Backup;
 
+use Carbon\CarbonImmutable;
 use Composer\InstalledVersions;
 use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Support\Facades\Artisan;
@@ -116,7 +117,11 @@ final readonly class BackupManager
                 ];
             }
 
-            usort($backups, static fn (array $left, array $right): int => strcmp((string) $right['created_at'], (string) $left['created_at']));
+            usort(
+                $backups,
+                static fn (array $left, array $right): int => CarbonImmutable::parse((string) $right['created_at'])->getTimestamp()
+                    <=> CarbonImmutable::parse((string) $left['created_at'])->getTimestamp(),
+            );
             $destinations[] = [
                 'disk' => $diskName,
                 'backups' => $backups,

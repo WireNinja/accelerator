@@ -44,7 +44,7 @@ final readonly class RemoteBackup
             throw new RuntimeException('Remote backup operation returned an invalid result document.');
         }
 
-        if (($result['status'] ?? 'ERROR') === 'ERROR') {
+        if (($result['status'] ?? 'ERROR') === 'ERROR' && $action !== 'status') {
             throw new RuntimeException(is_string($result['error'] ?? null) ? $result['error'] : 'Remote backup operation failed.');
         }
 
