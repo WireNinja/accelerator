@@ -13,13 +13,10 @@ use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Schedule;
-use Illuminate\Support\Facades\Session;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
-use Laravel\Nightwatch\Facades\Nightwatch;
 use Livewire\LivewireManager;
 use NotificationChannels\Telegram\Telegram;
-use SessionHandlerInterface;
 use Spatie\Backup\Tasks\Monitor\HealthChecks\MaximumAgeInDays;
 use Spatie\Backup\Tasks\Monitor\HealthChecks\MaximumStorageInMegabytes;
 use WireNinja\Accelerator\Console\Agent\DoctorCommand;
@@ -48,17 +45,13 @@ use WireNinja\Accelerator\Console\Deployment\LogsCommand;
 use WireNinja\Accelerator\Console\Deployment\NotifyTestCommand;
 use WireNinja\Accelerator\Console\Deployment\PortsCommand;
 use WireNinja\Accelerator\Console\Deployment\RuntimeBackupCommand;
-use WireNinja\Accelerator\Console\Deployment\ServiceRestartCommand;
-use WireNinja\Accelerator\Console\Deployment\ServiceStartCommand;
-use WireNinja\Accelerator\Console\Deployment\ServiceStatusCommand;
-use WireNinja\Accelerator\Console\Deployment\ServiceStopCommand;
 use WireNinja\Accelerator\Console\EnvCommand;
 use WireNinja\Accelerator\Console\FeatureListCommand;
 use WireNinja\Accelerator\Console\InstallCommand;
 use WireNinja\Accelerator\Console\ProvisionAdminCommand;
 use WireNinja\Accelerator\Contracts\AcceleratorUser;
 use WireNinja\Accelerator\Livewire\Synthesizers\BigDecimalSynth;
-use WireNinja\Accelerator\Support\OctaneTableSessionHandler;
+use WireNinja\Accelerator\Support\Observability\AuthenticatedOpenTelemetryHandler;
 use WireNinja\Accelerator\Support\Telegram\TelegramBotConfigurator;
 
 final class CoreServiceProvider extends ServiceProvider
@@ -66,6 +59,7 @@ final class CoreServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->configureBackupFilesystem();
+        $this->configureObservability();
 
         if (! config('accelerator.features.telegram')) {
             return;
@@ -84,16 +78,12 @@ final class CoreServiceProvider extends ServiceProvider
         $this->loadViewsFrom(__DIR__.'/../../resources/views', 'accelerator');
 
         $this->configureTrustedProxy();
-        $this->registerCustomSessionDriver();
         $this->configureBackup();
         $this->configureBackupSchedule();
+        $this->configureQueueSchedule();
         $this->configureEloquent();
         $this->configureApplicationDefaults();
         $this->configureSuperAdminGate();
-
-        if (config('accelerator.features.nightowl', false)) {
-            Nightwatch::captureDefaultVendorCommands();
-        }
 
         $this->app->make(LivewireManager::class)->propertySynthesizer(BigDecimalSynth::class);
 
@@ -120,10 +110,6 @@ final class CoreServiceProvider extends ServiceProvider
             EnvironmentValidateCommand::class,
             LogsCommand::class,
             PortsCommand::class,
-            ServiceRestartCommand::class,
-            ServiceStartCommand::class,
-            ServiceStatusCommand::class,
-            ServiceStopCommand::class,
             BackupCommand::class,
             BackupCleanupCommand::class,
             BackupListCommand::class,
@@ -152,18 +138,6 @@ final class CoreServiceProvider extends ServiceProvider
                 | Request::HEADER_X_FORWARDED_PORT
                 | Request::HEADER_X_FORWARDED_PROTO
         );
-    }
-
-    private function registerCustomSessionDriver(): void
-    {
-        if (config('session.driver') !== 'octane-table') {
-            return;
-        }
-
-        Session::extend('octane-table', static fn (Application $application): SessionHandlerInterface => new OctaneTableSessionHandler(
-            minutes: (int) $application['config']->get('session.lifetime'),
-            tableName: (string) $application['config']->get('session.octane_table', 'sessions'),
-        ));
     }
 
     private function configureBackup(): void
@@ -232,6 +206,15 @@ final class CoreServiceProvider extends ServiceProvider
         ]);
     }
 
+    private function configureObservability(): void
+    {
+        config()->set('logging.channels.otlp', [
+            'driver' => 'monolog',
+            'handler' => AuthenticatedOpenTelemetryHandler::class,
+            'level' => 'debug',
+        ]);
+    }
+
     private function configureBackupSchedule(): void
     {
         if (! $this->app->isProduction() || ! config('accelerator.backup.enabled', true)) {
@@ -254,6 +237,28 @@ final class CoreServiceProvider extends ServiceProvider
         Schedule::command('accelerator:backup:runtime status --json --no-interaction')
             ->dailyAt($parsed->addHour()->format('H:i'))
             ->withoutOverlapping(360);
+    }
+
+    private function configureQueueSchedule(): void
+    {
+        if (config('queue.default') !== 'database') {
+            return;
+        }
+
+        $timeout = max(1, (int) config('accelerator.queue.worker_timeout', 120));
+        $event = Schedule::command("queue:work database --queue=default --stop-when-empty --max-time=50 --timeout={$timeout} --tries=3 --memory=128")
+            ->name('accelerator-database-queue-drain')
+            ->withoutOverlapping(1)
+            ->runInBackground();
+
+        match ((int) config('accelerator.queue.drain_interval_seconds', 10)) {
+            5 => $event->everyFiveSeconds(),
+            15 => $event->everyFifteenSeconds(),
+            20 => $event->everyTwentySeconds(),
+            30 => $event->everyThirtySeconds(),
+            60 => $event->everyMinute(),
+            default => $event->everyTenSeconds(),
+        };
     }
 
     /**

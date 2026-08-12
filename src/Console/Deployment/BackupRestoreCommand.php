@@ -87,7 +87,7 @@ final class BackupRestoreCommand extends Command
                     ['Stage', $stage],
                     ['Domain', $config->domain],
                     ['Stable root', $config->deployRoot],
-                    ['Supervisor group', $config->group],
+                    ['Cron name', $config->cronName()],
                     ['Backup ID', $backupId],
                     ['Backup disk', $verified['disk'] ?? 'unknown'],
                     ['Backup created', $manifest['created_at'] ?? 'unknown'],

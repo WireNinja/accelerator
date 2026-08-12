@@ -1,0 +1,4 @@
+interface:
+  display_name: "Accelerator Observability"
+  short_description: "Operate Accelerator OpenTelemetry and OpenObserve"
+  default_prompt: "Use $accelerator-observability to configure or diagnose this application's OTLP export without exposing credentials."

@@ -10,7 +10,7 @@ use Spatie\Permission\Middleware\RoleMiddleware;
 use Spatie\Permission\Middleware\RoleOrPermissionMiddleware;
 use WireNinja\Accelerator\Http\Middleware\EnsureUserIsActive;
 use WireNinja\Accelerator\Http\Middleware\HandleAppearance;
-use WireNinja\Accelerator\Http\Middleware\SampleAuthenticatedNightOwlRequest;
+use WireNinja\Accelerator\Http\Middleware\TraceAuthenticatedRequest;
 
 final class BuiltinMiddleware
 {
@@ -20,8 +20,8 @@ final class BuiltinMiddleware
 
         $middleware->web(append: [
             HandleAppearance::class,
-            SampleAuthenticatedNightOwlRequest::class,
             EnsureUserIsActive::class,
+            TraceAuthenticatedRequest::class,
         ]);
 
         $middleware->alias([

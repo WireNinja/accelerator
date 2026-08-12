@@ -26,7 +26,6 @@ use Illuminate\View\Middleware\ShareErrorsFromSession;
 use WireNinja\Accelerator\Filament\AvatarProviders\DiceBearAvatarProvider;
 use WireNinja\Accelerator\Filament\Pages\Auth\Login;
 use WireNinja\Accelerator\Filament\Pages\ManageProfile;
-use WireNinja\Accelerator\Http\Middleware\SampleAuthenticatedNightOwlRequest;
 use WireNinja\Accelerator\Livewire\Sidebar;
 use WireNinja\Accelerator\Livewire\Topbar;
 use WireNinja\Accelerator\Settings\SystemSettings;
@@ -97,7 +96,6 @@ final class PanelPreset
                 AddQueuedCookiesToResponse::class,
                 StartSession::class,
                 AuthenticateSession::class,
-                SampleAuthenticatedNightOwlRequest::class,
                 ShareErrorsFromSession::class,
                 PreventRequestForgery::class,
                 SubstituteBindings::class,

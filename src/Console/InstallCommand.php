@@ -17,8 +17,7 @@ final class InstallCommand extends Command
     private const INSTALLER_OPTIONS = [
         'app-name', 'app-url', 'admin-name', 'admin-username', 'admin-email', 'admin-password',
         'package-manager', 'database', 'redis', 'features', 'deploy', 'deployment-mode', 'deployment-key',
-        'ssh-host', 'repo', 'branch', 'port-base', 'domain', 'deploy-root', 'staging-domain',
-        'staging-deploy-root', 'http-runtime',
+        'ssh-host', 'repo', 'branch', 'domain', 'deploy-root', 'staging-domain', 'staging-deploy-root',
     ];
 
     protected $signature = 'accelerator:install
@@ -38,12 +37,10 @@ final class InstallCommand extends Command
         {--ssh-host=}
         {--repo=}
         {--branch=main}
-        {--port-base=9010}
         {--domain=}
         {--deploy-root=}
         {--staging-domain=}
         {--staging-deploy-root=}
-        {--http-runtime=octane}
         {--json : Emit one stable JSON result and suppress progress output}';
 
     protected $description = 'Install Accelerator into a pristine Laravel application';

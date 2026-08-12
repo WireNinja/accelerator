@@ -1,6 +1,6 @@
 ---
 name: accelerator-feature-development
-description: Build or refactor an Accelerator business feature end to end from requirements, database schema, Eloquent model, policies and Shield RBAC through Filament resources, domain Actions or Services, activity logging, Octane safety, and verification. Use whenever implementing business CRUD, a domain workflow or state transition, a new model-backed Filament feature, or custom application logic spanning more than one layer.
+description: Build or refactor an Accelerator business feature end to end from requirements, database schema, Eloquent model, policies and Shield RBAC through Filament resources, domain Actions or Services, activity logging, worker safety, and verification. Use whenever implementing business CRUD, a domain workflow or state transition, a new model-backed Filament feature, or custom application logic spanning more than one layer.
 ---
 
 # Accelerator Feature Development
@@ -39,9 +39,9 @@ Ship the smallest complete business slice. Keep ordinary CRUD native; add archit
 - Bulk actions are disabled by default. Add one only for an explicit business need with policy checks, per-record safety, auditability, and bounded workload.
 - Follow Accelerator global form/table defaults and override them locally when cardinality or UX requires it.
 
-## Octane invariant
+## Runtime invariant
 
-Assume every backend feature runs in a long-lived Octane worker.
+HTTP requests run through PHP-FPM, while queue and scheduler commands may remain alive for a bounded interval.
 
 - Never keep request, authenticated user, tenant, mutable model, or other request-derived state in static properties or singletons.
 - Use scoped bindings for request-scoped services and resolve `request()` or authentication inside the method that needs it.

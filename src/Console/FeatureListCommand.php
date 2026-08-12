@@ -7,7 +7,6 @@ namespace WireNinja\Accelerator\Console;
 use Composer\InstalledVersions;
 use Illuminate\Console\Command;
 use JsonException;
-use WireNinja\Accelerator\Providers\HorizonServiceProvider;
 use WireNinja\Accelerator\Providers\OAuthServiceProvider;
 use WireNinja\Accelerator\Providers\PwaServiceProvider;
 
@@ -22,7 +21,7 @@ final class FeatureListCommand extends Command
     {
         $features = array_map(
             fn (string $feature): array => $this->feature($feature),
-            ['oauth', 'pwa', 'telegram', 'horizon', 'reverb', 'scout', 'nightowl'],
+            ['oauth', 'pwa', 'telegram', 'realtime', 'scout', 'observability'],
         );
         $mismatches = array_values(array_filter(
             $features,
@@ -68,13 +67,9 @@ final class FeatureListCommand extends Command
         [$runtimeLoaded, $source] = match ($feature) {
             'oauth' => [$this->providerLoaded(OAuthServiceProvider::class), OAuthServiceProvider::class],
             'pwa' => [$this->providerLoaded(PwaServiceProvider::class), PwaServiceProvider::class],
-            'horizon' => [$this->providerLoaded(HorizonServiceProvider::class), HorizonServiceProvider::class],
-            'reverb' => [config('broadcasting.default') === 'reverb', 'broadcasting.default'],
+            'realtime' => [config('broadcasting.default') === 'reverb', 'broadcasting.default'],
             'scout' => [config('scout.driver') !== 'collection', 'scout.driver'],
-            'nightowl' => [
-                (bool) config('nightowl.enabled', false) && ! (bool) config('nightowl.parallel_with_nightwatch', true),
-                'nightowl.enabled + nightowl.parallel_with_nightwatch=false',
-            ],
+            'observability' => [! (bool) config('opentelemetry.disabled', true), 'opentelemetry.disabled'],
             default => [$enabled, 'accelerator.features.telegram'],
         };
 

@@ -5,14 +5,14 @@ return [
         'oauth' => env('ACCELERATOR_FEATURE_OAUTH', false),
         'pwa' => env('ACCELERATOR_FEATURE_PWA', false),
         'telegram' => env('ACCELERATOR_FEATURE_TELEGRAM', false),
-        'horizon' => env('ACCELERATOR_FEATURE_HORIZON', false),
-        'reverb' => env('ACCELERATOR_FEATURE_REVERB', false),
+        'realtime' => env('ACCELERATOR_FEATURE_REALTIME', false),
         'scout' => env('ACCELERATOR_FEATURE_SCOUT', false),
-        'nightowl' => env('ACCELERATOR_FEATURE_NIGHTOWL', false),
+        'observability' => env('ACCELERATOR_FEATURE_OBSERVABILITY', false),
     ],
 
-    'nightowl' => [
-        'authenticated_request_sample_rate' => (float) env('NIGHTOWL_AUTHENTICATED_REQUEST_SAMPLE_RATE', 1.0),
+    'queue' => [
+        'drain_interval_seconds' => (int) env('ACCELERATOR_QUEUE_DRAIN_INTERVAL_SECONDS', 10),
+        'worker_timeout' => (int) env('ACCELERATOR_QUEUE_WORKER_TIMEOUT', 120),
     ],
 
     'pwa' => [
@@ -28,10 +28,6 @@ return [
         'panel' => 'App\\Enums\\System\\PanelEnum',
         'launcher' => 'App\\Enums\\System\\LauncherEnum',
         'navigation_group' => 'App\\Enums\\System\\NavigationGroup',
-    ],
-
-    'horizon' => [
-        'email_to' => env('HORIZON_EMAIL_TO'),
     ],
 
     'dev' => [

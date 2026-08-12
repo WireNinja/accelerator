@@ -26,10 +26,9 @@ final class Onboarding
         'oauth' => 'Google OAuth (safe default: existing users only)',
         'pwa' => 'Progressive Web App assets',
         'telegram' => 'Telegram notification channel',
-        'horizon' => 'Horizon queue dashboard and supervisor',
-        'reverb' => 'Reverb real-time broadcasting',
+        'realtime' => 'Realtime broadcasting through centralized Reverb',
         'scout' => 'Scout search with the database driver',
-        'nightowl' => 'NightOwl self-hosted observability (authenticated users only)',
+        'observability' => 'OpenTelemetry export to centralized OpenObserve',
     ];
 
     /** @var list<string> */
@@ -130,9 +129,9 @@ final class Onboarding
             default: 'sqlite',
         );
         $useRedis = confirm(
-            label: 'Use Redis for cache, sessions, and queues?',
+            label: 'Use Redis for cache and sessions?',
             default: false,
-            hint: 'Database drivers work immediately without an external service.',
+            hint: 'The queue always uses the database driver.',
         );
         $features = $this->resolveFeatures(multiselect(
             label: 'Activate optional runtime features',
@@ -151,13 +150,11 @@ final class Onboarding
         $sshHost = '';
         $repository = '';
         $repositoryBranch = '';
-        $portBase = 9010;
         $deploymentMode = '';
         $domain = '';
         $deployRoot = '';
         $stagingDomain = '';
         $stagingDeployRoot = '';
-        $httpRuntime = '';
 
         if ($deploy) {
             $deploymentKey = $defaultProject;
@@ -178,14 +175,6 @@ final class Onboarding
                 : select(label: 'SSH host alias', options: array_combine($sshAliases, $sshAliases));
             $repository = text(label: 'Git repository URL', default: $repository, required: true);
             $repositoryBranch = text(label: 'Git deployment branch', default: $repositoryBranch, required: true);
-            $portBase = (int) text(
-                label: 'First port in the reserved 20-port block',
-                default: '9010',
-                required: true,
-                validate: static fn (string $value): ?string => ctype_digit($value) && (int) $value >= 1024 && (int) $value <= 65523
-                    ? null
-                    : 'Enter an integer between 1024 and 65523.',
-            );
             $domain = text(
                 label: 'Production domain',
                 required: true,
@@ -207,11 +196,6 @@ final class Onboarding
                 $stagingDeployRoot = text(label: 'Staging release root', default: "/var/www/{$stagingDomain}", required: true);
             }
 
-            $httpRuntime = select(
-                label: 'Deployment HTTP runtime',
-                options: ['octane' => 'Octane + Swoole', 'fpm' => 'PHP-FPM'],
-                default: 'octane',
-            );
         }
 
         return new InstallPlan(
@@ -231,12 +215,10 @@ final class Onboarding
             sshHost: $sshHost,
             repository: $repository,
             repositoryBranch: $repositoryBranch,
-            portBase: $portBase,
             domain: $domain,
             deployRoot: $deployRoot,
             stagingDomain: $stagingDomain,
             stagingDeployRoot: $stagingDeployRoot,
-            httpRuntime: $httpRuntime,
         );
     }
 
@@ -313,12 +295,10 @@ final class Onboarding
             sshHost: $deploy ? $this->option($options, 'ssh-host') : '',
             repository: $deploy ? $this->option($options, 'repo') : '',
             repositoryBranch: $deploy ? $this->option($options, 'branch', 'main') : '',
-            portBase: $deploy ? (int) $this->option($options, 'port-base', '9010') : 9010,
             domain: $domain,
             deployRoot: $this->option($options, 'deploy-root', $domain === '' ? '' : "/var/www/{$domain}"),
             stagingDomain: $stagingDomain,
             stagingDeployRoot: $this->option($options, 'staging-deploy-root', $stagingDomain === '' ? '' : "/var/www/{$stagingDomain}"),
-            httpRuntime: $deploy ? $this->option($options, 'http-runtime', 'octane') : '',
         );
     }
 

@@ -36,7 +36,7 @@ final class UpdateOrderItems
 
 Keep `ActivitiesRelationManager` read-only and group it with native `RelationGroup` when exposing audit history.
 
-`AuditConfig` caches normalized metadata per Octane worker. Flush it only when runtime config is deliberately mutated in an interactive diagnostic session.
+`AuditConfig` caches normalized metadata for the PHP process. Flush it only when runtime config is deliberately mutated in an interactive diagnostic session.
 
 ## Verification
 

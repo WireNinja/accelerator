@@ -12,7 +12,7 @@ final class LogsCommand extends Command
 {
     protected $signature = 'accelerator:logs {service=laravel} {--stage=production} {--lines=200}';
 
-    protected $description = 'Read a stage-owned Laravel or Supervisor service log';
+    protected $description = 'Read a stage-owned Laravel or scheduler log';
 
     public function handle(): int
     {

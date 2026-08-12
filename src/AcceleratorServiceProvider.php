@@ -3,12 +3,10 @@
 namespace WireNinja\Accelerator;
 
 use Illuminate\Support\ServiceProvider;
-use NightOwl\NightOwlAgentServiceProvider;
 use Override;
 use WireNinja\Accelerator\Providers\CoreServiceProvider;
 use WireNinja\Accelerator\Providers\FilamentServiceProvider;
 use WireNinja\Accelerator\Providers\HeadServiceProvider;
-use WireNinja\Accelerator\Providers\HorizonServiceProvider;
 use WireNinja\Accelerator\Providers\OAuthServiceProvider;
 use WireNinja\Accelerator\Providers\PanelServiceProvider;
 use WireNinja\Accelerator\Providers\PwaServiceProvider;
@@ -22,8 +20,6 @@ class AcceleratorServiceProvider extends ServiceProvider
     private const FEATURE_PROVIDERS = [
         'oauth' => OAuthServiceProvider::class,
         'pwa' => PwaServiceProvider::class,
-        'horizon' => HorizonServiceProvider::class,
-        'nightowl' => NightOwlAgentServiceProvider::class,
     ];
 
     #[Override]

@@ -37,7 +37,7 @@ final class BuiltinExceptions
         // noise from actors that have no session, no CSRF token, and no legitimate business
         // on authenticated surfaces.
         //
-        // If reported to APM (Nightwatch/Sentry/Bugsnag), these inflate ingestion cost with
+        // If reported to an APM, these inflate ingestion cost with
         // zero signal-to-noise value. On a single VPS hosting multiple projects, this cost
         // compounds quickly.
         //

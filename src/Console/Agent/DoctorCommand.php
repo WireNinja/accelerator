@@ -92,8 +92,7 @@ final class DoctorCommand extends Command
 
         $opcache = extension_loaded('Zend OPcache');
         $this->assert('Runtime', 'OPcache', $opcache ? ((bool) ini_get('opcache.enable') ? 'enabled' : 'disabled') : 'unavailable', $opcache, 'OPcache should be installed on production hosts.', 'warning');
-        $octane = (string) config('octane.server', 'swoole');
-        $this->assert('Runtime', 'Octane driver', $octane, in_array($octane, ['swoole', 'frankenphp', 'roadrunner'], true), 'Octane driver must be swoole, frankenphp, or roadrunner.', 'warning');
+        $this->assert('Runtime', 'HTTP runtime', 'PHP-FPM', true, 'Accelerator client applications require PHP-FPM.');
         $this->assert(
             'Runtime',
             'Package discovery',
@@ -191,7 +190,7 @@ final class DoctorCommand extends Command
 
     private function inspectConfiguration(): void
     {
-        foreach (['oauth', 'pwa', 'telegram', 'horizon'] as $feature) {
+        foreach (['oauth', 'pwa', 'telegram', 'realtime', 'scout', 'observability'] as $feature) {
             $key = 'ACCELERATOR_FEATURE_'.strtoupper($feature);
             $valid = true;
 
@@ -271,15 +270,14 @@ final class DoctorCommand extends Command
         $stageEnvironment = ".accelerator/environments/{$config->stage}.env";
         $label = "Deployment {$config->stage}";
         $this->assert($label, 'Topology', "{$config->stage}: {$config->domain}", true, 'Deployment topology is invalid.');
-        $this->assert($label, 'Identity', $config->deploymentKey, $config->group === DeploymentConfig::serviceGroup($config->deploymentKey, $config->stage), 'Supervisor identity must be derived from deployment_key.');
-        $this->assert($label, 'Port block', "{$config->portBase}-".($config->portBase + 19), true, 'Deployment port block is invalid.');
+        $this->assert($label, 'Identity', $config->deploymentKey, $config->group === DeploymentConfig::serviceGroup($config->deploymentKey, $config->stage), 'Deployment identity must be derived from deployment_key.');
         $this->assert($label, 'Stable root', $config->deployRoot, $config->deployRoot === "/var/www/{$config->domain}", 'Deployment root must match the domain.');
         $this->assert($label, 'Stage environment', $stageEnvironment, is_file(base_path($stageEnvironment)), "Missing {$stageEnvironment}.");
-        $this->assert($label, 'Queue topology', $config->horizonEnabled ? 'horizon' : 'queue-worker', $config->horizonEnabled xor $config->queueWorkerEnabled, 'Exactly one queue worker topology must be enabled.');
         $environment = new DeploymentEnvironment(base_path());
+        $values = $environment->read($config);
+        $this->assert($label, 'Queue topology', 'database + scheduler drain', ($values['QUEUE_CONNECTION'] ?? '') === 'database', 'QUEUE_CONNECTION must equal database.');
         $environmentErrors = $environment->validate($config, requireExternalSecrets: false);
         $this->assert($label, 'Stage environment contract', $environmentErrors === [] ? 'valid' : 'invalid', $environmentErrors === [], implode(' ', $environmentErrors));
-        $values = $environment->read($config);
         $telegramConfigured = ($values['ACCELERATOR_TELEGRAM_BOT_TOKEN'] ?? '') !== '' && ($values['ACCELERATOR_TELEGRAM_CHAT_ID'] ?? '') !== '';
         $this->assert($label, 'Operator Telegram', $telegramConfigured ? 'configured' : 'not configured', $telegramConfigured, 'Operational alerts are disabled. Configure both ACCELERATOR_TELEGRAM_BOT_TOKEN and ACCELERATOR_TELEGRAM_CHAT_ID.', 'warning');
         $disks = array_filter(array_map('trim', explode(',', $values['ACCELERATOR_BACKUP_DISKS'] ?? 'local')));

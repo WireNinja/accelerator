@@ -19,7 +19,7 @@ final class PortsCommand extends Command
         {--available= : Find the first contiguous block of this size}
         {--json}';
 
-    protected $description = 'Detect active and Accelerator-reserved VPS ports and find a free block';
+    protected $description = 'Detect active VPS ports and find a free block';
 
     /** @throws JsonException */
     public function handle(): int
@@ -33,24 +33,6 @@ final class PortsCommand extends Command
             $output = (new SshRunner(base_path()))->run($host, $this->scanCommand(), 120);
             [$ports, $reserved] = $this->parse($output, $minimum, $maximum);
 
-            if ($host === $config->sshHost) {
-                for ($port = $config->portBase; $port < $config->portBase + 20; $port++) {
-                    $reserved[$port] = true;
-
-                    if (! isset($ports[$port]) && $port >= $minimum && $port <= $maximum) {
-                        $ports[$port] = [
-                            'port' => $port,
-                            'protocol' => 'tcp',
-                            'state' => 'RESERVED',
-                            'process' => '',
-                            'pid' => '',
-                            'source' => 'local .accelerator/deploy.json',
-                        ];
-                    }
-                }
-
-                ksort($ports);
-            }
             $blockSize = $this->option('available');
             $available = null;
 
@@ -97,7 +79,6 @@ final class PortsCommand extends Command
         return <<<'BASH'
 command sudo -n ss -H -lntup 2>/dev/null | sed 's/^/ACCELERATOR_SOCKET|/'
 command sudo -n find /etc/supervisor/conf.d /etc/nginx/sites-enabled -type f -exec grep -HE -- '--port=[0-9]{4,5}|--listen-on=[^ ]+:[0-9]{4,5}|proxy_pass http://[^;]+:[0-9]{4,5}' {} + 2>/dev/null | sed 's/^/ACCELERATOR_CONFIG|/'
-command sudo -n find /var/www -path '*/current/.accelerator/deploy.json' -type f -exec grep -HE '"port_base"[[:space:]]*:' {} + 2>/dev/null | sed 's/^/ACCELERATOR_BLOCK|/'
 BASH;
     }
 
@@ -128,17 +109,6 @@ BASH;
         $sources = [];
 
         foreach (preg_split('/\R/', $output) ?: [] as $line) {
-            if (preg_match('/ACCELERATOR_BLOCK\|([^:]+):.*"port_base"[[:space:]]*:[[:space:]]*(\d+)/', $line, $matches) === 1) {
-                $base = (int) $matches[2];
-
-                for ($port = $base; $port < $base + 20 && $port <= 65535; $port++) {
-                    $reserved[$port] = true;
-                    $sources[$port][] = 'deploy.json:'.$matches[1];
-                }
-
-                continue;
-            }
-
             if (preg_match('/ACCELERATOR_CONFIG\|([^:]+):(.*)$/', $line, $matches) === 1) {
                 if (preg_match_all('/(?::|=)(\d{4,5})(?:\D|$)/', $matches[2], $portMatches)) {
                     foreach ($portMatches[1] as $value) {

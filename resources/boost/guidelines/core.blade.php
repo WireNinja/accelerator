@@ -15,7 +15,7 @@ Accelerator is a proprietary, batteries-included foundation for Laravel 13 Filam
 - PWA/Vite: `accelerator-pwa-development`
 - remote mutation: `accelerator-deployment`
 - read-only operations: `accelerator-ops-observability`
-- self-hosted NightOwl observability: `accelerator-nightowl`
+- OpenTelemetry/OpenObserve: `accelerator-observability`
 
 ### Fixed contract
 
@@ -42,7 +42,7 @@ Accelerator is a proprietary, batteries-included foundation for Laravel 13 Filam
 
 ### Application architecture invariants
 
-- Treat all backend code as Octane-sensitive: no request-derived state in static properties or singletons; use scoped bindings and method-time request/auth resolution.
+- PHP-FPM is the only client HTTP runtime. Still avoid request-derived state in static properties or long-lived CLI workers.
 - Policies are the authorization boundary. Filament visibility is not security; Shield regeneration must use Accelerator's safe workflow.
 - Multi-write business invariants belong in transactions with database constraints or locks where races are possible. Durable side effects run after commit.
 - `Model::unguard()` is intentional application-wide behavior. Do not add noisy `$fillable` arrays merely to simulate protection; validate and authorize at input and action boundaries.
@@ -54,8 +54,10 @@ Accelerator is a proprietary, batteries-included foundation for Laravel 13 Filam
 - `.accelerator/environments/{stage}.env`: ignored stage secrets.
 - `.accelerator/install-state.json`: ignored resume receipt only.
 - Deployment root is `/var/www/{domain}` with Deployer releases and `current` symlink.
-- `deployment_key` is stable; Supervisor groups are `acc-{deployment_key}-{stage}`. `port_base` reserves one 20-port block per project.
-- Normal server operations originate from local Artisan commands. Deployer, SSH, Supervisor, and Linux commands are internal implementation layers; manual SSH is break-glass only.
+- `deployment_key` is stable. Schema 3 has no client process ports or Supervisor topology.
+- Normal server operations originate from local Artisan commands. Deployer, SSH, Nginx, PHP-FPM, cron, and Linux commands are internal implementation layers; manual SSH is break-glass only.
+- Queues use the database connection and a bounded worker launched by Laravel's package-owned sub-minute schedule. One `/etc/cron.d/acc-{deployment_key}-{stage}` entry runs `schedule:run` each minute.
+- Realtime applications are clients of centralized Reverb; observability exports directly over OTLP/HTTP to centralized OpenObserve. Client stages own neither daemon.
 - Dual stages are independent, identical application instances. Code, dependencies, features, UI, and behavior match; domain and mutable data/runtime state are isolated. The configurable `LOCAL DATA`, `TEST DATA`, or `LIVE DATA` topbar badge is the deliberate UI exception. Single-stage projects do not show it.
 
 ### Safety

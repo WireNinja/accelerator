@@ -28,8 +28,8 @@ final readonly class EnvironmentWriter
             throw new RuntimeException('Unable to read Accelerator environment template.');
         }
 
-        $currentEnvironment = file_get_contents($this->context->projectRoot.'/.env');
-        $appKey = is_string($currentEnvironment) ? $this->environmentValue($currentEnvironment, 'APP_KEY') : '';
+        $current = file_get_contents($this->context->projectRoot.'/.env');
+        $appKey = is_string($current) ? $this->environmentValue($current, 'APP_KEY') : '';
         $appKey = $appKey !== '' ? $appKey : 'base64:'.base64_encode(random_bytes(32));
         $this->context->writeFile('.env', $this->renderEnvironment($template, $appKey), 0600);
         $this->context->writeFile('.env.example', $this->renderEnvironment($template, ''));
@@ -43,26 +43,19 @@ final readonly class EnvironmentWriter
         }
 
         $plan = $this->context->plan;
-        $stage = fn (bool $enabled, string $domain): array => [
+        $stage = static fn (bool $enabled, string $domain): array => [
             'enabled' => $enabled,
             'ssh_host' => $plan->sshHost,
             'domain' => $domain,
             'root' => $domain === '' ? '' : "/var/www/{$domain}",
-            'http_runtime' => $plan->httpRuntime,
-            'horizon' => $this->context->hasFeature('horizon'),
-            'queue_worker' => ! $this->context->hasFeature('horizon'),
-            'reverb' => $this->context->hasFeature('reverb'),
-            'nightowl' => $this->context->hasFeature('nightowl'),
-            'scheduler' => true,
             'health_path' => '/up',
         ];
         $document = [
-            'schema' => 2,
+            'schema' => 3,
             'default_stage' => $plan->deploymentMode === 'dual' ? 'staging' : 'production',
             'deployment_key' => $plan->deploymentKey,
             'repository' => $plan->repository,
             'branch' => $plan->repositoryBranch,
-            'port_base' => $plan->portBase,
             'keep_releases' => 5,
             'php_version' => '8.5',
             'php_binary' => 'php8.5',
@@ -75,10 +68,7 @@ final readonly class EnvironmentWriter
             ],
         ];
         DeploymentConfig::validateTopologyDocument($document);
-        $this->context->writeFile('.accelerator/deploy.json', json_encode(
-            $document,
-            JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
-        ).PHP_EOL);
+        $this->context->writeFile('.accelerator/deploy.json', json_encode($document, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR).PHP_EOL);
 
         $runtime = file_get_contents($this->context->projectRoot.'/.env.example');
 
@@ -87,29 +77,16 @@ final readonly class EnvironmentWriter
         }
 
         if ($plan->deploymentMode === 'dual') {
-            $this->context->writeFile('.accelerator/environments/staging.env', $this->productionEnvironment(
-                $runtime,
-                'staging',
-                $plan->stagingDomain,
-                $plan->stagingDeployRoot,
-                true,
-            ), 0600);
+            $this->context->writeFile('.accelerator/environments/staging.env', $this->productionEnvironment($runtime, 'staging', $plan->stagingDomain, $plan->stagingDeployRoot, true), 0600);
         }
 
-        $this->context->writeFile('.accelerator/environments/production.env', $this->productionEnvironment(
-            $runtime,
-            'production',
-            $plan->domain,
-            $plan->deployRoot,
-            $plan->deploymentMode === 'dual',
-        ), 0600);
+        $this->context->writeFile('.accelerator/environments/production.env', $this->productionEnvironment($runtime, 'production', $plan->domain, $plan->deployRoot, $plan->deploymentMode === 'dual'), 0600);
     }
 
     private function renderEnvironment(string $template, string $appKey): string
     {
         $plan = $this->context->plan;
         $cacheDriver = $plan->useRedis ? 'redis' : 'database';
-        $databaseName = str_replace('-', '_', $plan->deploymentKey);
         $values = [
             'APP_NAME' => '"'.addcslashes($plan->appName, '"\\').'"',
             'APP_KEY' => $appKey,
@@ -118,67 +95,29 @@ final readonly class EnvironmentWriter
             'CACHE_STORE' => $cacheDriver,
             'SESSION_DRIVER' => $cacheDriver,
             'SESSION_STORE' => $cacheDriver,
-            'QUEUE_CONNECTION' => $cacheDriver,
-            'BROADCAST_CONNECTION' => $this->context->hasFeature('reverb') ? 'reverb' : 'log',
+            'QUEUE_CONNECTION' => 'database',
+            'BROADCAST_CONNECTION' => $this->context->hasFeature('realtime') ? 'reverb' : 'log',
             'SCOUT_DRIVER' => $this->context->hasFeature('scout') ? 'database' : 'collection',
-            'NIGHTOWL_ENABLED' => $this->context->boolean($this->context->hasFeature('nightowl')),
-            'NIGHTWATCH_ENABLED' => $this->context->boolean($this->context->hasFeature('nightowl')),
+            'LOG_STACK' => $this->context->hasFeature('observability') ? 'daily,otlp' : 'daily',
+            'OTEL_SDK_DISABLED' => $this->context->boolean(! $this->context->hasFeature('observability')),
+            'OTEL_INSTRUMENTATION_HTTP_SERVER' => 'false',
             'ACCELERATOR_FEATURE_OAUTH' => $this->context->boolean($this->context->hasFeature('oauth')),
             'ACCELERATOR_FEATURE_PWA' => $this->context->boolean($this->context->hasFeature('pwa')),
             'ACCELERATOR_FEATURE_TELEGRAM' => $this->context->boolean($this->context->hasFeature('telegram')),
-            'ACCELERATOR_FEATURE_HORIZON' => $this->context->boolean($this->context->hasFeature('horizon')),
-            'ACCELERATOR_FEATURE_REVERB' => $this->context->boolean($this->context->hasFeature('reverb')),
+            'ACCELERATOR_FEATURE_REALTIME' => $this->context->boolean($this->context->hasFeature('realtime')),
             'ACCELERATOR_FEATURE_SCOUT' => $this->context->boolean($this->context->hasFeature('scout')),
-            'ACCELERATOR_FEATURE_NIGHTOWL' => $this->context->boolean($this->context->hasFeature('nightowl')),
+            'ACCELERATOR_FEATURE_OBSERVABILITY' => $this->context->boolean($this->context->hasFeature('observability')),
             'ACCELERATOR_OAUTH_MODE' => $this->context->hasFeature('oauth') ? 'existing_only' : 'disabled',
-            'ACCELERATOR_UPLOAD_MAX_MB' => '100',
-            'ACCELERATOR_UI_DENSITY' => 'compact',
-            'ACCELERATOR_ENVIRONMENT_INDICATOR_ENABLED' => $this->context->boolean(
-                $this->context->plan->deploy && $this->context->plan->deploymentMode === 'dual',
-            ),
-            'ACCELERATOR_ENVIRONMENT_INDICATOR_LABEL' => $this->context->plan->deploy
-                && $this->context->plan->deploymentMode === 'dual' ? '"LOCAL DATA"' : '',
-            'ACCELERATOR_ENVIRONMENT_INDICATOR_COLOR' => $this->context->plan->deploy
-                && $this->context->plan->deploymentMode === 'dual' ? 'info' : 'warning',
-            'ACCELERATOR_BACKUP_ENABLED' => 'true',
-            'ACCELERATOR_BACKUP_NAME' => 'local',
-            'ACCELERATOR_BACKUP_DISKS' => 'local',
-            'ACCELERATOR_BACKUP_S3_ENABLED' => 'false',
-            'ACCELERATOR_BACKUP_S3_ACCESS_KEY_ID' => '',
-            'ACCELERATOR_BACKUP_S3_SECRET_ACCESS_KEY' => '',
-            'ACCELERATOR_BACKUP_S3_REGION' => 'auto',
-            'ACCELERATOR_BACKUP_S3_BUCKET' => '',
-            'ACCELERATOR_BACKUP_S3_ENDPOINT' => '',
-            'ACCELERATOR_BACKUP_S3_PREFIX' => 'accelerator',
-            'ACCELERATOR_BACKUP_TIME' => '02:00',
-            'ACCELERATOR_BACKUP_MAXIMUM_AGE_DAYS' => '2',
-            'ACCELERATOR_BACKUP_MAXIMUM_STORAGE_MEGABYTES' => '5000',
-            'ACCELERATOR_DEPLOYMENT_KEY' => 'local',
-            'ACCELERATOR_DEPLOYMENT_STAGE' => 'local',
-            'ACCELERATOR_DEPLOY_ROOT' => '',
-            'ACCELERATOR_TELEGRAM_NOTIFY_SUCCESSES' => 'false',
+            'ACCELERATOR_ENVIRONMENT_INDICATOR_ENABLED' => $this->context->boolean($plan->deploy && $plan->deploymentMode === 'dual'),
+            'ACCELERATOR_ENVIRONMENT_INDICATOR_LABEL' => $plan->deploy && $plan->deploymentMode === 'dual' ? '"LOCAL DATA"' : '',
+            'ACCELERATOR_ENVIRONMENT_INDICATOR_COLOR' => $plan->deploy && $plan->deploymentMode === 'dual' ? 'info' : 'warning',
             'GOOGLE_REDIRECT_URI' => rtrim($plan->appUrl, '/').'/auth/google/callback',
             'VITE_APP_NAME' => '"'.addcslashes($plan->appName, '"\\').'"',
         ];
 
-        if ($this->context->hasFeature('reverb') && $appKey !== '') {
-            $reverbKey = bin2hex(random_bytes(16));
-            $values += [
-                'REVERB_APP_ID' => bin2hex(random_bytes(8)),
-                'REVERB_APP_KEY' => $reverbKey,
-                'REVERB_APP_SECRET' => bin2hex(random_bytes(32)),
-                'VITE_REVERB_APP_KEY' => $reverbKey,
-            ];
-        }
-
         if ($plan->database !== 'sqlite') {
-            $values += [
-                'DB_HOST' => '127.0.0.1',
-                'DB_PORT' => $plan->database === 'pgsql' ? '5432' : '3306',
-                'DB_DATABASE' => $databaseName,
-                'DB_USERNAME' => $databaseName,
-                'DB_PASSWORD' => '',
-            ];
+            $databaseName = str_replace('-', '_', $plan->deploymentKey);
+            $values += ['DB_HOST' => '127.0.0.1', 'DB_PORT' => $plan->database === 'pgsql' ? '5432' : '3306', 'DB_DATABASE' => $databaseName, 'DB_USERNAME' => $databaseName, 'DB_PASSWORD' => ''];
         }
 
         foreach ($values as $key => $value) {
@@ -190,109 +129,39 @@ final readonly class EnvironmentWriter
 
     private function productionEnvironment(string $contents, string $stage, string $domain, string $deployRoot, bool $dualStage): string
     {
-        $contents = $this->setEnvironmentValue($contents, 'APP_ENV', 'production');
-        $contents = $this->setEnvironmentValue($contents, 'APP_KEY', 'base64:'.base64_encode(random_bytes(32)));
-        $contents = $this->setEnvironmentValue($contents, 'APP_DEBUG', 'false');
-        $contents = $this->setEnvironmentValue($contents, 'APP_URL', "https://{$domain}");
-        $contents = $this->setEnvironmentValue($contents, 'LOG_LEVEL', 'error');
-        $contents = $this->setEnvironmentValue($contents, 'ACCELERATOR_ENVIRONMENT_INDICATOR_ENABLED', $this->context->boolean($dualStage));
-        $contents = $this->setEnvironmentValue($contents, 'ACCELERATOR_ENVIRONMENT_INDICATOR_LABEL', $stage === 'staging' ? '"TEST DATA"' : '"LIVE DATA"');
-        $contents = $this->setEnvironmentValue($contents, 'ACCELERATOR_ENVIRONMENT_INDICATOR_COLOR', $stage === 'staging' ? 'warning' : 'danger');
-        $prefix = strtolower((string) preg_replace('/[^a-z0-9]+/i', '_', "{$this->context->plan->deploymentKey}_{$stage}"));
-        $contents = $this->setEnvironmentValue($contents, 'REDIS_PREFIX', "{$prefix}_database_");
-        $contents = $this->setEnvironmentValue($contents, 'CACHE_PREFIX', "{$prefix}_cache_");
-        $contents = $this->setEnvironmentValue($contents, 'HORIZON_NAME', "{$this->context->plan->deploymentKey}-{$stage}");
-        $contents = $this->setEnvironmentValue($contents, 'HORIZON_PREFIX', "{$prefix}_horizon:");
-        $contents = $this->setEnvironmentValue($contents, 'SESSION_COOKIE', "{$prefix}_session");
-        $stagePortBase = $this->context->plan->portBase + ($stage === 'production' && $this->context->plan->deploymentMode === 'dual' ? 10 : 0);
-        $contents = $this->setEnvironmentValue($contents, 'ACCELERATOR_DEPLOYMENT_KEY', $this->context->plan->deploymentKey);
-        $contents = $this->setEnvironmentValue($contents, 'ACCELERATOR_DEPLOYMENT_STAGE', $stage);
-        $contents = $this->setEnvironmentValue($contents, 'ACCELERATOR_DEPLOY_ROOT', $deployRoot);
-        $contents = $this->setEnvironmentValue($contents, 'ACCELERATOR_BACKUP_ENABLED', 'true');
-        $contents = $this->setEnvironmentValue($contents, 'ACCELERATOR_BACKUP_NAME', "acc-{$this->context->plan->deploymentKey}-{$stage}");
-        $contents = $this->setEnvironmentValue($contents, 'ACCELERATOR_BACKUP_DISKS', 'local');
-        $contents = $this->setEnvironmentValue($contents, 'ACCELERATOR_BACKUP_S3_ENABLED', 'true');
-        $contents = $this->setEnvironmentValue($contents, 'ACCELERATOR_BACKUP_S3_ACCESS_KEY_ID', '');
-        $contents = $this->setEnvironmentValue($contents, 'ACCELERATOR_BACKUP_S3_SECRET_ACCESS_KEY', '');
-        $contents = $this->setEnvironmentValue($contents, 'ACCELERATOR_BACKUP_S3_REGION', 'auto');
-        $contents = $this->setEnvironmentValue($contents, 'ACCELERATOR_BACKUP_S3_BUCKET', '');
-        $contents = $this->setEnvironmentValue($contents, 'ACCELERATOR_BACKUP_S3_ENDPOINT', '');
-        $contents = $this->setEnvironmentValue($contents, 'ACCELERATOR_BACKUP_S3_PREFIX', 'accelerator');
-        $contents = $this->setEnvironmentValue($contents, 'ACCELERATOR_BACKUP_TIME', sprintf('02:%02d', $stagePortBase % 60));
-        $contents = $this->setEnvironmentValue($contents, 'ACCELERATOR_BACKUP_MAXIMUM_AGE_DAYS', '2');
-        $contents = $this->setEnvironmentValue($contents, 'ACCELERATOR_BACKUP_MAXIMUM_STORAGE_MEGABYTES', '5000');
-        $contents = $this->setEnvironmentValue($contents, 'ACCELERATOR_TELEGRAM_NOTIFY_SUCCESSES', 'false');
-        $contents = $this->setEnvironmentValue($contents, 'OCTANE_PORT', (string) $stagePortBase);
-        $contents = $this->setEnvironmentValue($contents, 'REVERB_SERVER_PORT', (string) ($stagePortBase + 1));
-        $contents = $this->setEnvironmentValue($contents, 'NIGHTOWL_AGENT_PORT', (string) ($stagePortBase + 2));
-        $contents = $this->setEnvironmentValue($contents, 'NIGHTOWL_INGEST_URI', '127.0.0.1:'.($stagePortBase + 2));
-        $contents = $this->setEnvironmentValue($contents, 'NIGHTOWL_UDP_PORT', (string) ($stagePortBase + 3));
-        $contents = $this->setEnvironmentValue($contents, 'NIGHTOWL_HEALTH_PORT', (string) ($stagePortBase + 4));
-
-        if ($this->context->hasFeature('nightowl')) {
-            $nightowlDatabase = "acc_nightowl_{$this->context->plan->deploymentKey}_{$stage}";
-
-            foreach ([
-                'NIGHTOWL_ENABLED' => 'true',
-                'NIGHTOWL_PARALLEL_WITH_NIGHTWATCH' => 'false',
-                'NIGHTOWL_AGENT_HOST' => '127.0.0.1',
-                'NIGHTOWL_ENABLE_UDP' => 'false',
-                'NIGHTOWL_HEALTH_ENABLED' => 'true',
-                'NIGHTOWL_HEALTH_REPORT_ENABLED' => 'false',
-                'NIGHTOWL_TABLE_STATS' => 'false',
-                'NIGHTOWL_DB_CONNECTION' => 'pgsql',
-                'NIGHTOWL_DB_HOST' => '127.0.0.1',
-                'NIGHTOWL_DB_PORT' => '5432',
-                'NIGHTOWL_DB_DATABASE' => $nightowlDatabase,
-                'NIGHTOWL_DB_USERNAME' => $nightowlDatabase,
-                'NIGHTOWL_DB_PASSWORD' => bin2hex(random_bytes(32)),
-                'NIGHTOWL_AUTHENTICATED_REQUEST_SAMPLE_RATE' => '1.0',
-                'NIGHTWATCH_ENABLED' => 'true',
-                'NIGHTWATCH_LOG_LEVEL' => 'debug',
-                'NIGHTWATCH_CAPTURE_REQUEST_PAYLOAD' => 'true',
-                'NIGHTWATCH_CAPTURE_EXCEPTION_SOURCE_CODE' => 'true',
-                'NIGHTWATCH_IGNORE_REQUEST_HEADERS' => 'false',
-                'NIGHTWATCH_IGNORE_QUERIES' => 'false',
-                'NIGHTWATCH_IGNORE_OUTGOING_REQUESTS' => 'false',
-                'NIGHTWATCH_IGNORE_CACHE_EVENTS' => 'false',
-                'NIGHTWATCH_IGNORE_MAIL' => 'false',
-                'NIGHTWATCH_IGNORE_NOTIFICATIONS' => 'false',
-                'NIGHTWATCH_REQUEST_SAMPLE_RATE' => '0.0',
-                'NIGHTWATCH_EXCEPTION_SAMPLE_RATE' => '0.0',
-                'NIGHTWATCH_COMMAND_SAMPLE_RATE' => '1.0',
-                'NIGHTWATCH_SCHEDULED_TASK_SAMPLE_RATE' => '1.0',
-            ] as $key => $value) {
-                $contents = $this->setEnvironmentValue($contents, $key, $value);
-            }
-        }
+        $deploymentKey = $this->context->plan->deploymentKey;
+        $prefix = strtolower((string) preg_replace('/[^a-z0-9]+/i', '_', "{$deploymentKey}_{$stage}"));
+        $values = [
+            'APP_ENV' => 'production', 'APP_KEY' => 'base64:'.base64_encode(random_bytes(32)), 'APP_DEBUG' => 'false', 'APP_URL' => "https://{$domain}",
+            'LOG_LEVEL' => 'error', 'QUEUE_CONNECTION' => 'database', 'SESSION_COOKIE' => "{$prefix}_session", 'REDIS_PREFIX' => "{$prefix}_database_", 'CACHE_PREFIX' => "{$prefix}_cache_",
+            'ACCELERATOR_ENVIRONMENT_INDICATOR_ENABLED' => $this->context->boolean($dualStage), 'ACCELERATOR_ENVIRONMENT_INDICATOR_LABEL' => $stage === 'staging' ? '"TEST DATA"' : '"LIVE DATA"', 'ACCELERATOR_ENVIRONMENT_INDICATOR_COLOR' => $stage === 'staging' ? 'warning' : 'danger',
+            'ACCELERATOR_DEPLOYMENT_KEY' => $deploymentKey, 'ACCELERATOR_DEPLOYMENT_STAGE' => $stage, 'ACCELERATOR_DEPLOY_ROOT' => $deployRoot,
+            'ACCELERATOR_BACKUP_NAME' => "acc-{$deploymentKey}-{$stage}", 'ACCELERATOR_BACKUP_S3_ENABLED' => 'true', 'ACCELERATOR_BACKUP_TIME' => $stage === 'staging' ? '02:10' : '02:20',
+            'OTEL_SERVICE_NAME' => $deploymentKey, 'OTEL_SERVICE_INSTANCE_ID' => "{$deploymentKey}-{$stage}",
+            'OTEL_RESOURCE_ATTRIBUTES' => "\"service.namespace=accelerator,deployment.environment.name={$stage},service.instance.id={$deploymentKey}-{$stage}\"",
+            'OTEL_EXPORTER_OTLP_ENDPOINT' => 'https://observe.ohmyserver.com/api/default', 'OTEL_EXPORTER_OTLP_HEADERS' => '', 'OTEL_EXPORTER_OTLP_PROTOCOL' => 'http/protobuf',
+        ];
 
         if ($this->context->plan->database === 'sqlite') {
-            $contents = $this->setEnvironmentValue($contents, 'DB_DATABASE', rtrim($deployRoot, '/').'/shared/database/database.sqlite');
+            $values['DB_DATABASE'] = rtrim($deployRoot, '/').'/shared/database/database.sqlite';
         } else {
-            $database = str_replace('-', '_', $this->context->plan->deploymentKey).'_'.$stage;
-            $contents = $this->setEnvironmentValue($contents, 'DB_DATABASE', $database);
+            $values['DB_DATABASE'] = str_replace('-', '_', $deploymentKey).'_'.$stage;
         }
 
-        if ($this->context->hasFeature('reverb')) {
-            $reverbKey = bin2hex(random_bytes(16));
-
-            foreach ([
-                'REVERB_APP_ID' => bin2hex(random_bytes(8)),
-                'REVERB_APP_KEY' => $reverbKey,
-                'REVERB_APP_SECRET' => bin2hex(random_bytes(32)),
-                'REVERB_HOST' => $domain,
-                'REVERB_PORT' => '443',
-                'REVERB_SCHEME' => 'https',
-                'VITE_REVERB_APP_KEY' => $reverbKey,
-                'VITE_REVERB_HOST' => $domain,
-                'VITE_REVERB_PORT' => '443',
-                'VITE_REVERB_SCHEME' => 'https',
-            ] as $key => $value) {
-                $contents = $this->setEnvironmentValue($contents, $key, $value);
-            }
+        if ($this->context->hasFeature('realtime')) {
+            $key = bin2hex(random_bytes(16));
+            $values += [
+                'REVERB_APP_ID' => bin2hex(random_bytes(8)), 'REVERB_APP_KEY' => $key, 'REVERB_APP_SECRET' => bin2hex(random_bytes(32)),
+                'REVERB_HOST' => 'centralized-reverb.ohmyserver.com', 'REVERB_PORT' => '443', 'REVERB_SCHEME' => 'https',
+                'VITE_REVERB_APP_KEY' => $key, 'VITE_REVERB_HOST' => 'centralized-reverb.ohmyserver.com', 'VITE_REVERB_PORT' => '443', 'VITE_REVERB_SCHEME' => 'https',
+            ];
         }
 
-        foreach (['DB_PASSWORD', 'GOOGLE_CLIENT_SECRET', 'TELEGRAM_BOT_TOKEN', 'VAPID_PRIVATE_KEY'] as $key) {
+        foreach ($values as $key => $value) {
+            $contents = $this->setEnvironmentValue($contents, $key, $value);
+        }
+
+        foreach (['DB_PASSWORD', 'GOOGLE_CLIENT_SECRET', 'TELEGRAM_BOT_TOKEN', 'VAPID_PRIVATE_KEY', 'OTEL_EXPORTER_OTLP_HEADERS'] as $key) {
             $contents = $this->setEnvironmentValue($contents, $key, '');
         }
 
@@ -304,20 +173,16 @@ final readonly class EnvironmentWriter
         $pattern = '/^(?:#\s*)?'.preg_quote($key, '/').'=.*$/m';
         $replacement = "{$key}={$value}";
 
-        if (preg_match($pattern, $contents) === 1) {
-            return (string) preg_replace_callback($pattern, static fn (): string => $replacement, $contents, 1);
-        }
-
-        return rtrim($contents).PHP_EOL.$replacement.PHP_EOL;
+        return preg_match($pattern, $contents) === 1
+            ? (string) preg_replace_callback($pattern, static fn (): string => $replacement, $contents, 1)
+            : rtrim($contents).PHP_EOL.$replacement.PHP_EOL;
     }
 
     private function environmentValue(string $contents, string $key): string
     {
-        if (preg_match('/^'.preg_quote($key, '/').'=(.*)$/m', $contents, $matches) !== 1) {
-            return '';
-        }
-
-        return trim($matches[1], " \t\n\r\0\x0B\"");
+        return preg_match('/^'.preg_quote($key, '/').'=(.*)$/m', $contents, $matches) === 1
+            ? trim($matches[1], " \t\n\r\0\x0B\"")
+            : '';
     }
 
     private function updateGitignore(): void

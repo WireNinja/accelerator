@@ -5,7 +5,7 @@ description: Guide a WireNinja Accelerator application from a pristine Laravel p
 
 # Accelerator project lifecycle
 
-Treat public Artisan commands as the only user/AI interface. Deployer is the internal atomic-release engine; Supervisor owns long-running processes. Envoy is absent.
+Treat public Artisan commands as the user/AI interface. Deployer is the internal atomic-release engine. Nginx and PHP-FPM are shared OS services; native cron is the only stage-owned runtime file. Envoy and client Supervisor programs are absent.
 
 ## Route by phase
 
@@ -21,9 +21,10 @@ Treat public Artisan commands as the only user/AI interface. Deployer is the int
 - pnpm is default; npm is fallback; one lockfile only.
 - Never run Composer update on the VPS.
 - Stable root is `/var/www/{domain}` with `releases`, `shared`, and `current`.
-- Stable deployment identity is `deployment_key`; derive Supervisor groups and service names from it.
-- Reserve a scanned, explicit 20-port block; never auto-assign during deploy.
-- Dual stages run identical code/features but isolate every mutable datum and process.
+- Stable deployment identity is `deployment_key`; domain remains a mutable address.
+- Client projects reserve no ports. Reverb and OpenObserve are centralized host services.
+- Queues use the database driver and package-owned sub-minute scheduler drain.
+- Dual stages run identical code/features but isolate every mutable datum, credential, and cron entry.
 - Single-stage projects hide the environment badge.
 - Dual-stage projects show `LOCAL DATA`, `TEST DATA`, and `LIVE DATA` badges.
 - A code rollback never reverses database migrations.

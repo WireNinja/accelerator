@@ -14,10 +14,7 @@ use SensitiveParameter;
 
 class Login extends BaseLogin
 {
-    /**
-     * Dont remove this. This is required to make the rate limit works on the login page.
-     * Why? Because we may use octane in the prod, and default rate limit key is too long for swoole table.
-     */
+    /** Keep login throttle keys compact and free of raw user input. */
     protected function getRateLimitKey($method, $component = null): string
     {
         $method ??= debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, limit: 2)[1]['function'];

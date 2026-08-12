@@ -29,13 +29,7 @@ final readonly class DependencyInstaller
         }
 
         $composer['autoload']['files'] = array_values(array_unique([...$autoloadFiles, 'app/Support/helpers.php']));
-        $dontDiscover = $composer['extra']['laravel']['dont-discover'] ?? [];
-
-        if (! is_array($dontDiscover)) {
-            throw new RuntimeException('Project composer.json extra.laravel.dont-discover must be an array.');
-        }
-
-        $composer['extra']['laravel']['dont-discover'] = array_values(array_unique([...$dontDiscover, 'laravel/horizon']));
+        unset($composer['extra']['laravel']['dont-discover']);
         $composer['scripts']['post-autoload-dump'] = [
             'Illuminate\\Foundation\\ComposerScripts::postAutoloadDump',
             '@php artisan package:discover --ansi',
@@ -43,7 +37,7 @@ final readonly class DependencyInstaller
         ];
         $composer['scripts']['dev'] = [
             'Composer\\Config::disableProcessTimeout',
-            $this->context->packageBinaryCommand('concurrently').' -c "#93c5fd,#c4b5fd,#fb7185,#fdba74" "php artisan serve" "php artisan queue:listen --tries=1 --timeout=0" "php artisan pail --timeout=0" "'.$this->context->packageScriptCommand('dev').'" --names=server,queue,logs,vite --kill-others',
+            $this->context->packageBinaryCommand('concurrently').' -c "#93c5fd,#c4b5fd,#fb7185,#fdba74" "php artisan serve" "php artisan schedule:work" "php artisan pail --timeout=0" "'.$this->context->packageScriptCommand('dev').'" --names=server,scheduler,logs,vite --kill-others',
         ];
         $composer['scripts']['format'] = 'pint --format=json';
         $composer['scripts']['refactor'] = 'rector --output-format=json';
