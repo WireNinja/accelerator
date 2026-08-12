@@ -84,11 +84,11 @@ php artisan accelerator:logs scheduler --stage=production
 
 Stable root is `/var/www/{domain}` with Deployer `releases`, `shared`, and `current`. Deploy reloads the exact PHP-FPM service, replaces the exact stage cron file, and removes only an old Accelerator-owned Supervisor group for the same deployment key and stage. It never uninstalls Supervisor or touches unrelated projects.
 
-Dual stages run identical code and features. They isolate database, uploads, APP_KEY, sessions/cache namespace, Reverb credential, OTLP credential and identity, backups, domain, and cron entry. Production promotion deploys the exact successful staging revision. A code rollback never reverses database migrations.
+Dual stages run identical code and features. They isolate database, uploads, APP_KEY, sessions/cache namespace, OTLP credential and identity, backups, domain, and cron entry. Reverb deliberately uses one shared hub credential. Production promotion deploys the exact successful staging revision. A code rollback never reverses database migrations.
 
 ## Centralized Reverb
 
-Client stages use distinct `REVERB_APP_ID`, key, and secret registered in the central hub. Their public host is `centralized-reverb.ohmyserver.com:443`. Accelerator clients do not bind a Reverb port and Nginx does not proxy websocket routes locally.
+All client applications and stages reuse the single app ID, key, and secret from the centralized Reverb server's ignored `.env`. Their public host is `centralized-reverb.ohmyserver.com:443`. The hub `.env` survives its Git-based deploy because it is ignored; clients do not bind a Reverb port and Nginx does not proxy websocket routes locally.
 
 ## OpenObserve
 

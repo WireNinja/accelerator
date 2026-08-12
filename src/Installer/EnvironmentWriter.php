@@ -115,6 +115,21 @@ final readonly class EnvironmentWriter
             'VITE_APP_NAME' => '"'.addcslashes($plan->appName, '"\\').'"',
         ];
 
+        if ($this->context->hasFeature('realtime')) {
+            $values += [
+                'REVERB_APP_ID' => $plan->reverbAppId,
+                'REVERB_APP_KEY' => $plan->reverbAppKey,
+                'REVERB_APP_SECRET' => $plan->reverbAppSecret,
+                'VITE_REVERB_APP_KEY' => $plan->reverbAppKey,
+                'REVERB_HOST' => 'centralized-reverb.ohmyserver.com',
+                'REVERB_PORT' => '443',
+                'REVERB_SCHEME' => 'https',
+                'VITE_REVERB_HOST' => 'centralized-reverb.ohmyserver.com',
+                'VITE_REVERB_PORT' => '443',
+                'VITE_REVERB_SCHEME' => 'https',
+            ];
+        }
+
         if ($plan->database !== 'sqlite') {
             $databaseName = str_replace('-', '_', $plan->deploymentKey);
             $values += ['DB_HOST' => '127.0.0.1', 'DB_PORT' => $plan->database === 'pgsql' ? '5432' : '3306', 'DB_DATABASE' => $databaseName, 'DB_USERNAME' => $databaseName, 'DB_PASSWORD' => ''];
@@ -149,11 +164,10 @@ final readonly class EnvironmentWriter
         }
 
         if ($this->context->hasFeature('realtime')) {
-            $key = bin2hex(random_bytes(16));
             $values += [
-                'REVERB_APP_ID' => bin2hex(random_bytes(8)), 'REVERB_APP_KEY' => $key, 'REVERB_APP_SECRET' => bin2hex(random_bytes(32)),
+                'REVERB_APP_ID' => $this->context->plan->reverbAppId, 'REVERB_APP_KEY' => $this->context->plan->reverbAppKey, 'REVERB_APP_SECRET' => $this->context->plan->reverbAppSecret,
                 'REVERB_HOST' => 'centralized-reverb.ohmyserver.com', 'REVERB_PORT' => '443', 'REVERB_SCHEME' => 'https',
-                'VITE_REVERB_APP_KEY' => $key, 'VITE_REVERB_HOST' => 'centralized-reverb.ohmyserver.com', 'VITE_REVERB_PORT' => '443', 'VITE_REVERB_SCHEME' => 'https',
+                'VITE_REVERB_APP_KEY' => $this->context->plan->reverbAppKey, 'VITE_REVERB_HOST' => 'centralized-reverb.ohmyserver.com', 'VITE_REVERB_PORT' => '443', 'VITE_REVERB_SCHEME' => 'https',
             ];
         }
 

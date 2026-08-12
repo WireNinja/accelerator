@@ -30,7 +30,7 @@ final class InstallCommand extends Command
         {--package-manager=pnpm}
         {--database=sqlite}
         {--redis}
-        {--features=}
+        {--features= : Comma-separated features; realtime also requires ACCELERATOR_REVERB_APP_ID/KEY/SECRET in non-interactive mode}
         {--deploy}
         {--deployment-mode=single}
         {--deployment-key=}

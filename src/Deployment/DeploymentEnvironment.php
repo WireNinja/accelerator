@@ -114,6 +114,24 @@ final readonly class DeploymentEnvironment
             }
         }
 
+        if (($values['ACCELERATOR_FEATURE_REALTIME'] ?? 'false') === 'true') {
+            foreach (['REVERB_APP_ID', 'REVERB_APP_KEY', 'REVERB_APP_SECRET'] as $required) {
+                if (trim($values[$required] ?? '') === '') {
+                    $errors[] = "{$required} is required while realtime is enabled.";
+                }
+            }
+
+            if (($values['VITE_REVERB_APP_KEY'] ?? '') !== ($values['REVERB_APP_KEY'] ?? '')) {
+                $errors[] = 'VITE_REVERB_APP_KEY must match the shared REVERB_APP_KEY.';
+            }
+
+            foreach (['REVERB_HOST', 'VITE_REVERB_HOST'] as $hostKey) {
+                if (($values[$hostKey] ?? '') !== 'centralized-reverb.ohmyserver.com') {
+                    $errors[] = "{$hostKey} must point to centralized-reverb.ohmyserver.com.";
+                }
+            }
+        }
+
         return $errors;
     }
 

@@ -24,6 +24,9 @@ final readonly class InstallPlan
         public string $database,
         public bool $useRedis,
         public array $features,
+        public string $reverbAppId,
+        public string $reverbAppKey,
+        public string $reverbAppSecret,
         public bool $deploy,
         public string $deploymentMode,
         public string $deploymentKey,
@@ -69,6 +72,11 @@ final readonly class InstallPlan
             throw new InvalidArgumentException('Unknown Accelerator features: '.implode(', ', $unknownFeatures));
         }
 
+        if (in_array('realtime', $this->features, true)
+            && ($this->reverbAppId === '' || $this->reverbAppKey === '' || $this->reverbAppSecret === '')) {
+            throw new InvalidArgumentException('Centralized Reverb app ID, key, and secret are required when realtime is enabled.');
+        }
+
         if ($this->deploy && ! in_array($this->deploymentMode, ['single', 'dual'], true)) {
             throw new InvalidArgumentException('Deployment mode must be single or dual.');
         }
@@ -107,6 +115,9 @@ final readonly class InstallPlan
             database: self::string($data, 'database'),
             useRedis: (bool) ($data['useRedis'] ?? false),
             features: array_values(array_filter($data['features'] ?? [], is_string(...))),
+            reverbAppId: self::string($data, 'reverbAppId'),
+            reverbAppKey: self::string($data, 'reverbAppKey'),
+            reverbAppSecret: self::string($data, 'reverbAppSecret'),
             deploy: (bool) ($data['deploy'] ?? false),
             deploymentMode: self::string($data, 'deploymentMode', 'single'),
             deploymentKey: self::string($data, 'deploymentKey', self::string($data, 'project')),

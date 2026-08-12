@@ -13,6 +13,7 @@ use WireNinja\Accelerator\Deployment\DeploymentConfig;
 
 use function Laravel\Prompts\confirm;
 use function Laravel\Prompts\multiselect;
+use function Laravel\Prompts\password;
 use function Laravel\Prompts\select;
 use function Laravel\Prompts\text;
 
@@ -30,7 +31,6 @@ final class ConfigureCommand extends Command
         {--deployment-key= : Stable lowercase deployment identity}
         {--ssl-email= : Email used for ACME certificate registration}
         {--rotate-app-key : Generate a new APP_KEY for the selected stage}
-        {--rotate-realtime-credentials : Generate new centralized Reverb credentials for the selected stage}
         {--force : Confirm a validated non-interactive write}
         {--json : Emit a stable JSON result}';
 
@@ -169,6 +169,7 @@ final class ConfigureCommand extends Command
         $config = DeploymentConfig::load(base_path(), $stage, validateRuntime: false);
         $path = ".accelerator/environments/{$stage}.env";
         $current = $store->read($path);
+        $local = $store->read('.env');
         $template = $current !== [] ? $current : $store->read('.env.example');
         $prefix = str_replace('-', '_', "{$config->deploymentKey}_{$stage}");
         $key = ($this->option('rotate-app-key') || ($template['APP_KEY'] ?? '') === '') ? 'base64:'.base64_encode(random_bytes(32)) : $template['APP_KEY'];
@@ -182,13 +183,26 @@ final class ConfigureCommand extends Command
             'OTEL_INSTRUMENTATION_HTTP_SERVER' => 'false', 'OTEL_EXPORTER_OTLP_ENDPOINT' => $template['OTEL_EXPORTER_OTLP_ENDPOINT'] ?? 'https://observe.ohmyserver.com/api/default',
         ];
 
-        if (($draft['ACCELERATOR_FEATURE_REALTIME'] ?? 'false') === 'true' && ($this->option('rotate-realtime-credentials') || ($draft['REVERB_APP_KEY'] ?? '') === '')) {
-            $reverbKey = bin2hex(random_bytes(16));
-            $draft += ['REVERB_APP_ID' => bin2hex(random_bytes(8)), 'REVERB_APP_KEY' => $reverbKey, 'REVERB_APP_SECRET' => bin2hex(random_bytes(32)), 'VITE_REVERB_APP_KEY' => $reverbKey];
-        }
-
         if (($draft['ACCELERATOR_FEATURE_REALTIME'] ?? 'false') === 'true') {
-            $draft += ['REVERB_HOST' => 'centralized-reverb.ohmyserver.com', 'REVERB_PORT' => '443', 'REVERB_SCHEME' => 'https', 'VITE_REVERB_HOST' => 'centralized-reverb.ohmyserver.com', 'VITE_REVERB_PORT' => '443', 'VITE_REVERB_SCHEME' => 'https'];
+            $reverbAppId = $local['REVERB_APP_ID'] ?? (string) getenv('ACCELERATOR_REVERB_APP_ID');
+            $reverbAppKey = $local['REVERB_APP_KEY'] ?? (string) getenv('ACCELERATOR_REVERB_APP_KEY');
+            $reverbAppSecret = $local['REVERB_APP_SECRET'] ?? (string) getenv('ACCELERATOR_REVERB_APP_SECRET');
+
+            if ($this->interactive()) {
+                $reverbAppId = $reverbAppId !== '' ? $reverbAppId : text('Centralized Reverb app ID', required: true);
+                $reverbAppKey = $reverbAppKey !== '' ? $reverbAppKey : password('Centralized Reverb app key', required: true);
+                $reverbAppSecret = $reverbAppSecret !== '' ? $reverbAppSecret : password('Centralized Reverb app secret', required: true);
+            }
+
+            if ($reverbAppId === '' || $reverbAppKey === '' || $reverbAppSecret === '') {
+                throw new RuntimeException('Realtime requires shared centralized Reverb credentials in local .env or ACCELERATOR_REVERB_APP_ID/KEY/SECRET process variables.');
+            }
+
+            $draft += [
+                'REVERB_APP_ID' => $reverbAppId, 'REVERB_APP_KEY' => $reverbAppKey, 'REVERB_APP_SECRET' => $reverbAppSecret,
+                'REVERB_HOST' => 'centralized-reverb.ohmyserver.com', 'REVERB_PORT' => '443', 'REVERB_SCHEME' => 'https',
+                'VITE_REVERB_APP_KEY' => $reverbAppKey, 'VITE_REVERB_HOST' => 'centralized-reverb.ohmyserver.com', 'VITE_REVERB_PORT' => '443', 'VITE_REVERB_SCHEME' => 'https',
+            ];
         }
 
         $store->replace($path, $draft);

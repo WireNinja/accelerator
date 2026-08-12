@@ -18,6 +18,6 @@ Schema 3 stores stable `deployment_key`, repository/branch, package manager, PHP
 
 Optional features are OAuth, PWA, Telegram, realtime, Scout, and observability. Realtime means centralized Reverb client. Observability means direct OpenTelemetry export to OpenObserve. Queue connection is always `database`; Redis remains optional for cache and sessions.
 
-Never print or commit credentials. Preserve backup, Telegram, database, OAuth, Reverb, and OTLP secrets during reconfiguration. `--rotate-app-key` and `--rotate-realtime-credentials` are destructive and require explicit intent. OpenObserve headers must be distinct per app stage.
+Never print or commit credentials. Preserve backup, Telegram, database, OAuth, Reverb, and OTLP secrets during reconfiguration. `--rotate-app-key` is destructive and requires explicit intent. Realtime uses the same centralized Reverb app ID, key, and secret in local, staging, and production; the central server's ignored `.env` is the source of truth. OpenObserve headers must be distinct per app stage.
 
-Dual stages run identical code but isolate database, uploads, APP_KEY, Reverb credentials, OTLP credential/identity, Redis/cache prefixes, session cookie, and backup namespace. Single-stage disables the data indicator; dual-stage labels local/test/live data.
+Dual stages run identical code but isolate database, uploads, APP_KEY, OTLP credential/identity, Redis/cache prefixes, session cookie, and backup namespace. Reverb credentials are deliberately shared because the centralized server exposes one application. Single-stage disables the data indicator; dual-stage labels local/test/live data.
