@@ -554,6 +554,10 @@ final readonly class BackupManager
 
     private function protectArtifact(string $diskName, string $archivePath): void
     {
+        if ($diskName === config('accelerator.backup.s3.disk')) {
+            return;
+        }
+
         $disk = Storage::disk($diskName);
 
         foreach ([$archivePath, $archivePath.'.accelerator.json'] as $path) {

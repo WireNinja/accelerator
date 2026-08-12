@@ -34,6 +34,8 @@ The `ACCELERATOR_TELEGRAM_*` pair is the stage operator channel for deployment a
 
 Cloudflare R2 uses the account endpoint and region `auto`. The runtime needs only an R2 S3 Access Key ID and Secret Access Key with Object Read & Write access to the selected bucket; it does not use the general Cloudflare API token. Credentials must support listing, reading, writing, and deleting objects because verification, restore, and retention cleanup use all four capabilities. Keep all values in the ignored stage env, never `deploy.json`.
 
+R2 buckets are private by default and do not implement S3 object ACL mutation. Accelerator writes to its dedicated S3 disk with private visibility but deliberately does not call `PutObjectAcl`; do not reintroduce a post-write `setVisibility()` call for this disk.
+
 With the default prefix, object keys are isolated as `accelerator/{deployment_key}/{stage}/acc-{deployment_key}-{stage}/...`. A single bucket can therefore safely hold many projects and both stages without collisions. Do not add `accelerator-s3` manually to `ACCELERATOR_BACKUP_DISKS`; the boolean flag owns it.
 
 ## Public workflow
