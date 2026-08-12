@@ -752,6 +752,7 @@ task('accelerator:mark-failed-release', function (): void {
 });
 
 task('deploy', [
+    'accelerator:provision',
     'deploy:prepare',
     'deploy:vendors',
     'artisan:storage:link',
