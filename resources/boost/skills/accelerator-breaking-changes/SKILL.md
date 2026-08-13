@@ -18,6 +18,6 @@ Target contract:
 - retain small `BetterEnum` where domain code uses it;
 - use `null = all` and `[] = none` for role default permissions;
 - app-owned `NavigationGroup`; resource icon/label/policy stay local;
-- committed `.accelerator/deploy.json`, ignored stage envs, Deployer-backed Artisan operations.
+- committed `.easyploy/manifest.json`, ignored Easyploy stage envs, and Easyploy as the sole deployment control plane.
 
 Never rewrite an applied migration blindly. Add an explicit transition migration for existing data. Verify boot, caches, route topology, PHPStan level 5, Composer audit/validate, pnpm/npm peers/build, RBAC, and affected UI. No compatibility facade or dual old/new workflow remains at completion.

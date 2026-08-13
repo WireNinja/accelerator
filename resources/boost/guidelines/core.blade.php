@@ -7,13 +7,13 @@ Accelerator is a proprietary, batteries-included foundation for Laravel 13 Filam
 - fresh install: `accelerator-installation`
 - complete fresh-to-live workflow: `accelerator-project-lifecycle`
 - existing-app migration: `accelerator-breaking-changes`
-- env/features/deploy topology: `accelerator-env-config`
+- local env/features: `accelerator-env-config`
 - Filament/Shield/resources/UI: `accelerator-filament`
 - end-to-end business features: `accelerator-feature-development`
 - models/schema/casts/relations: `accelerator-model-context`
 - audit logging: `accelerator-activity-log`
 - PWA/Vite: `accelerator-pwa-development`
-- remote mutation: `accelerator-deployment`
+- deployment and remote mutation: `easyploy-deployment`
 - read-only operations: `accelerator-ops-observability`
 - OpenTelemetry/OpenObserve: `accelerator-observability`
 
@@ -50,13 +50,13 @@ Accelerator is a proprietary, batteries-included foundation for Laravel 13 Filam
 ### Configuration boundaries
 
 - `.env`: local Laravel runtime; application code reads `config()`.
-- `.accelerator/deploy.json`: committed non-secret topology.
-- `.accelerator/environments/{stage}.env`: ignored stage secrets.
+- `.easyploy/manifest.json`: committed non-secret topology.
+- `.easyploy/environments/{stage}.env`: ignored stage secrets.
 - `.accelerator/reverb-apps.json`: ignored centralized Reverb registration payload; never print or commit it.
 - `.accelerator/install-state.json`: ignored resume receipt only.
-- Deployment root is `/var/www/{domain}` with Deployer releases and `current` symlink.
-- `deployment_key` is stable. Schema 3 has no client process ports or Supervisor topology.
-- Normal server operations originate from local Artisan commands. Deployer, SSH, Nginx, PHP-FPM, cron, and Linux commands are internal implementation layers; manual SSH is break-glass only.
+- Deployment root is `/var/www/{domain}` with Easyploy releases and `current` symlink.
+- `deployment_key` is stable. Easyploy manifest schema 1 has no client process ports or Supervisor topology.
+- Normal server operations originate from the local Easyploy CLI. SSH, Nginx, PHP-FPM, cron, and Linux commands are internal implementation layers; manual SSH is break-glass only.
 - Queues use the database connection and a bounded worker launched by Laravel's package-owned sub-minute schedule. One `/etc/cron.d/acc-{deployment_key}-{stage}` entry runs `schedule:run` each minute.
 - Realtime applications are clients of centralized Reverb with a distinct application credential per runtime; observability exports directly over OTLP/HTTP to centralized OpenObserve. Client stages own neither daemon.
 - Dual stages are independent, identical application instances. Code, dependencies, features, UI, and behavior match; domain and mutable data/runtime state are isolated. The configurable `LOCAL DATA`, `TEST DATA`, or `LIVE DATA` topbar badge is the deliberate UI exception. Single-stage projects do not show it.

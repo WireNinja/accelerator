@@ -18,10 +18,8 @@ use Symfony\Component\Process\Process;
 use Throwable;
 use WireNinja\Accelerator\AcceleratorServiceProvider;
 use WireNinja\Accelerator\Contracts\AcceleratorUser;
-use WireNinja\Accelerator\Deployment\DeploymentConfig;
-use WireNinja\Accelerator\Deployment\DeploymentEnvironment;
 
-#[Signature('accelerator:doctor {--json : Output as JSON} {--compact : Compact JSON output} {--section= : runtime, database, frontend, deployment, or security}')]
+#[Signature('accelerator:doctor {--json : Output as JSON} {--compact : Compact JSON output} {--section= : runtime, database, frontend, or security}')]
 #[Description('Verify the Accelerator installation contract and report actionable failures')]
 final class DoctorCommand extends Command
 {
@@ -36,13 +34,13 @@ final class DoctorCommand extends Command
         $section = $this->option('section');
 
         if (! is_string($section) || $section === '') {
-            foreach (['runtime', 'database', 'frontend', 'deployment', 'security'] as $selected) {
+            foreach (['runtime', 'database', 'frontend', 'security'] as $selected) {
                 $this->inspectSection($selected);
             }
-        } elseif (in_array($section, ['runtime', 'database', 'frontend', 'deployment', 'security'], true)) {
+        } elseif (in_array($section, ['runtime', 'database', 'frontend', 'security'], true)) {
             $this->inspectSection($section);
         } else {
-            $this->record('Runtime', 'Section', $section, 'error', 'Section must be runtime, database, frontend, deployment, or security.');
+            $this->record('Runtime', 'Section', $section, 'error', 'Section must be runtime, database, frontend, or security.');
         }
 
         $errors = $this->messagesFor('error');
@@ -234,89 +232,12 @@ final class DoctorCommand extends Command
         }
     }
 
-    private function inspectDeployment(): void
-    {
-        if (is_file(base_path('.accelerator/deploy.env'))) {
-            $this->record('Deployment', 'Legacy topology', 'deploy.env', 'error', 'Migrate .accelerator/deploy.env to .accelerator/deploy.json before deployment.');
-
-            return;
-        }
-
-        if (! is_file(base_path('.accelerator/deploy.json'))) {
-            $this->record('Deployment', 'Topology', 'not configured', 'warning', 'Deployment is optional. Configure it with php artisan accelerator:configure deployment.');
-
-            return;
-        }
-
-        try {
-            $default = DeploymentConfig::load(base_path());
-            $stages = array_keys(array_filter(
-                is_array($default->document['stages'] ?? null) ? $default->document['stages'] : [],
-                static fn (mixed $stage): bool => is_array($stage) && ($stage['enabled'] ?? false) === true,
-            ));
-
-            foreach ($stages as $stage) {
-                if (is_string($stage)) {
-                    $this->inspectDeploymentStage(DeploymentConfig::load(base_path(), $stage));
-                }
-            }
-        } catch (Throwable $exception) {
-            $this->record('Deployment', 'Topology', 'invalid', 'error', $this->redact($exception->getMessage()));
-        }
-    }
-
-    private function inspectDeploymentStage(DeploymentConfig $config): void
-    {
-        $stageEnvironment = ".accelerator/environments/{$config->stage}.env";
-        $label = "Deployment {$config->stage}";
-        $this->assert($label, 'Topology', "{$config->stage}: {$config->domain}", true, 'Deployment topology is invalid.');
-        $this->assert($label, 'Identity', $config->deploymentKey, $config->group === DeploymentConfig::serviceGroup($config->deploymentKey, $config->stage), 'Deployment identity must be derived from deployment_key.');
-        $this->assert($label, 'Stable root', $config->deployRoot, $config->deployRoot === "/var/www/{$config->domain}", 'Deployment root must match the domain.');
-        $this->assert($label, 'Stage environment', $stageEnvironment, is_file(base_path($stageEnvironment)), "Missing {$stageEnvironment}.");
-        $environment = new DeploymentEnvironment(base_path());
-        $values = $environment->read($config);
-        $this->assert($label, 'Queue topology', 'database + scheduler drain', ($values['QUEUE_CONNECTION'] ?? '') === 'database', 'QUEUE_CONNECTION must equal database.');
-        $environmentErrors = $environment->validate($config, requireExternalSecrets: false);
-        $this->assert($label, 'Stage environment contract', $environmentErrors === [] ? 'valid' : 'invalid', $environmentErrors === [], implode(' ', $environmentErrors));
-        $telegramConfigured = ($values['ACCELERATOR_TELEGRAM_BOT_TOKEN'] ?? '') !== '' && ($values['ACCELERATOR_TELEGRAM_CHAT_ID'] ?? '') !== '';
-        $this->assert($label, 'Operator Telegram', $telegramConfigured ? 'configured' : 'not configured', $telegramConfigured, 'Operational alerts are disabled. Configure both ACCELERATOR_TELEGRAM_BOT_TOKEN and ACCELERATOR_TELEGRAM_CHAT_ID.', 'warning');
-        $disks = array_filter(array_map('trim', explode(',', $values['ACCELERATOR_BACKUP_DISKS'] ?? 'local')));
-        $s3Enabled = ($values['ACCELERATOR_BACKUP_S3_ENABLED'] ?? 'true') === 'true';
-
-        if ($s3Enabled) {
-            $disks[] = 'accelerator-s3';
-        }
-
-        $offsite = array_values(array_diff($disks, ['local']));
-        $this->assert($label, 'Backup durability', $offsite === [] ? 'same VPS only' : 'offsite: '.implode(', ', $offsite), $offsite !== [], 'Local-only backups do not survive total VPS loss.', 'warning');
-        $s3Configured = collect([
-            'ACCELERATOR_BACKUP_S3_ACCESS_KEY_ID',
-            'ACCELERATOR_BACKUP_S3_SECRET_ACCESS_KEY',
-            'ACCELERATOR_BACKUP_S3_BUCKET',
-            'ACCELERATOR_BACKUP_S3_ENDPOINT',
-        ])->every(static fn (string $key): bool => trim($values[$key] ?? '') !== '');
-        $this->assert(
-            $label,
-            'S3 credentials',
-            $s3Enabled ? ($s3Configured ? 'configured' : 'incomplete') : 'disabled',
-            ! $s3Enabled || $s3Configured,
-            'S3 backup is enabled but its stage-owned credentials, bucket, or endpoint are incomplete.',
-            'warning',
-        );
-    }
-
     private function inspectSecurity(): void
     {
         $productionDebug = app()->isProduction() && (bool) config('app.debug');
         $this->assert('Security', 'Production debug', $productionDebug ? 'enabled' : 'disabled', ! $productionDebug, 'APP_DEBUG must be false in production.');
         $this->assert('Security', 'Application key', filled(config('app.key')) ? 'set' : 'empty', filled(config('app.key')), 'APP_KEY is empty.');
 
-        foreach (glob(base_path('.accelerator/environments/*.env')) ?: [] as $file) {
-            $permissions = fileperms($file);
-            $mode = is_int($permissions) ? $permissions & 0777 : 0;
-            $relative = ltrim(str_replace(base_path(), '', $file), '/');
-            $this->assert('Security', $relative, decoct($mode), $mode !== 0 && ($mode & 0077) === 0, "{$relative} must not be readable by group or others.");
-        }
     }
 
     private function inspectSection(string $section): void
@@ -325,7 +246,6 @@ final class DoctorCommand extends Command
             'runtime' => $this->inspectRuntimeSection(),
             'database' => $this->inspectDatabase(),
             'frontend' => $this->inspectFrontend(),
-            'deployment' => $this->inspectDeployment(),
             'security' => $this->inspectSecurity(),
             default => throw new InvalidArgumentException("Unknown doctor section: {$section}"),
         };

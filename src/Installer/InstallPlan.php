@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace WireNinja\Accelerator\Installer;
 
 use InvalidArgumentException;
-use WireNinja\Accelerator\Deployment\DeploymentConfig;
 
 final readonly class InstallPlan
 {
@@ -28,16 +27,6 @@ final readonly class InstallPlan
         public bool $useRedis,
         public array $features,
         public array $reverbApplications,
-        public bool $deploy,
-        public string $deploymentMode,
-        public string $deploymentKey,
-        public string $sshHost,
-        public string $repository,
-        public string $repositoryBranch,
-        public string $domain,
-        public string $deployRoot,
-        public string $stagingDomain,
-        public string $stagingDeployRoot,
     ) {
         if (! in_array($this->packageManager, ['pnpm', 'npm'], true)) {
             throw new InvalidArgumentException('Package manager must be pnpm or npm.');
@@ -74,38 +63,9 @@ final readonly class InstallPlan
         }
 
         if (in_array('realtime', $this->features, true)) {
-            $requiredApplications = ['local'];
-
-            if ($this->deploy) {
-                $requiredApplications[] = 'production';
-
-                if ($this->deploymentMode === 'dual') {
-                    $requiredApplications[] = 'staging';
-                }
+            if (! self::validReverbApplication($this->reverbApplications['local'] ?? null)) {
+                throw new InvalidArgumentException('Centralized Reverb credentials are missing for [local].');
             }
-
-            foreach ($requiredApplications as $application) {
-                if (! self::validReverbApplication($this->reverbApplications[$application] ?? null)) {
-                    throw new InvalidArgumentException("Centralized Reverb credentials are missing for [{$application}].");
-                }
-            }
-        }
-
-        if ($this->deploy && ! in_array($this->deploymentMode, ['single', 'dual'], true)) {
-            throw new InvalidArgumentException('Deployment mode must be single or dual.');
-        }
-
-        if ($this->deploy) {
-            DeploymentConfig::validateInstallerTargets(
-                deploymentKey: $this->deploymentKey,
-                sshHost: $this->sshHost,
-                repository: $this->repository,
-                branch: $this->repositoryBranch,
-                productionDomain: $this->domain,
-                productionRoot: $this->deployRoot,
-                stagingDomain: $this->deploymentMode === 'dual' ? $this->stagingDomain : null,
-                stagingRoot: $this->deploymentMode === 'dual' ? $this->stagingDeployRoot : null,
-            );
         }
     }
 
@@ -130,16 +90,6 @@ final readonly class InstallPlan
             useRedis: (bool) ($data['useRedis'] ?? false),
             features: array_values(array_filter($data['features'] ?? [], is_string(...))),
             reverbApplications: is_array($data['reverbApplications'] ?? null) ? $data['reverbApplications'] : [],
-            deploy: (bool) ($data['deploy'] ?? false),
-            deploymentMode: self::string($data, 'deploymentMode', 'single'),
-            deploymentKey: self::string($data, 'deploymentKey', self::string($data, 'project')),
-            sshHost: self::string($data, 'sshHost'),
-            repository: self::string($data, 'repository'),
-            repositoryBranch: self::string($data, 'repositoryBranch', 'main'),
-            domain: self::string($data, 'domain'),
-            deployRoot: self::string($data, 'deployRoot'),
-            stagingDomain: self::string($data, 'stagingDomain'),
-            stagingDeployRoot: self::string($data, 'stagingDeployRoot'),
         );
     }
 

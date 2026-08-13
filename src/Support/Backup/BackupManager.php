@@ -188,7 +188,7 @@ final readonly class BackupManager
 
         if (! $healthy) {
             $this->notifier->send('backup health', 'failed', [
-                'next_command' => 'php artisan accelerator:backup:status --stage='.config('accelerator.operations.stage'),
+                'next_command' => 'easyploy backup status --stage='.config('accelerator.operations.stage').' --json',
             ]);
         }
 

@@ -57,7 +57,7 @@ final class BuiltinExceptions
         // ACCEPTABLE RISK:
         // All authenticated surfaces (admin panel, API with auth middleware) still report
         // normally. Public-facing surfaces in this architecture are minimal (login page,
-        // OAuth callback, PWA assets) and are validated through deployment health checks
+        // OAuth callback, PWA assets) and are validated through application health checks
         // and uptime monitoring, not exception APM.
         //
         // If a project adds significant public guest-facing features (e-commerce storefront,

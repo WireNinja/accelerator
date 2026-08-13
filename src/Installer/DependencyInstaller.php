@@ -84,7 +84,6 @@ final readonly class DependencyInstaller
             'require',
             '--dev',
             'laravel/boost:^2.0',
-            'deployer/deployer:^8.0',
             'larastan/larastan:^3.0',
             'pestphp/pest:^5.0',
             'pestphp/pest-plugin-laravel:^5.0',

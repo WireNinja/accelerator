@@ -1,25 +1,22 @@
 ---
 name: accelerator-ops-observability
-description: Diagnose Accelerator releases, logs, backups, Nginx, PHP-FPM, native cron, database queue drains, centralized Reverb client connectivity, and OpenTelemetry export without changing server state.
+description: Diagnose Accelerator application health, database queue drains, backups, centralized Reverb connectivity, and OpenTelemetry export without changing server state. Use Easyploy read-only commands for releases and infrastructure.
 ---
 
 # Accelerator operations observability
 
-Confirm configured deployment key, stage, domain, root, and SSH host first. Inspect only that project.
+Confirm deployment key, stage, domain, root, and SSH host from `.easyploy/manifest.json`.
 
 ```bash
 php artisan accelerator:doctor --json
-php artisan accelerator:deploy:preflight --stage=production --json
-php artisan accelerator:deploy:status --stage=production --json
-php artisan accelerator:backup:list --stage=production --json
-php artisan accelerator:backup:status --stage=production --json
-php artisan accelerator:backup:verify --stage=production --backup=<exact-id> --json
+easyploy config validate --stage=production --json
+easyploy doctor --stage=production --json
+easyploy status --stage=production --json
+easyploy backup status --stage=production --json
 ```
 
-Evidence order: committed topology; active `current` symlink; Nginx vhost and `/up`; exact PHP-FPM service; exact `/etc/cron.d/acc-{deployment_key}-{stage}` file; scheduler/Laravel logs; queue backlog; backup status; disk/release state. Inspect only key presence for secrets.
+Evidence order: committed Easyploy topology; active release; Nginx/FPM/cron health; Laravel logs; queue backlog; backup status; centralized service connectivity. Inspect only key presence for secrets.
 
-Centralized Reverb and OpenObserve are separate host services. Diagnose client configuration locally first; touching either central service requires separate explicit authority. Use `accelerator-observability` for OTLP-specific checks.
+Centralized Reverb and OpenObserve are separate services. Diagnose client configuration first; touching either central service needs separate authority. Use `accelerator-observability` for OTLP-specific checks.
 
-Inspect backup age, size, disk reachability, checksum result, archive components, encryption state, local free space, and the last lifecycle result. Read `../accelerator-deployment/references/backup-restore.md` for the artifact contract.
-
-This skill is read-only. Do not create, clean, deploy, restart, rollback, unlock, restore, or rewrite config. Switch to `accelerator-deployment` only after explicit mutation authority.
+This skill is read-only. Do not deploy, restart, reconcile, roll back, unlock, restore, or rewrite config. Switch to `easyploy-deployment` only after explicit mutation authority.

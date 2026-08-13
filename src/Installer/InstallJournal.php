@@ -126,7 +126,6 @@ final class InstallJournal
                 'package_manager' => $this->plan->packageManager,
                 'database' => $this->plan->database,
                 'features' => $this->plan->features,
-                'deployment_configured' => $this->plan->deploy,
             ] : null,
             'completed_steps' => $this->completedSteps,
             'publishes' => $this->publishes,

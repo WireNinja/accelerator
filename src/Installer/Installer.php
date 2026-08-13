@@ -62,14 +62,7 @@ final readonly class Installer
         $this->step($journal, 'quality', $application->quality(...));
         $journal->finish();
 
-        if ($this->plan->deploy) {
-            $firstStage = $this->plan->deploymentMode === 'dual' ? 'staging' : 'production';
-            $this->outro("Accelerator v2 installed. Complete .accelerator/environments/{$firstStage}.env, then run php artisan accelerator:configure environment --stage={$firstStage}.");
-
-            return;
-        }
-
-        $this->outro('Accelerator v2 installed. Run php artisan accelerator:doctor at any time to verify it.');
+        $this->outro('Accelerator v2 installed. Run php artisan accelerator:doctor to verify it; run easyploy init when deployment is needed.');
     }
 
     /**

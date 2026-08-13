@@ -1,6 +1,6 @@
 ---
 name: accelerator-env-config
-description: Inspect or change Accelerator local env, optional features, deployment schema 3, and ignored stage runtime files without mutating a server.
+description: Inspect or change Accelerator local application env and optional feature configuration without mutating a server. Use Easyploy for deployment topology and stage environments.
 ---
 
 # Accelerator environment and configuration
@@ -9,16 +9,15 @@ description: Inspect or change Accelerator local env, optional features, deploym
 |---|---|
 | `.env` | Local runtime and local secrets. |
 | `.env.example` | Public key contract; no credentials. |
-| `.accelerator/deploy.json` | Committed schema-3 topology; no secrets. |
-| `.accelerator/environments/{stage}.env` | Ignored canonical stage runtime and secrets. |
-| `.accelerator/reverb-apps.json` | Ignored centralized Reverb registration payload; contains secrets. |
+| `.accelerator/install-state.json` | Ignored resumable installer receipt only. |
+| `.accelerator/reverb-apps.json` | Ignored local centralized-Reverb registration payload. |
+| `.easyploy/manifest.json` | Committed non-secret deployment topology. |
+| `.easyploy/environments/{stage}.env` | Ignored stage runtime and secrets. |
 
-Use `php artisan accelerator:configure application|features|deployment|environment`. Use `accelerator:env:validate`, `accelerator:env:diff`, and `accelerator:feature:list --json` for read-only checks. `accelerator:env:push` is a separate remote mutation.
+Use `php artisan accelerator:configure application|features`, `accelerator:env`, `accelerator:feature:list --json`, and `accelerator:doctor --json` for local application config.
 
-Schema 3 stores stable `deployment_key`, repository/branch, package manager, PHP-FPM defaults, and stage host/domain/root. It has no `port_base`, HTTP-runtime choice, Supervisor program, queue-worker count, local Reverb switch, or telemetry daemon switch.
+Use `easyploy init|config|env` for topology and stage environments. Never make Accelerator recreate a second deployment control plane.
 
-Optional features are OAuth, PWA, Telegram, realtime, Scout, and observability. Realtime means centralized Reverb client. Observability means direct OpenTelemetry export to OpenObserve. Queue connection is always `database`; Redis remains optional for cache and sessions.
+Optional features are OAuth, PWA, Telegram, realtime, Scout, and observability. Realtime is a centralized Reverb client. Observability is direct OTLP export to OpenObserve. Queue connection is always database; Redis is optional for cache/sessions.
 
-Never print or commit credentials. Preserve backup, Telegram, database, OAuth, Reverb, and OTLP secrets during reconfiguration. `--rotate-app-key` and `--rotate-reverb-app` are destructive and require explicit intent. Every local/staging/production runtime uses a distinct centralized Reverb application and allowed origin. Register changed `.accelerator/reverb-apps.json` entries centrally before pushing the client env. OpenObserve headers must be distinct per app stage.
-
-Dual stages run identical code but isolate database, uploads, APP_KEY, Reverb credentials, OTLP credential/identity, Redis/cache prefixes, session cookie, and backup namespace. Single-stage disables the data indicator; dual-stage labels local/test/live data.
+Never print or commit credentials. `--rotate-reverb-app` is destructive. Dual stages run identical code and isolate all mutable runtime data and credentials.

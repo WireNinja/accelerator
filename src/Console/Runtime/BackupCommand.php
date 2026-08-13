@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace WireNinja\Accelerator\Console\Deployment;
+namespace WireNinja\Accelerator\Console\Runtime;
 
 use Illuminate\Console\Command;
 use JsonException;
@@ -10,7 +10,7 @@ use Throwable;
 use WireNinja\Accelerator\Support\Backup\BackupManager;
 use WireNinja\Accelerator\Support\Operations\OperatorTelegramNotifier;
 
-final class RuntimeBackupCommand extends Command
+final class BackupCommand extends Command
 {
     protected $signature = 'accelerator:backup:runtime
         {action : create, list, status, verify, cleanup, prepare, restore-context, discard, post-restore-health, notify-test, or restore notification}
@@ -62,7 +62,7 @@ final class RuntimeBackupCommand extends Command
                 $this->notifier->send('backup restore', 'failed', [
                     'backup_id' => is_string($this->option('backup')) ? $this->option('backup') : null,
                     'error' => $exception->getMessage(),
-                    'next_command' => 'php artisan accelerator:backup:verify --stage='.config('accelerator.operations.stage'),
+                    'next_command' => 'easyploy backup status --stage='.config('accelerator.operations.stage').' --json',
                 ], force: true);
             }
 
@@ -117,7 +117,7 @@ final class RuntimeBackupCommand extends Command
         $delivered = $this->notifier->send('backup restore', $result, [
             'backup_id' => $this->backupId(),
             'next_command' => $result === 'failed'
-                ? 'php artisan accelerator:deploy:status --stage='.config('accelerator.operations.stage')
+                ? 'easyploy status --stage='.config('accelerator.operations.stage').' --json'
                 : null,
         ], force: true);
 

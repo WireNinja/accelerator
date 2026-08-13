@@ -16,8 +16,7 @@ final class InstallCommand extends Command
     /** @var list<string> */
     private const INSTALLER_OPTIONS = [
         'app-name', 'app-url', 'admin-name', 'admin-username', 'admin-email', 'admin-password',
-        'package-manager', 'database', 'redis', 'features', 'deploy', 'deployment-mode', 'deployment-key',
-        'ssh-host', 'repo', 'branch', 'domain', 'deploy-root', 'staging-domain', 'staging-deploy-root',
+        'package-manager', 'database', 'redis', 'features',
     ];
 
     protected $signature = 'accelerator:install
@@ -31,16 +30,6 @@ final class InstallCommand extends Command
         {--database=sqlite}
         {--redis}
         {--features= : Comma-separated features; realtime also requires ACCELERATOR_REVERB_APP_ID/KEY/SECRET in non-interactive mode}
-        {--deploy}
-        {--deployment-mode=single}
-        {--deployment-key=}
-        {--ssh-host=}
-        {--repo=}
-        {--branch=main}
-        {--domain=}
-        {--deploy-root=}
-        {--staging-domain=}
-        {--staging-deploy-root=}
         {--json : Emit one stable JSON result and suppress progress output}';
 
     protected $description = 'Install Accelerator into a pristine Laravel application';
@@ -61,7 +50,7 @@ final class InstallCommand extends Command
 
         try {
             $processRunner = new ProcessRunner(quiet: (bool) $this->option('json'));
-            $plan = (new Onboarding($projectRoot, $processRunner))->plan($this->installerArguments());
+            $plan = (new Onboarding($projectRoot))->plan($this->installerArguments());
 
             (new Installer(
                 projectRoot: $projectRoot,
@@ -78,7 +67,6 @@ final class InstallCommand extends Command
                     'package_manager' => $plan->packageManager,
                     'database' => $plan->database,
                     'features' => $plan->features,
-                    'deployment_configured' => $plan->deploy,
                 ]);
             }
         } catch (Throwable $exception) {

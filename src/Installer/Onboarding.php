@@ -8,7 +8,6 @@ use Illuminate\Support\Str;
 use JsonException;
 use RuntimeException;
 use WireNinja\Accelerator\Configuration\ReverbApplicationRegistry;
-use WireNinja\Accelerator\Configuration\SshConfig;
 
 use function Laravel\Prompts\confirm;
 use function Laravel\Prompts\intro;
@@ -38,10 +37,7 @@ final class Onboarding
         'scout',
     ];
 
-    public function __construct(
-        private readonly string $projectRoot,
-        private readonly ProcessRunner $processRunner,
-    ) {}
+    public function __construct(private readonly string $projectRoot) {}
 
     /**
      * @param  list<string>  $arguments
@@ -141,72 +137,10 @@ final class Onboarding
             hint: 'Filament, settings, and RBAC are always installed. External-service integrations remain optional.',
             required: false,
         ));
-        $deploy = confirm(
-            label: 'Configure VPS deployment now?',
-            default: false,
-            hint: 'You can configure it later with php artisan accelerator:configure deployment.',
-        );
-
-        $deploymentKey = '';
-        $sshHost = '';
-        $repository = '';
-        $repositoryBranch = '';
-        $deploymentMode = '';
-        $domain = '';
-        $deployRoot = '';
-        $stagingDomain = '';
-        $stagingDeployRoot = '';
-
-        if ($deploy) {
-            $deploymentKey = $defaultProject;
-            $repository = $this->processRunner->capture(['git', 'remote', 'get-url', 'origin'], $this->projectRoot);
-            $repositoryBranch = $this->processRunner->capture(['git', 'branch', '--show-current'], $this->projectRoot) ?: 'main';
-            $deploymentMode = select(
-                label: 'Deployment topology',
-                options: [
-                    'single' => 'Production only',
-                    'dual' => 'Staging and production',
-                ],
-                default: 'single',
-            );
-            $deploymentKey = text(label: 'Stable deployment key', default: $deploymentKey, required: true);
-            $sshAliases = SshConfig::aliases();
-            $sshHost = $sshAliases === []
-                ? text(label: 'SSH host alias from ~/.ssh/config', required: true)
-                : select(label: 'SSH host alias', options: array_combine($sshAliases, $sshAliases));
-            $repository = text(label: 'Git repository URL', default: $repository, required: true);
-            $repositoryBranch = text(label: 'Git deployment branch', default: $repositoryBranch, required: true);
-            $domain = text(
-                label: 'Production domain',
-                required: true,
-                validate: static fn (string $value): ?string => preg_match('/^(?=.{1,253}$)(?!-)[a-z0-9.-]+(?<!-)$/i', $value)
-                    ? null
-                    : 'Enter a valid hostname without a scheme or path.',
-            );
-            $deployRoot = text(label: 'Production release root', default: "/var/www/{$domain}", required: true);
-
-            if ($deploymentMode === 'dual') {
-                $stagingDomain = text(
-                    label: 'Staging domain',
-                    default: "staging.{$domain}",
-                    required: true,
-                    validate: static fn (string $value): ?string => preg_match('/^(?=.{1,253}$)(?!-)[a-z0-9.-]+(?<!-)$/i', $value)
-                        ? null
-                        : 'Enter a valid hostname without a scheme or path.',
-                );
-                $stagingDeployRoot = text(label: 'Staging release root', default: "/var/www/{$stagingDomain}", required: true);
-            }
-
-        }
-
         $reverbApplications = $this->reverbApplications(
             features: $features,
-            deploymentKey: $deploymentKey !== '' ? $deploymentKey : $defaultProject,
+            deploymentKey: $defaultProject,
             localUrl: $appUrl,
-            deploy: $deploy,
-            deploymentMode: $deploymentMode,
-            productionDomain: $domain,
-            stagingDomain: $stagingDomain,
         );
 
         if ($reverbApplications !== []) {
@@ -225,16 +159,6 @@ final class Onboarding
             useRedis: $useRedis,
             features: $features,
             reverbApplications: $reverbApplications,
-            deploy: $deploy,
-            deploymentMode: $deploymentMode,
-            deploymentKey: $deploymentKey,
-            sshHost: $sshHost,
-            repository: $repository,
-            repositoryBranch: $repositoryBranch,
-            domain: $domain,
-            deployRoot: $deployRoot,
-            stagingDomain: $stagingDomain,
-            stagingDeployRoot: $stagingDeployRoot,
         );
     }
 
@@ -280,10 +204,6 @@ final class Onboarding
 
             $features = $this->resolveFeatures($requestedFeatures);
         }
-        $deploy = isset($options['deploy']);
-        $deploymentMode = $this->option($options, 'deployment-mode', 'single');
-        $domain = $this->option($options, 'domain');
-        $stagingDomain = $this->option($options, 'staging-domain', $domain === '' ? '' : "staging.{$domain}");
         $adminPassword = $this->option($options, 'admin-password', (string) getenv('ACCELERATOR_ADMIN_PASSWORD'));
         if ($adminPassword === '') {
             throw new RuntimeException('Non-interactive installation requires --admin-password or ACCELERATOR_ADMIN_PASSWORD. The password is never generated or printed.');
@@ -306,23 +226,9 @@ final class Onboarding
             features: $features,
             reverbApplications: $this->reverbApplications(
                 features: $features,
-                deploymentKey: $deploy ? $this->option($options, 'deployment-key', $defaultProject) : $defaultProject,
+                deploymentKey: $defaultProject,
                 localUrl: $this->option($options, 'app-url', 'http://localhost:8000'),
-                deploy: $deploy,
-                deploymentMode: $deploy ? $deploymentMode : '',
-                productionDomain: $domain,
-                stagingDomain: $stagingDomain,
             ),
-            deploy: $deploy,
-            deploymentMode: $deploy ? $deploymentMode : '',
-            deploymentKey: $deploy ? $this->option($options, 'deployment-key', $defaultProject) : '',
-            sshHost: $deploy ? $this->option($options, 'ssh-host') : '',
-            repository: $deploy ? $this->option($options, 'repo') : '',
-            repositoryBranch: $deploy ? $this->option($options, 'branch', 'main') : '',
-            domain: $domain,
-            deployRoot: $this->option($options, 'deploy-root', $domain === '' ? '' : "/var/www/{$domain}"),
-            stagingDomain: $stagingDomain,
-            stagingDeployRoot: $this->option($options, 'staging-deploy-root', $stagingDomain === '' ? '' : "/var/www/{$stagingDomain}"),
         );
     }
 
@@ -348,28 +254,14 @@ final class Onboarding
         array $features,
         string $deploymentKey,
         string $localUrl,
-        bool $deploy,
-        string $deploymentMode,
-        string $productionDomain,
-        string $stagingDomain,
     ): array {
         if (! in_array('realtime', $features, true)) {
             return [];
         }
 
-        $applications = [
+        return [
             'local' => ReverbApplicationRegistry::generate("{$deploymentKey}-local", $localUrl),
         ];
-
-        if ($deploy) {
-            $applications['production'] = ReverbApplicationRegistry::generate("{$deploymentKey}-production", "https://{$productionDomain}");
-        }
-
-        if ($deploy && $deploymentMode === 'dual') {
-            $applications['staging'] = ReverbApplicationRegistry::generate("{$deploymentKey}-staging", "https://{$stagingDomain}");
-        }
-
-        return $applications;
     }
 
     private function validatePassword(string $password): ?string

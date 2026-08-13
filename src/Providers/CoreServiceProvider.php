@@ -23,32 +23,12 @@ use WireNinja\Accelerator\Console\Agent\DoctorCommand;
 use WireNinja\Accelerator\Console\ConfigureCommand;
 use WireNinja\Accelerator\Console\ContextCommand;
 use WireNinja\Accelerator\Console\DependenciesCommand;
-use WireNinja\Accelerator\Console\Deployment\BackupCleanupCommand;
-use WireNinja\Accelerator\Console\Deployment\BackupCommand;
-use WireNinja\Accelerator\Console\Deployment\BackupListCommand;
-use WireNinja\Accelerator\Console\Deployment\BackupRestoreCommand;
-use WireNinja\Accelerator\Console\Deployment\BackupStatusCommand;
-use WireNinja\Accelerator\Console\Deployment\BackupVerifyCommand;
-use WireNinja\Accelerator\Console\Deployment\DeployCommand;
-use WireNinja\Accelerator\Console\Deployment\DeployInitCommand;
-use WireNinja\Accelerator\Console\Deployment\DeployPreflightCommand;
-use WireNinja\Accelerator\Console\Deployment\DeployPromoteCommand;
-use WireNinja\Accelerator\Console\Deployment\DeployRelocateCommand;
-use WireNinja\Accelerator\Console\Deployment\DeployRollbackCommand;
-use WireNinja\Accelerator\Console\Deployment\DeployStatusCommand;
-use WireNinja\Accelerator\Console\Deployment\DeployUnlockCommand;
-use WireNinja\Accelerator\Console\Deployment\EnvironmentDiffCommand;
-use WireNinja\Accelerator\Console\Deployment\EnvironmentEditCommand;
-use WireNinja\Accelerator\Console\Deployment\EnvironmentPushCommand;
-use WireNinja\Accelerator\Console\Deployment\EnvironmentValidateCommand;
-use WireNinja\Accelerator\Console\Deployment\LogsCommand;
-use WireNinja\Accelerator\Console\Deployment\NotifyTestCommand;
-use WireNinja\Accelerator\Console\Deployment\PortsCommand;
-use WireNinja\Accelerator\Console\Deployment\RuntimeBackupCommand;
 use WireNinja\Accelerator\Console\EnvCommand;
 use WireNinja\Accelerator\Console\FeatureListCommand;
 use WireNinja\Accelerator\Console\InstallCommand;
 use WireNinja\Accelerator\Console\ProvisionAdminCommand;
+use WireNinja\Accelerator\Console\Runtime\BackupCommand;
+use WireNinja\Accelerator\Console\Runtime\NotifyCommand;
 use WireNinja\Accelerator\Contracts\AcceleratorUser;
 use WireNinja\Accelerator\Livewire\Synthesizers\BigDecimalSynth;
 use WireNinja\Accelerator\Support\Observability\AuthenticatedOpenTelemetryHandler;
@@ -97,28 +77,8 @@ final class CoreServiceProvider extends ServiceProvider
             ConfigureCommand::class,
             ContextCommand::class,
             DependenciesCommand::class,
-            DeployCommand::class,
-            DeployInitCommand::class,
-            DeployPreflightCommand::class,
-            DeployPromoteCommand::class,
-            DeployRelocateCommand::class,
-            DeployRollbackCommand::class,
-            DeployStatusCommand::class,
-            DeployUnlockCommand::class,
-            EnvironmentDiffCommand::class,
-            EnvironmentEditCommand::class,
-            EnvironmentPushCommand::class,
-            EnvironmentValidateCommand::class,
-            LogsCommand::class,
-            PortsCommand::class,
             BackupCommand::class,
-            BackupCleanupCommand::class,
-            BackupListCommand::class,
-            BackupRestoreCommand::class,
-            BackupStatusCommand::class,
-            BackupVerifyCommand::class,
-            RuntimeBackupCommand::class,
-            NotifyTestCommand::class,
+            NotifyCommand::class,
             EnvCommand::class,
             FeatureListCommand::class,
             InstallCommand::class,
