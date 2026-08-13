@@ -58,6 +58,7 @@ final class CoreServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
+        $this->configureDatabaseQueue();
         $this->configureBackupFilesystem();
         $this->configureObservability();
 
@@ -215,6 +216,19 @@ final class CoreServiceProvider extends ServiceProvider
         ]);
     }
 
+    private function configureDatabaseQueue(): void
+    {
+        if (config('queue.default') !== 'database') {
+            return;
+        }
+
+        $timeout = max(1, (int) config('accelerator.queue.worker_timeout', 120));
+        $buffer = max(1, (int) config('accelerator.queue.retry_after_buffer_seconds', 30));
+        $configuredRetryAfter = (int) config('queue.connections.database.retry_after', 90);
+
+        config()->set('queue.connections.database.retry_after', max($configuredRetryAfter, $timeout + $buffer));
+    }
+
     private function configureBackupSchedule(): void
     {
         if (! $this->app->isProduction() || ! config('accelerator.backup.enabled', true)) {
@@ -246,9 +260,11 @@ final class CoreServiceProvider extends ServiceProvider
         }
 
         $timeout = max(1, (int) config('accelerator.queue.worker_timeout', 120));
-        $event = Schedule::command("queue:work database --queue=default --stop-when-empty --max-time=50 --timeout={$timeout} --tries=3 --memory=128")
+        $maxTime = max(1, (int) config('accelerator.queue.worker_max_time', 50));
+        $mutexMinutes = max(2, (int) ceil((max($timeout, $maxTime) + 30) / 60));
+        $event = Schedule::command("queue:work database --queue=default --stop-when-empty --max-time={$maxTime} --timeout={$timeout} --tries=3 --memory=128")
             ->name('accelerator-database-queue-drain')
-            ->withoutOverlapping(1)
+            ->withoutOverlapping($mutexMinutes)
             ->runInBackground();
 
         match ((int) config('accelerator.queue.drain_interval_seconds', 10)) {

@@ -55,6 +55,7 @@ There is no client Octane, Horizon, local Reverb server, Nightwatch, NightOwl, O
 | `.env.example` | Public key contract; never credentials. |
 | `.accelerator/deploy.json` | Committed schema-3 deployment topology. |
 | `.accelerator/environments/{stage}.env` | Ignored canonical stage runtime and secrets. |
+| `.accelerator/reverb-apps.json` | Ignored registration payload for isolated centralized Reverb applications. |
 
 ```bash
 php artisan accelerator:configure application
@@ -84,11 +85,17 @@ php artisan accelerator:logs scheduler --stage=production
 
 Stable root is `/var/www/{domain}` with Deployer `releases`, `shared`, and `current`. Deploy reloads the exact PHP-FPM service, replaces the exact stage cron file, and removes only an old Accelerator-owned Supervisor group for the same deployment key and stage. It never uninstalls Supervisor or touches unrelated projects.
 
-Dual stages run identical code and features. They isolate database, uploads, APP_KEY, sessions/cache namespace, OTLP credential and identity, backups, domain, and cron entry. Reverb deliberately uses one shared hub credential. Production promotion deploys the exact successful staging revision. A code rollback never reverses database migrations.
+Dual stages run identical code and features. They isolate database, uploads, APP_KEY, sessions/cache namespace, Reverb credentials, OTLP credential and identity, backups, domain, and cron entry. Production promotion deploys the exact successful staging revision. A code rollback never reverses database migrations.
 
 ## Centralized Reverb
 
-All client applications and stages reuse the single app ID, key, and secret from the centralized Reverb server's ignored `.env`. Their public host is `centralized-reverb.ohmyserver.com:443`. The hub `.env` survives its Git-based deploy because it is ignored; clients do not bind a Reverb port and Nginx does not proxy websocket routes locally.
+Every `{deployment_key}-{stage}` uses its own app ID, key, secret, and allowed origin on the same centralized Reverb daemon. Accelerator writes the ignored `.accelerator/reverb-apps.json` registration payload; import it into the centralized server, clear its config cache, and restart Reverb before connecting the client. Clients do not bind a Reverb port and Nginx does not proxy websocket routes locally.
+
+Rotate one stage without disturbing another:
+
+```bash
+php artisan accelerator:configure environment --stage=staging --rotate-reverb-app
+```
 
 ## OpenObserve
 
@@ -100,7 +107,7 @@ Required stage values:
 ACCELERATOR_FEATURE_OBSERVABILITY=true
 LOG_STACK=daily,otlp
 OTEL_SDK_DISABLED=false
-OTEL_SERVICE_NAME=deployment-key
+OTEL_SERVICE_NAME=deployment-key-stage
 OTEL_SERVICE_INSTANCE_ID=deployment-key-stage
 OTEL_EXPORTER_OTLP_ENDPOINT=https://observe.ohmyserver.com/api/default
 OTEL_EXPORTER_OTLP_HEADERS=Authorization=Basic <ingestion-only-token>,stream-name=default
@@ -111,6 +118,10 @@ OTEL_INSTRUMENTATION_HTTP_SERVER=false
 ```
 
 `OTEL_INSTRUMENTATION_HTTP_SERVER=false` is mandatory: Accelerator starts HTTP telemetry only after session authentication resolves. Guest requests and guest logs are excluded from OTLP. Authenticated requests, CLI/scheduled work, and queue jobs remain observable. OpenObserve retains telemetry for 60 days. Never commit or print OTLP headers.
+
+## Queue timeouts
+
+The scheduled database worker raises `retry_after` above its configured timeout and derives the overlap-lock lifetime from the longest worker bound. The default worker timeout remains configurable through `ACCELERATOR_QUEUE_WORKER_TIMEOUT`. Individual jobs may use Laravel's `#[Timeout(...)]`, but that value must not exceed the worker timeout unless the worker configuration is raised too.
 
 ## Backups
 

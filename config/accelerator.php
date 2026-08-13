@@ -13,6 +13,8 @@ return [
     'queue' => [
         'drain_interval_seconds' => (int) env('ACCELERATOR_QUEUE_DRAIN_INTERVAL_SECONDS', 10),
         'worker_timeout' => (int) env('ACCELERATOR_QUEUE_WORKER_TIMEOUT', 120),
+        'worker_max_time' => (int) env('ACCELERATOR_QUEUE_WORKER_MAX_TIME', 50),
+        'retry_after_buffer_seconds' => (int) env('ACCELERATOR_QUEUE_RETRY_AFTER_BUFFER_SECONDS', 30),
     ],
 
     'pwa' => [

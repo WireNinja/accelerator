@@ -26,7 +26,7 @@ accelerator:configure deployment
   -> HTTPS domain
 ```
 
-Single-stage hides the data badge. The stage owns its database, uploads, session/cache namespace, backup namespace, OTLP ingestion credential, and cron entry. Reverb uses the one shared credential from the centralized hub.
+Single-stage hides the data badge. The stage owns its database, uploads, session/cache namespace, backup namespace, Reverb application, OTLP ingestion credential, and cron entry.
 
 ## Dual-stage deployment
 
@@ -40,7 +40,7 @@ configure staging + production
   -> deploy:promote exact staging revision to production
 ```
 
-Both stages run identical code and dependencies. They differ only in domain and mutable runtime data/credentials. Show `TEST DATA` and `LIVE DATA` badges.
+Both stages run identical code and dependencies. They differ only in domain and mutable runtime data/credentials, including distinct Reverb applications. Show `TEST DATA` and `LIVE DATA` badges.
 
 ## Runtime ownership
 

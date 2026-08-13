@@ -8,12 +8,12 @@ use Illuminate\Console\Command;
 use JsonException;
 use RuntimeException;
 use WireNinja\Accelerator\Configuration\EnvironmentStore;
+use WireNinja\Accelerator\Configuration\ReverbApplicationRegistry;
 use WireNinja\Accelerator\Configuration\SshConfig;
 use WireNinja\Accelerator\Deployment\DeploymentConfig;
 
 use function Laravel\Prompts\confirm;
 use function Laravel\Prompts\multiselect;
-use function Laravel\Prompts\password;
 use function Laravel\Prompts\select;
 use function Laravel\Prompts\text;
 
@@ -31,6 +31,7 @@ final class ConfigureCommand extends Command
         {--deployment-key= : Stable lowercase deployment identity}
         {--ssl-email= : Email used for ACME certificate registration}
         {--rotate-app-key : Generate a new APP_KEY for the selected stage}
+        {--rotate-reverb-app : Generate new centralized Reverb credentials for the selected stage}
         {--force : Confirm a validated non-interactive write}
         {--json : Emit a stable JSON result}';
 
@@ -128,10 +129,34 @@ final class ConfigureCommand extends Command
             'OTEL_INSTRUMENTATION_HTTP_SERVER' => 'false',
             'ACCELERATOR_OAUTH_MODE' => in_array('oauth', $selected, true) ? ($current['ACCELERATOR_OAUTH_MODE'] ?? 'existing_only') : 'disabled',
         ];
-        $store->merge('.env', $draft);
-        $store->merge('.env.example', $draft);
 
-        return $this->success('features', ['.env', '.env.example']);
+        $deploymentKey = $this->localDeploymentKey();
+        $serviceName = "{$deploymentKey}-local";
+        $draft += [
+            'OTEL_SERVICE_NAME' => $serviceName,
+            'OTEL_SERVICE_INSTANCE_ID' => $serviceName,
+            'OTEL_RESOURCE_ATTRIBUTES' => "service.namespace=accelerator,deployment.environment.name=local,service.instance.id={$serviceName}",
+        ];
+
+        $exampleDraft = $draft;
+        $files = ['.env', '.env.example'];
+
+        if (in_array('realtime', $selected, true)) {
+            $application = $this->existingOrGeneratedReverbApplication(
+                name: "{$deploymentKey}-local",
+                origin: $current['APP_URL'] ?? 'http://localhost:8000',
+                environment: $current,
+                rotate: (bool) $this->option('rotate-reverb-app'),
+            );
+            (new ReverbApplicationRegistry(base_path()))->upsert($application);
+            $draft = [...$draft, ...$this->reverbEnvironment($application)];
+            $files[] = ReverbApplicationRegistry::PATH;
+        }
+
+        $store->merge('.env', $draft);
+        $store->merge('.env.example', $exampleDraft);
+
+        return $this->success('features', $files);
     }
 
     /** @throws JsonException */
@@ -169,45 +194,86 @@ final class ConfigureCommand extends Command
         $config = DeploymentConfig::load(base_path(), $stage, validateRuntime: false);
         $path = ".accelerator/environments/{$stage}.env";
         $current = $store->read($path);
-        $local = $store->read('.env');
         $template = $current !== [] ? $current : $store->read('.env.example');
         $prefix = str_replace('-', '_', "{$config->deploymentKey}_{$stage}");
+        $serviceName = "{$config->deploymentKey}-{$stage}";
         $key = ($this->option('rotate-app-key') || ($template['APP_KEY'] ?? '') === '') ? 'base64:'.base64_encode(random_bytes(32)) : $template['APP_KEY'];
         $draft = [
             ...$template,
             'APP_ENV' => 'production', 'APP_KEY' => $key, 'APP_DEBUG' => 'false', 'APP_URL' => "https://{$config->domain}", 'QUEUE_CONNECTION' => 'database',
             'SESSION_COOKIE' => "{$prefix}_session", 'REDIS_PREFIX' => "{$prefix}_database_", 'CACHE_PREFIX' => "{$prefix}_cache_",
             'ACCELERATOR_DEPLOYMENT_KEY' => $config->deploymentKey, 'ACCELERATOR_DEPLOYMENT_STAGE' => $stage, 'ACCELERATOR_DEPLOY_ROOT' => $config->deployRoot,
-            'ACCELERATOR_BACKUP_NAME' => "acc-{$config->deploymentKey}-{$stage}", 'OTEL_SERVICE_NAME' => $config->deploymentKey, 'OTEL_SERVICE_INSTANCE_ID' => "{$config->deploymentKey}-{$stage}",
-            'OTEL_RESOURCE_ATTRIBUTES' => "service.namespace=accelerator,deployment.environment.name={$stage},service.instance.id={$config->deploymentKey}-{$stage}",
+            'ACCELERATOR_BACKUP_NAME' => "acc-{$config->deploymentKey}-{$stage}", 'OTEL_SERVICE_NAME' => $serviceName, 'OTEL_SERVICE_INSTANCE_ID' => $serviceName,
+            'OTEL_RESOURCE_ATTRIBUTES' => "service.namespace=accelerator,deployment.environment.name={$stage},service.instance.id={$serviceName}",
             'OTEL_INSTRUMENTATION_HTTP_SERVER' => 'false', 'OTEL_EXPORTER_OTLP_ENDPOINT' => $template['OTEL_EXPORTER_OTLP_ENDPOINT'] ?? 'https://observe.ohmyserver.com/api/default',
         ];
 
         if (($draft['ACCELERATOR_FEATURE_REALTIME'] ?? 'false') === 'true') {
-            $reverbAppId = $local['REVERB_APP_ID'] ?? (string) getenv('ACCELERATOR_REVERB_APP_ID');
-            $reverbAppKey = $local['REVERB_APP_KEY'] ?? (string) getenv('ACCELERATOR_REVERB_APP_KEY');
-            $reverbAppSecret = $local['REVERB_APP_SECRET'] ?? (string) getenv('ACCELERATOR_REVERB_APP_SECRET');
-
-            if ($this->interactive()) {
-                $reverbAppId = $reverbAppId !== '' ? $reverbAppId : text('Centralized Reverb app ID', required: true);
-                $reverbAppKey = $reverbAppKey !== '' ? $reverbAppKey : password('Centralized Reverb app key', required: true);
-                $reverbAppSecret = $reverbAppSecret !== '' ? $reverbAppSecret : password('Centralized Reverb app secret', required: true);
-            }
-
-            if ($reverbAppId === '' || $reverbAppKey === '' || $reverbAppSecret === '') {
-                throw new RuntimeException('Realtime requires shared centralized Reverb credentials in local .env or ACCELERATOR_REVERB_APP_ID/KEY/SECRET process variables.');
-            }
-
-            $draft += [
-                'REVERB_APP_ID' => $reverbAppId, 'REVERB_APP_KEY' => $reverbAppKey, 'REVERB_APP_SECRET' => $reverbAppSecret,
-                'REVERB_HOST' => 'centralized-reverb.ohmyserver.com', 'REVERB_PORT' => '443', 'REVERB_SCHEME' => 'https',
-                'VITE_REVERB_APP_KEY' => $reverbAppKey, 'VITE_REVERB_HOST' => 'centralized-reverb.ohmyserver.com', 'VITE_REVERB_PORT' => '443', 'VITE_REVERB_SCHEME' => 'https',
-            ];
+            $application = $this->existingOrGeneratedReverbApplication(
+                name: "{$config->deploymentKey}-{$stage}",
+                origin: "https://{$config->domain}",
+                environment: $current,
+                rotate: (bool) $this->option('rotate-reverb-app'),
+            );
+            (new ReverbApplicationRegistry(base_path()))->upsert($application);
+            $draft = [...$draft, ...$this->reverbEnvironment($application)];
         }
 
         $store->replace($path, $draft);
 
-        return $this->success('environment', [$path]);
+        return $this->success('environment', ($draft['ACCELERATOR_FEATURE_REALTIME'] ?? 'false') === 'true'
+            ? [$path, ReverbApplicationRegistry::PATH]
+            : [$path]);
+    }
+
+    private function localDeploymentKey(): string
+    {
+        $document = $this->deploymentDocument();
+        $key = $document['deployment_key'] ?? basename(base_path());
+
+        return is_string($key) && $key !== '' ? $key : basename(base_path());
+    }
+
+    /**
+     * @param  array<string, string>  $environment
+     * @return array{name: string, app_id: string, key: string, secret: string, allowed_origins: list<string>}
+     */
+    private function existingOrGeneratedReverbApplication(string $name, string $origin, array $environment, bool $rotate): array
+    {
+        if (! $rotate
+            && ($environment['REVERB_APP_ID'] ?? '') !== ''
+            && ($environment['REVERB_APP_KEY'] ?? '') !== ''
+            && ($environment['REVERB_APP_SECRET'] ?? '') !== '') {
+            $application = ReverbApplicationRegistry::generate($name, $origin);
+
+            return [...$application,
+                'app_id' => $environment['REVERB_APP_ID'],
+                'key' => $environment['REVERB_APP_KEY'],
+                'secret' => $environment['REVERB_APP_SECRET'],
+            ];
+        }
+
+        return ReverbApplicationRegistry::generate($name, $origin);
+    }
+
+    /**
+     * @param  array{name: string, app_id: string, key: string, secret: string, allowed_origins: list<string>}  $application
+     * @return array<string, string>
+     */
+    private function reverbEnvironment(array $application): array
+    {
+        return [
+            'REVERB_APP_ID' => $application['app_id'],
+            'REVERB_APP_KEY' => $application['key'],
+            'REVERB_APP_SECRET' => $application['secret'],
+            'REVERB_HOST' => 'centralized-reverb.ohmyserver.com',
+            'REVERB_PORT' => '443',
+            'REVERB_SCHEME' => 'https',
+            'VITE_REVERB_APP_KEY' => $application['key'],
+            'VITE_REVERB_HOST' => 'centralized-reverb.ohmyserver.com',
+            'VITE_REVERB_PORT' => '443',
+            'VITE_REVERB_SCHEME' => 'https',
+        ];
     }
 
     /** @return array<string, mixed> */

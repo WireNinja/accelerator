@@ -98,11 +98,9 @@ NGINX;
 
     public function cron(): string
     {
-        $name = $this->config->cronName();
-
         return <<<CRON
 # {$this->config->ownerToken('cron')}
-* * * * * {$this->config->runUser} flock -n /run/lock/{$name}-scheduler.lock {$this->config->phpBinary} {$this->config->deployRoot}/current/artisan schedule:run --no-interaction >> {$this->config->sharedPath()}/storage/logs/scheduler.log 2>&1
+* * * * * {$this->config->runUser} {$this->config->phpBinary} {$this->config->deployRoot}/current/artisan schedule:run --no-interaction >> {$this->config->sharedPath()}/storage/logs/scheduler.log 2>&1
 CRON.PHP_EOL;
     }
 

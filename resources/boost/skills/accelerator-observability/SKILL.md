@@ -11,7 +11,7 @@ Use `keepsuit/laravel-opentelemetry`; do not install Nightwatch, NightOwl, Sentr
 
 - OpenObserve is host infrastructure outside Accelerator deployment ownership.
 - Each `{deployment_key}:{stage}` has a distinct ingestion-only credential.
-- Set `OTEL_SERVICE_NAME={deployment_key}` and `OTEL_SERVICE_INSTANCE_ID={deployment_key}-{stage}`.
+- Set both `OTEL_SERVICE_NAME` and `OTEL_SERVICE_INSTANCE_ID` to `{deployment_key}-{stage}` so OpenObserve shows each runtime as one unambiguous service.
 - Include `service.namespace=accelerator` and `deployment.environment.name={stage}` in `OTEL_RESOURCE_ATTRIBUTES`.
 - Keep `OTEL_INSTRUMENTATION_HTTP_SERVER=false`. Accelerator's web middleware starts traces only after an authenticated user is available.
 - Guest HTTP requests and their logs must not reach OTLP. CLI, scheduled work, and queue jobs remain observable.

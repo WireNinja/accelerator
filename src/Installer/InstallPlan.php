@@ -12,7 +12,10 @@ final readonly class InstallPlan
     /** @var list<string> */
     private const FEATURES = ['oauth', 'pwa', 'telegram', 'realtime', 'scout', 'observability'];
 
-    /** @param list<string> $features */
+    /**
+     * @param  list<string>  $features
+     * @param  array<string, array{name: string, app_id: string, key: string, secret: string, allowed_origins: list<string>}>  $reverbApplications
+     */
     public function __construct(
         public string $appName,
         public string $appUrl,
@@ -24,9 +27,7 @@ final readonly class InstallPlan
         public string $database,
         public bool $useRedis,
         public array $features,
-        public string $reverbAppId,
-        public string $reverbAppKey,
-        public string $reverbAppSecret,
+        public array $reverbApplications,
         public bool $deploy,
         public string $deploymentMode,
         public string $deploymentKey,
@@ -72,9 +73,22 @@ final readonly class InstallPlan
             throw new InvalidArgumentException('Unknown Accelerator features: '.implode(', ', $unknownFeatures));
         }
 
-        if (in_array('realtime', $this->features, true)
-            && ($this->reverbAppId === '' || $this->reverbAppKey === '' || $this->reverbAppSecret === '')) {
-            throw new InvalidArgumentException('Centralized Reverb app ID, key, and secret are required when realtime is enabled.');
+        if (in_array('realtime', $this->features, true)) {
+            $requiredApplications = ['local'];
+
+            if ($this->deploy) {
+                $requiredApplications[] = 'production';
+
+                if ($this->deploymentMode === 'dual') {
+                    $requiredApplications[] = 'staging';
+                }
+            }
+
+            foreach ($requiredApplications as $application) {
+                if (! self::validReverbApplication($this->reverbApplications[$application] ?? null)) {
+                    throw new InvalidArgumentException("Centralized Reverb credentials are missing for [{$application}].");
+                }
+            }
         }
 
         if ($this->deploy && ! in_array($this->deploymentMode, ['single', 'dual'], true)) {
@@ -95,7 +109,7 @@ final readonly class InstallPlan
         }
     }
 
-    /** @return array<string, array<int, string>|bool|string> */
+    /** @return array<string, mixed> */
     public function toArray(): array
     {
         return get_object_vars($this);
@@ -115,9 +129,7 @@ final readonly class InstallPlan
             database: self::string($data, 'database'),
             useRedis: (bool) ($data['useRedis'] ?? false),
             features: array_values(array_filter($data['features'] ?? [], is_string(...))),
-            reverbAppId: self::string($data, 'reverbAppId'),
-            reverbAppKey: self::string($data, 'reverbAppKey'),
-            reverbAppSecret: self::string($data, 'reverbAppSecret'),
+            reverbApplications: is_array($data['reverbApplications'] ?? null) ? $data['reverbApplications'] : [],
             deploy: (bool) ($data['deploy'] ?? false),
             deploymentMode: self::string($data, 'deploymentMode', 'single'),
             deploymentKey: self::string($data, 'deploymentKey', self::string($data, 'project')),
@@ -135,5 +147,15 @@ final readonly class InstallPlan
     private static function string(array $data, string $key, string $default = ''): string
     {
         return is_string($data[$key] ?? null) ? $data[$key] : $default;
+    }
+
+    private static function validReverbApplication(mixed $application): bool
+    {
+        return is_array($application)
+            && is_string($application['name'] ?? null) && $application['name'] !== ''
+            && is_string($application['app_id'] ?? null) && $application['app_id'] !== ''
+            && is_string($application['key'] ?? null) && $application['key'] !== ''
+            && is_string($application['secret'] ?? null) && $application['secret'] !== ''
+            && is_array($application['allowed_origins'] ?? null) && $application['allowed_origins'] !== [];
     }
 }

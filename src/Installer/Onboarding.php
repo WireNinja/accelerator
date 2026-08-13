@@ -7,6 +7,7 @@ namespace WireNinja\Accelerator\Installer;
 use Illuminate\Support\Str;
 use JsonException;
 use RuntimeException;
+use WireNinja\Accelerator\Configuration\ReverbApplicationRegistry;
 use WireNinja\Accelerator\Configuration\SshConfig;
 
 use function Laravel\Prompts\confirm;
@@ -140,16 +141,6 @@ final class Onboarding
             hint: 'Filament, settings, and RBAC are always installed. External-service integrations remain optional.',
             required: false,
         ));
-        $reverbAppId = '';
-        $reverbAppKey = '';
-        $reverbAppSecret = '';
-
-        if (in_array('realtime', $features, true)) {
-            note('Use the shared app credentials from centralized-reverb.ohmyserver.com. Accelerator will reuse them for local, staging, and production.');
-            $reverbAppId = text(label: 'Centralized Reverb app ID', required: true);
-            $reverbAppKey = password(label: 'Centralized Reverb app key', required: true);
-            $reverbAppSecret = password(label: 'Centralized Reverb app secret', required: true);
-        }
         $deploy = confirm(
             label: 'Configure VPS deployment now?',
             default: false,
@@ -208,6 +199,20 @@ final class Onboarding
 
         }
 
+        $reverbApplications = $this->reverbApplications(
+            features: $features,
+            deploymentKey: $deploymentKey !== '' ? $deploymentKey : $defaultProject,
+            localUrl: $appUrl,
+            deploy: $deploy,
+            deploymentMode: $deploymentMode,
+            productionDomain: $domain,
+            stagingDomain: $stagingDomain,
+        );
+
+        if ($reverbApplications !== []) {
+            note('Accelerator generated isolated Reverb credentials for each runtime. Register the ignored .accelerator/reverb-apps.json entries on the centralized Reverb server before connecting.');
+        }
+
         return new InstallPlan(
             appName: $appName,
             appUrl: $appUrl,
@@ -219,9 +224,7 @@ final class Onboarding
             database: $database,
             useRedis: $useRedis,
             features: $features,
-            reverbAppId: $reverbAppId,
-            reverbAppKey: $reverbAppKey,
-            reverbAppSecret: $reverbAppSecret,
+            reverbApplications: $reverbApplications,
             deploy: $deploy,
             deploymentMode: $deploymentMode,
             deploymentKey: $deploymentKey,
@@ -282,10 +285,6 @@ final class Onboarding
         $domain = $this->option($options, 'domain');
         $stagingDomain = $this->option($options, 'staging-domain', $domain === '' ? '' : "staging.{$domain}");
         $adminPassword = $this->option($options, 'admin-password', (string) getenv('ACCELERATOR_ADMIN_PASSWORD'));
-        $reverbAppId = in_array('realtime', $features, true) ? (string) getenv('ACCELERATOR_REVERB_APP_ID') : '';
-        $reverbAppKey = in_array('realtime', $features, true) ? (string) getenv('ACCELERATOR_REVERB_APP_KEY') : '';
-        $reverbAppSecret = in_array('realtime', $features, true) ? (string) getenv('ACCELERATOR_REVERB_APP_SECRET') : '';
-
         if ($adminPassword === '') {
             throw new RuntimeException('Non-interactive installation requires --admin-password or ACCELERATOR_ADMIN_PASSWORD. The password is never generated or printed.');
         }
@@ -305,9 +304,15 @@ final class Onboarding
             database: $this->option($options, 'database', 'sqlite'),
             useRedis: isset($options['redis']),
             features: $features,
-            reverbAppId: $reverbAppId,
-            reverbAppKey: $reverbAppKey,
-            reverbAppSecret: $reverbAppSecret,
+            reverbApplications: $this->reverbApplications(
+                features: $features,
+                deploymentKey: $deploy ? $this->option($options, 'deployment-key', $defaultProject) : $defaultProject,
+                localUrl: $this->option($options, 'app-url', 'http://localhost:8000'),
+                deploy: $deploy,
+                deploymentMode: $deploy ? $deploymentMode : '',
+                productionDomain: $domain,
+                stagingDomain: $stagingDomain,
+            ),
             deploy: $deploy,
             deploymentMode: $deploy ? $deploymentMode : '',
             deploymentKey: $deploy ? $this->option($options, 'deployment-key', $defaultProject) : '',
@@ -333,6 +338,38 @@ final class Onboarding
             array_keys(self::FEATURES),
             static fn (string $feature): bool => isset($selected[$feature]),
         ));
+    }
+
+    /**
+     * @param  list<string>  $features
+     * @return array<string, array{name: string, app_id: string, key: string, secret: string, allowed_origins: list<string>}>
+     */
+    private function reverbApplications(
+        array $features,
+        string $deploymentKey,
+        string $localUrl,
+        bool $deploy,
+        string $deploymentMode,
+        string $productionDomain,
+        string $stagingDomain,
+    ): array {
+        if (! in_array('realtime', $features, true)) {
+            return [];
+        }
+
+        $applications = [
+            'local' => ReverbApplicationRegistry::generate("{$deploymentKey}-local", $localUrl),
+        ];
+
+        if ($deploy) {
+            $applications['production'] = ReverbApplicationRegistry::generate("{$deploymentKey}-production", "https://{$productionDomain}");
+        }
+
+        if ($deploy && $deploymentMode === 'dual') {
+            $applications['staging'] = ReverbApplicationRegistry::generate("{$deploymentKey}-staging", "https://{$stagingDomain}");
+        }
+
+        return $applications;
     }
 
     private function validatePassword(string $password): ?string

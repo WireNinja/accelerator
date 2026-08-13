@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace WireNinja\Accelerator\Installer;
 
+use Illuminate\Support\Str;
 use JsonException;
 use RuntimeException;
+use WireNinja\Accelerator\Configuration\ReverbApplicationRegistry;
 use WireNinja\Accelerator\Deployment\DeploymentConfig;
 
 final readonly class EnvironmentWriter
@@ -17,6 +19,7 @@ final readonly class EnvironmentWriter
     {
         $this->writeEnvironmentFiles();
         $this->writeDeploymentFiles();
+        $this->writeReverbRegistry();
         $this->updateGitignore();
     }
 
@@ -87,6 +90,8 @@ final readonly class EnvironmentWriter
     {
         $plan = $this->context->plan;
         $cacheDriver = $plan->useRedis ? 'redis' : 'database';
+        $deploymentKey = $plan->deploymentKey !== '' ? $plan->deploymentKey : Str::slug($plan->appName);
+        $serviceName = "{$deploymentKey}-local";
         $values = [
             'APP_NAME' => '"'.addcslashes($plan->appName, '"\\').'"',
             'APP_KEY' => $appKey,
@@ -113,14 +118,18 @@ final readonly class EnvironmentWriter
             'ACCELERATOR_ENVIRONMENT_INDICATOR_COLOR' => $plan->deploy && $plan->deploymentMode === 'dual' ? 'info' : 'warning',
             'GOOGLE_REDIRECT_URI' => rtrim($plan->appUrl, '/').'/auth/google/callback',
             'VITE_APP_NAME' => '"'.addcslashes($plan->appName, '"\\').'"',
+            'OTEL_SERVICE_NAME' => $serviceName,
+            'OTEL_SERVICE_INSTANCE_ID' => $serviceName,
+            'OTEL_RESOURCE_ATTRIBUTES' => "\"service.namespace=accelerator,deployment.environment.name=local,service.instance.id={$serviceName}\"",
         ];
 
         if ($this->context->hasFeature('realtime')) {
+            $reverb = $plan->reverbApplications['local'];
             $values += [
-                'REVERB_APP_ID' => $plan->reverbAppId,
-                'REVERB_APP_KEY' => $plan->reverbAppKey,
-                'REVERB_APP_SECRET' => $plan->reverbAppSecret,
-                'VITE_REVERB_APP_KEY' => $plan->reverbAppKey,
+                'REVERB_APP_ID' => $reverb['app_id'],
+                'REVERB_APP_KEY' => $reverb['key'],
+                'REVERB_APP_SECRET' => $reverb['secret'],
+                'VITE_REVERB_APP_KEY' => $reverb['key'],
                 'REVERB_HOST' => 'centralized-reverb.ohmyserver.com',
                 'REVERB_PORT' => '443',
                 'REVERB_SCHEME' => 'https',
@@ -145,6 +154,7 @@ final readonly class EnvironmentWriter
     private function productionEnvironment(string $contents, string $stage, string $domain, string $deployRoot, bool $dualStage): string
     {
         $deploymentKey = $this->context->plan->deploymentKey;
+        $serviceName = "{$deploymentKey}-{$stage}";
         $prefix = strtolower((string) preg_replace('/[^a-z0-9]+/i', '_', "{$deploymentKey}_{$stage}"));
         $values = [
             'APP_ENV' => 'production', 'APP_KEY' => 'base64:'.base64_encode(random_bytes(32)), 'APP_DEBUG' => 'false', 'APP_URL' => "https://{$domain}",
@@ -152,8 +162,8 @@ final readonly class EnvironmentWriter
             'ACCELERATOR_ENVIRONMENT_INDICATOR_ENABLED' => $this->context->boolean($dualStage), 'ACCELERATOR_ENVIRONMENT_INDICATOR_LABEL' => $stage === 'staging' ? '"TEST DATA"' : '"LIVE DATA"', 'ACCELERATOR_ENVIRONMENT_INDICATOR_COLOR' => $stage === 'staging' ? 'warning' : 'danger',
             'ACCELERATOR_DEPLOYMENT_KEY' => $deploymentKey, 'ACCELERATOR_DEPLOYMENT_STAGE' => $stage, 'ACCELERATOR_DEPLOY_ROOT' => $deployRoot,
             'ACCELERATOR_BACKUP_NAME' => "acc-{$deploymentKey}-{$stage}", 'ACCELERATOR_BACKUP_S3_ENABLED' => 'true', 'ACCELERATOR_BACKUP_TIME' => $stage === 'staging' ? '02:10' : '02:20',
-            'OTEL_SERVICE_NAME' => $deploymentKey, 'OTEL_SERVICE_INSTANCE_ID' => "{$deploymentKey}-{$stage}",
-            'OTEL_RESOURCE_ATTRIBUTES' => "\"service.namespace=accelerator,deployment.environment.name={$stage},service.instance.id={$deploymentKey}-{$stage}\"",
+            'OTEL_SERVICE_NAME' => $serviceName, 'OTEL_SERVICE_INSTANCE_ID' => $serviceName,
+            'OTEL_RESOURCE_ATTRIBUTES' => "\"service.namespace=accelerator,deployment.environment.name={$stage},service.instance.id={$serviceName}\"",
             'OTEL_EXPORTER_OTLP_ENDPOINT' => 'https://observe.ohmyserver.com/api/default', 'OTEL_EXPORTER_OTLP_HEADERS' => '', 'OTEL_EXPORTER_OTLP_PROTOCOL' => 'http/protobuf',
         ];
 
@@ -164,10 +174,11 @@ final readonly class EnvironmentWriter
         }
 
         if ($this->context->hasFeature('realtime')) {
+            $reverb = $this->context->plan->reverbApplications[$stage];
             $values += [
-                'REVERB_APP_ID' => $this->context->plan->reverbAppId, 'REVERB_APP_KEY' => $this->context->plan->reverbAppKey, 'REVERB_APP_SECRET' => $this->context->plan->reverbAppSecret,
+                'REVERB_APP_ID' => $reverb['app_id'], 'REVERB_APP_KEY' => $reverb['key'], 'REVERB_APP_SECRET' => $reverb['secret'],
                 'REVERB_HOST' => 'centralized-reverb.ohmyserver.com', 'REVERB_PORT' => '443', 'REVERB_SCHEME' => 'https',
-                'VITE_REVERB_APP_KEY' => $this->context->plan->reverbAppKey, 'VITE_REVERB_HOST' => 'centralized-reverb.ohmyserver.com', 'VITE_REVERB_PORT' => '443', 'VITE_REVERB_SCHEME' => 'https',
+                'VITE_REVERB_APP_KEY' => $reverb['key'], 'VITE_REVERB_HOST' => 'centralized-reverb.ohmyserver.com', 'VITE_REVERB_PORT' => '443', 'VITE_REVERB_SCHEME' => 'https',
             ];
         }
 
@@ -199,6 +210,17 @@ final readonly class EnvironmentWriter
             : '';
     }
 
+    /** @throws JsonException */
+    private function writeReverbRegistry(): void
+    {
+        if (! $this->context->hasFeature('realtime')) {
+            return;
+        }
+
+        $registry = new ReverbApplicationRegistry($this->context->projectRoot);
+        $registry->write(array_values($this->context->plan->reverbApplications));
+    }
+
     private function updateGitignore(): void
     {
         $path = $this->context->projectRoot.'/.gitignore';
@@ -210,7 +232,7 @@ final readonly class EnvironmentWriter
 
         $contents = preg_replace('/^\/\.accelerator\/[ \t]*$\R?/m', '', $contents) ?? $contents;
 
-        foreach (['/.accelerator/install-state.json', '/.accelerator/environments/', '/.accelerator/restore-state/', '/storage/framework/accelerator-backup-state.json'] as $entry) {
+        foreach (['/.accelerator/install-state.json', '/.accelerator/environments/', '/.accelerator/reverb-apps.json', '/.accelerator/restore-state/', '/storage/framework/accelerator-backup-state.json'] as $entry) {
             if (! preg_match('/^'.preg_quote($entry, '/').'$/m', $contents)) {
                 $contents = rtrim($contents).PHP_EOL.$entry.PHP_EOL;
             }
