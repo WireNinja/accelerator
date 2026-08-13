@@ -27,4 +27,6 @@ Use `keepsuit/laravel-opentelemetry`; do not install Nightwatch, NightOwl, Sentr
 5. For local diagnosis, use `OTEL_SDK_DISABLED=true` when no valid ingestion credential is configured.
 6. Verify one authenticated request, one queued job, one selected command, one log, and one metric in OpenObserve. Verify a guest request produces no OTLP data.
 
+OpenObserve Service Catalog's **All** count is not the number of Laravel applications. It also includes inferred datastore nodes. The intended application identity is the entry classified as `service`; MySQL commonly appears as a `database` node named from `db.namespace`, while Redis can appear as a `database` node named by its configured DB index such as `1`. These are valid OpenTelemetry semantic-convention attributes, not leaked or legacy `service.name` values. Verify `service_name` and `infer_service_type` before diagnosing an identity collision.
+
 OpenObserve retention is 60 days. Changing backend retention, users, storage, Nginx, or systemd is a separate host-infrastructure task and requires explicit authorization.
