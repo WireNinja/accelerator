@@ -68,6 +68,11 @@ final readonly class DependencyInstaller
     {
         $this->configureFrontendPolicy();
         $manager = $this->context->plan->packageManager;
+
+        if ($manager === 'pnpm') {
+            $this->context->processRunner->run(['pnpm', 'clean', '--lockfile'], $this->context->projectRoot);
+        }
+
         $this->context->processRunner->run([$manager, 'install'], $this->context->projectRoot);
 
         if ($manager === 'npm') {
