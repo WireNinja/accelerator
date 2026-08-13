@@ -13,7 +13,7 @@ use WireNinja\Accelerator\Support\Operations\OperatorTelegramNotifier;
 final class RuntimeBackupCommand extends Command
 {
     protected $signature = 'accelerator:backup:runtime
-        {action : create, list, status, verify, cleanup, prepare, discard, post-restore-health, notify-test, or restore notification}
+        {action : create, list, status, verify, cleanup, prepare, restore-context, discard, post-restore-health, notify-test, or restore notification}
         {--only=all : all, database, or files}
         {--backup= : Exact backup ID}
         {--disk= : Exact configured filesystem disk}
@@ -43,6 +43,7 @@ final class RuntimeBackupCommand extends Command
                 'verify' => $this->backups->verify($this->backupId(), $this->disk()),
                 'cleanup' => $this->backups->cleanup(),
                 'prepare' => $this->backups->prepareRestore($this->backupId(), $this->disk(), (string) $this->option('only')),
+                'restore-context' => $this->restoreContext(),
                 'discard' => $this->backups->discardPreparedRestore($this->backupId()),
                 'post-restore-health' => $this->backups->postRestoreHealth(),
                 'notify-test' => $this->notifyTest(),
@@ -85,6 +86,28 @@ final class RuntimeBackupCommand extends Command
             'configured' => $configured,
             'delivered' => $delivered,
             'error' => $configured ? null : 'ACCELERATOR_TELEGRAM_BOT_TOKEN and ACCELERATOR_TELEGRAM_CHAT_ID are required.',
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    private function restoreContext(): array
+    {
+        $connection = (string) config('database.default');
+        $revisionPath = base_path('REVISION');
+
+        return [
+            'status' => 'OK',
+            'deployment_key' => (string) config('accelerator.operations.deployment_key'),
+            'stage' => (string) config('accelerator.operations.stage'),
+            'revision' => is_file($revisionPath) ? trim((string) file_get_contents($revisionPath)) : '',
+            'backup_name' => (string) config('accelerator.backup.name'),
+            'database' => [
+                'driver' => (string) config("database.connections.{$connection}.driver", $connection),
+                'database' => (string) config("database.connections.{$connection}.database", ''),
+                'username' => (string) config("database.connections.{$connection}.username", ''),
+                'host' => (string) config("database.connections.{$connection}.host", ''),
+                'socket' => (string) config("database.connections.{$connection}.unix_socket", ''),
+            ],
         ];
     }
 
