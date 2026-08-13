@@ -58,9 +58,9 @@ final readonly class Scaffolder
             $this->context->writeFile($destination, $this->render($contents));
         }
 
-        $legacyPath = $this->context->projectRoot.'/resources/js/app.js';
+        $replacedPath = $this->context->projectRoot.'/resources/js/app.js';
 
-        if (is_file($legacyPath) && ! unlink($legacyPath)) {
+        if (is_file($replacedPath) && ! unlink($replacedPath)) {
             throw new RuntimeException('Unable to remove replaced Laravel file: resources/js/app.js');
         }
     }

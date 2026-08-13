@@ -28,7 +28,7 @@ Never infer production in a dual-stage project.
 - Code recovery: `easyploy rollback`; migrations are never reversed.
 - Domain-root move: `easyploy relocate --from=/var/www/exact-old-root`; source is preserved.
 - Stale lock: inspect with `status`; `unlock` only after proving no deployment is active.
-- Backup: `backup create|status|download|restore`. Restore requires exact stage, backup ID, disk/mode, and destructive authority.
+- Backup: `backup create|status|local|download|restore`. `backup local` inventories downloads on the Mac without SSH. Restore requires exact stage, backup ID, disk/mode, and destructive authority.
 
 Before mutation, report the exact stage, host, domain, root, and command. Pass `--yes` only after authority exists. After mutation, verify with `status --json`.
 
@@ -41,4 +41,3 @@ Do not run Certbot, Composer update, Nginx/FPM/cron edits, or symlink commands m
 - Accelerator owns Laravel-aware backup semantics, queue scheduling, Reverb client configuration, and OpenTelemetry instrumentation.
 - Easyploy owns SSH, Nginx, dedicated FPM pools, native cron, releases, env transfer, and local backup downloads.
 - VPS bootstrap remains operator-owned.
-
