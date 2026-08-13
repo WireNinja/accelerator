@@ -3,6 +3,7 @@
 namespace WireNinja\Accelerator;
 
 use Illuminate\Support\ServiceProvider;
+use Keepsuit\LaravelOpenTelemetry\LaravelOpenTelemetryServiceProvider;
 use Override;
 use WireNinja\Accelerator\Providers\CoreServiceProvider;
 use WireNinja\Accelerator\Providers\FilamentServiceProvider;
@@ -20,6 +21,7 @@ class AcceleratorServiceProvider extends ServiceProvider
     private const FEATURE_PROVIDERS = [
         'oauth' => OAuthServiceProvider::class,
         'pwa' => PwaServiceProvider::class,
+        'observability' => LaravelOpenTelemetryServiceProvider::class,
     ];
 
     #[Override]

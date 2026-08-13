@@ -29,7 +29,7 @@ final readonly class Installer
             processRunner: $this->processRunner,
         );
         $scaffolder = new Scaffolder($context);
-        $preflight = new Preflight($context, $scaffolder);
+        $preflight = new Preflight($context);
         $environment = new EnvironmentWriter($context);
         $dependencies = new DependencyInstaller($context);
         $application = new ApplicationFinalizer($context);
@@ -41,14 +41,6 @@ final readonly class Installer
             $this->outro('Accelerator v2 is already installed with this configuration. Nothing changed.');
 
             return;
-        }
-
-        if (! $journal->isCompleted('scaffold')) {
-            $preflight->recipeTargets();
-        }
-
-        if (! $journal->isCompleted('environment')) {
-            $preflight->environmentTargets();
         }
 
         $journal->start();

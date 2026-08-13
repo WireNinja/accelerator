@@ -6,6 +6,7 @@ namespace WireNinja\Accelerator\Console;
 
 use Illuminate\Console\Command;
 use JsonException;
+use RuntimeException;
 use Throwable;
 use WireNinja\Accelerator\Installer\Installer;
 use WireNinja\Accelerator\Installer\Onboarding;
@@ -30,25 +31,17 @@ final class InstallCommand extends Command
         {--database=sqlite}
         {--redis}
         {--features= : Comma-separated features; realtime also requires ACCELERATOR_REVERB_APP_ID/KEY/SECRET in non-interactive mode}
+        {--force : Reinstall destructively without interactive confirmation}
         {--json : Emit one stable JSON result and suppress progress output}';
 
-    protected $description = 'Install Accelerator into a pristine Laravel application';
+    protected $description = 'Destructively install Accelerator into a Laravel application';
 
     public function handle(): int
     {
         $projectRoot = base_path();
 
-        if ($this->alreadyInstalled($projectRoot)) {
-            if ($this->option('json')) {
-                $this->writeJson('already_installed', false);
-            } else {
-                $this->components->info('Accelerator is already installed. Nothing changed.');
-            }
-
-            return self::SUCCESS;
-        }
-
         try {
+            $this->confirmReinstallation($projectRoot);
             $processRunner = new ProcessRunner(quiet: (bool) $this->option('json'));
             $plan = (new Onboarding($projectRoot))->plan($this->installerArguments());
 
@@ -103,18 +96,49 @@ final class InstallCommand extends Command
         return $arguments;
     }
 
-    private function alreadyInstalled(string $projectRoot): bool
+    private function confirmReinstallation(string $projectRoot): void
     {
-        $journal = @file_get_contents($projectRoot.'/.accelerator/install-state.json');
-        $state = is_string($journal) ? json_decode($journal, true) : null;
+        $path = $projectRoot.'/.accelerator/install-state.json';
 
-        if (is_array($state)) {
-            return ($state['finished'] ?? false) === true;
+        if (! is_file($path)) {
+            return;
         }
 
-        $environment = @file_get_contents($projectRoot.'/.env');
+        $journal = file_get_contents($path);
 
-        return is_string($environment) && str_contains($environment, 'ACCELERATOR_UPLOAD_MAX_MB=');
+        if (! is_string($journal)) {
+            throw new RuntimeException('Unable to read .accelerator/install-state.json.');
+        }
+
+        try {
+            $state = json_decode($journal, true, flags: JSON_THROW_ON_ERROR);
+        } catch (JsonException $exception) {
+            throw new RuntimeException('.accelerator/install-state.json contains invalid JSON.', previous: $exception);
+        }
+
+        if (! is_array($state) || ! array_key_exists('finished', $state) || ! is_bool($state['finished'])) {
+            throw new RuntimeException('.accelerator/install-state.json has an invalid structure.');
+        }
+
+        if ($state['finished'] === false) {
+            return;
+        }
+
+        if (! $this->option('force')) {
+            if (! $this->input->isInteractive() || $this->option('json')) {
+                throw new RuntimeException('Accelerator is already installed. Reinstallation overwrites package-owned files and rebuilds the database; rerun with --force.');
+            }
+
+            $this->components->warn('Accelerator was already installed. Reinstallation overwrites package-owned files and runs migrate:fresh --seed.');
+
+            if (! $this->confirm('Continue with destructive reinstallation?', false)) {
+                throw new RuntimeException('Reinstallation cancelled.');
+            }
+        }
+
+        if (! unlink($path)) {
+            throw new RuntimeException('Unable to reset .accelerator/install-state.json for reinstallation.');
+        }
     }
 
     /** @param array<string, mixed>|null $receipt @throws JsonException */

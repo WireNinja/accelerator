@@ -13,7 +13,7 @@ Opinionated Laravel 13 + Filament foundation for one solo developer shipping rep
 - Client applications own zero Supervisor programs.
 - Realtime is served by centralized Reverb; telemetry is exported directly to centralized OpenObserve.
 
-## Fresh installation
+## Installation
 
 ```bash
 laravel new project
@@ -22,7 +22,7 @@ composer require wireninja/accelerator
 php artisan accelerator:install
 ```
 
-The installer is fresh-only and resumable. Existing applications must use a surgical migration; never run the installer because it may execute `migrate:fresh --seed`.
+The installer is resumable and intentionally destructive: package-owned recipe files are overwritten and the database may be rebuilt with `migrate:fresh --seed`. A completed `.accelerator/install-state.json` receipt triggers an explicit confirmation before reinstalling; automation must opt in with `--force`. Use the surgical migration workflow only when existing application code or data must be preserved.
 
 Local development:
 

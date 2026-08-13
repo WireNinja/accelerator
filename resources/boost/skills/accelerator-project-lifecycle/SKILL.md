@@ -1,6 +1,6 @@
 ---
 name: accelerator-project-lifecycle
-description: Guide a WireNinja Accelerator application from pristine Laravel installation through local business development and Easyploy single-stage or dual-stage deployment.
+description: Guide a WireNinja Accelerator application from installation through local business development and Easyploy single-stage or dual-stage deployment.
 ---
 
 # Accelerator project lifecycle
@@ -9,8 +9,8 @@ Accelerator owns the Laravel/Filament application foundation. Easyploy is the so
 
 ## Route by phase
 
-- Fresh pristine install: `accelerator-installation`.
-- Existing application migration: `accelerator-breaking-changes`; never run the installer.
+- New or intentionally replaceable application install: `accelerator-installation`.
+- Existing application migration that must preserve code or data: `accelerator-breaking-changes`.
 - Local application config: `accelerator-env-config`.
 - Authorized server mutation: `easyploy-deployment`.
 - Read-only diagnosis: `accelerator-ops-observability`.

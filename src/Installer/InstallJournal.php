@@ -118,6 +118,7 @@ final class InstallJournal
         }
 
         $payload = json_encode([
+            'schema' => 1,
             'fingerprint' => $this->fingerprint,
             'plan' => $this->finished ? null : $this->plan->toArray(),
             'receipt' => $this->finished ? [
