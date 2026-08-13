@@ -24,7 +24,7 @@ Treat public Artisan commands as the user/AI interface. Deployer is the internal
 - Stable deployment identity is `deployment_key`; domain remains a mutable address.
 - Client projects reserve no ports. Reverb and OpenObserve are centralized host services.
 - Queues use the database driver and package-owned sub-minute scheduler drain.
-- Dual stages run identical code/features and isolate mutable application data, APP_KEY, session/cache namespace, OTLP credential/identity, backups, domain, and cron. The single centralized Reverb app credential is the deliberate shared exception.
+- Dual stages run identical code/features and isolate mutable application data, APP_KEY, session/cache namespace, Reverb application, OTLP credential/identity, backups, domain, and cron.
 - Single-stage projects hide the environment badge.
 - Dual-stage projects show `LOCAL DATA`, `TEST DATA`, and `LIVE DATA` badges.
 - A code rollback never reverses database migrations.

@@ -14,7 +14,7 @@ php artisan accelerator:install
 
 Inspect `php artisan accelerator:install --help` for non-interactive options. Non-interactive runs require `--admin-password` or `ACCELERATOR_ADMIN_PASSWORD`; never print it. Use `--json` for one stable result. Default to pnpm 11+; use npm 12+ only when requested. The installer rejects older package-manager versions because they cannot enforce the committed policy. Never install a Laravel starter kit first.
 
-When realtime is selected, provide the existing single-app credentials from centralized Reverb once. Interactive installation prompts for them; non-interactive installation reads `ACCELERATOR_REVERB_APP_ID`, `ACCELERATOR_REVERB_APP_KEY`, and `ACCELERATOR_REVERB_APP_SECRET`. Accelerator writes the same credential set to local and every enabled deployment stage.
+When realtime is selected, Accelerator generates a distinct centralized Reverb application for every enabled runtime: local, staging, and production. The client env receives only its own credentials and allowed origin. The ignored `.accelerator/reverb-apps.json` registry is the explicit handoff to the centralized Reverb operator; import it before using or deploying a rotated client credential. Never print or commit the registry.
 
 When deployment is configured during install, require a stable `--deployment-key`. Domains may change; the deployment key remains stable. Client projects reserve no ports.
 

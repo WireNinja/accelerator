@@ -122,7 +122,7 @@ final readonly class DeploymentEnvironment
             }
 
             if (($values['VITE_REVERB_APP_KEY'] ?? '') !== ($values['REVERB_APP_KEY'] ?? '')) {
-                $errors[] = 'VITE_REVERB_APP_KEY must match the shared REVERB_APP_KEY.';
+                $errors[] = 'VITE_REVERB_APP_KEY must match REVERB_APP_KEY for this runtime.';
             }
 
             foreach (['REVERB_HOST', 'VITE_REVERB_HOST'] as $hostKey) {
