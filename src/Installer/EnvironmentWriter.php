@@ -7,6 +7,7 @@ namespace WireNinja\Accelerator\Installer;
 use Illuminate\Support\Str;
 use JsonException;
 use RuntimeException;
+use WireNinja\Accelerator\Configuration\EnvironmentStore;
 use WireNinja\Accelerator\Configuration\ReverbApplicationRegistry;
 
 final readonly class EnvironmentWriter
@@ -29,21 +30,21 @@ final readonly class EnvironmentWriter
             throw new RuntimeException('Unable to read Accelerator environment template.');
         }
 
-        $current = file_get_contents($this->context->projectRoot.'/.env');
-        $appKey = is_string($current) ? $this->environmentValue($current, 'APP_KEY') : '';
+        $store = new EnvironmentStore($this->context->projectRoot);
+        $appKey = $store->read('.env')['APP_KEY'] ?? '';
         $appKey = $appKey !== '' ? $appKey : 'base64:'.base64_encode(random_bytes(32));
-        $this->context->writeFile('.env', $this->renderEnvironment($template, $appKey), 0600);
-        $this->context->writeFile('.env.example', $this->renderEnvironment($template, ''));
+        $this->context->writeFile('.env', $this->renderEnvironment($store, $template, $appKey), 0600);
+        $this->context->writeFile('.env.example', $this->renderEnvironment($store, $template, ''));
     }
 
-    private function renderEnvironment(string $template, string $appKey): string
+    private function renderEnvironment(EnvironmentStore $store, string $template, string $appKey): string
     {
         $plan = $this->context->plan;
         $cacheDriver = $plan->useRedis ? 'redis' : 'database';
         $deploymentKey = Str::slug($plan->appName);
         $serviceName = "{$deploymentKey}-local";
         $values = [
-            'APP_NAME' => '"'.addcslashes($plan->appName, '"\\').'"',
+            'APP_NAME' => $plan->appName,
             'APP_KEY' => $appKey,
             'APP_URL' => $plan->appUrl,
             'DB_CONNECTION' => $plan->database,
@@ -67,10 +68,10 @@ final readonly class EnvironmentWriter
             'ACCELERATOR_ENVIRONMENT_INDICATOR_LABEL' => '',
             'ACCELERATOR_ENVIRONMENT_INDICATOR_COLOR' => 'warning',
             'GOOGLE_REDIRECT_URI' => rtrim($plan->appUrl, '/').'/auth/google/callback',
-            'VITE_APP_NAME' => '"'.addcslashes($plan->appName, '"\\').'"',
+            'VITE_APP_NAME' => $plan->appName,
             'OTEL_SERVICE_NAME' => $serviceName,
             'OTEL_SERVICE_INSTANCE_ID' => $serviceName,
-            'OTEL_RESOURCE_ATTRIBUTES' => "\"service.namespace=accelerator,deployment.environment.name=local,service.instance.id={$serviceName}\"",
+            'OTEL_RESOURCE_ATTRIBUTES' => "service.namespace=accelerator,deployment.environment.name=local,service.instance.id={$serviceName}",
         ];
 
         if ($this->context->hasFeature('realtime')) {
@@ -94,28 +95,7 @@ final readonly class EnvironmentWriter
             $values += ['DB_HOST' => '127.0.0.1', 'DB_PORT' => $plan->database === 'pgsql' ? '5432' : '3306', 'DB_DATABASE' => $databaseName, 'DB_USERNAME' => $databaseName, 'DB_PASSWORD' => ''];
         }
 
-        foreach ($values as $key => $value) {
-            $template = $this->setEnvironmentValue($template, $key, $value);
-        }
-
-        return rtrim($template).PHP_EOL;
-    }
-
-    private function setEnvironmentValue(string $contents, string $key, string $value): string
-    {
-        $pattern = '/^(?:#\s*)?'.preg_quote($key, '/').'=.*$/m';
-        $replacement = "{$key}={$value}";
-
-        return preg_match($pattern, $contents) === 1
-            ? (string) preg_replace_callback($pattern, static fn (): string => $replacement, $contents, 1)
-            : rtrim($contents).PHP_EOL.$replacement.PHP_EOL;
-    }
-
-    private function environmentValue(string $contents, string $key): string
-    {
-        return preg_match('/^'.preg_quote($key, '/').'=(.*)$/m', $contents, $matches) === 1
-            ? trim($matches[1], " \t\n\r\0\x0B\"")
-            : '';
+        return $store->mergeContents($template, $values);
     }
 
     /** @throws JsonException */

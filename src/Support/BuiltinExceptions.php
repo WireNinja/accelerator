@@ -27,42 +27,8 @@ final class BuiltinExceptions
 
     public static function make(Exceptions $exceptions): void
     {
-        // @DONOT-REMOVE dontReportWhen Auth::guest()
-        //
-        // WHY THIS EXISTS:
-        // Unauthenticated traffic (crawlers, vulnerability scanners, path snipers, SEO bots,
-        // brute-force scripts) constantly hits admin/internal endpoints and triggers exceptions
-        // like AuthenticationException, NotFoundHttpException, MethodNotAllowedHttpException,
-        // ModelNotFoundException, and TokenMismatchException. These are NOT bugs — they are
-        // noise from actors that have no session, no CSRF token, and no legitimate business
-        // on authenticated surfaces.
-        //
-        // If reported to an APM, these inflate ingestion cost with
-        // zero signal-to-noise value. On a single VPS hosting multiple projects, this cost
-        // compounds quickly.
-        //
-        // SCOPE:
-        // - Suppresses ALL exception reporting when the request has no authenticated user.
-        // - CLI/console processes are NEVER suppressed (scheduler, queue workers, commands).
-        // - This is intentional and aggressive by design. The tradeoff is: if a genuine
-        //   guest-facing bug occurs (e.g. a public page 500s), it won't reach APM.
-        //
-        // WHY NOT SURGICAL FILTERING:
-        // Surgical filtering (e.g. suppress only 404/401/419) still leaks scanner noise for
-        // any exception type the scanner manages to trigger (QueryException from SQL injection
-        // attempts, ViewException from path traversal, etc). Every new exception type that
-        // leaks requires a new suppression rule — an infinite maintenance burden. The blanket
-        // approach guarantees zero bot noise regardless of what exceptions they trigger.
-        //
-        // ACCEPTABLE RISK:
-        // All authenticated surfaces (admin panel, API with auth middleware) still report
-        // normally. Public-facing surfaces in this architecture are minimal (login page,
-        // OAuth callback, PWA assets) and are validated through application health checks
-        // and uptime monitoring, not exception APM.
-        //
-        // If a project adds significant public guest-facing features (e-commerce storefront,
-        // public API), override this in the application's exception handler to narrow the
-        // suppression scope for those specific routes.
+        // Guest HTTP exceptions are intentionally excluded from telemetry to suppress bot noise.
+        // CLI work remains reportable; apps with public guest features must narrow this policy.
         $exceptions->dontReportWhen(function () {
             if (app()->runningInConsole()) {
                 return false;

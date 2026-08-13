@@ -8,13 +8,10 @@ use Carbon\CarbonImmutable;
 use Composer\InstalledVersions;
 use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Support\Facades\Artisan;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use JsonException;
-use RecursiveDirectoryIterator;
-use RecursiveIteratorIterator;
 use RuntimeException;
 use Throwable;
 use WireNinja\Accelerator\Support\Operations\OperatorTelegramNotifier;
@@ -22,7 +19,10 @@ use ZipArchive;
 
 final readonly class BackupManager
 {
-    public function __construct(private OperatorTelegramNotifier $notifier) {}
+    public function __construct(
+        private OperatorTelegramNotifier $notifier,
+        private BackupArchive $archiveInspector,
+    ) {}
 
     /** @return array<string, mixed> */
     public function create(string $mode, ?string $revision = null): array
@@ -261,15 +261,12 @@ final readonly class BackupManager
                     throw new RuntimeException("Backup [{$backupId}] is empty.");
                 }
 
+                $this->archiveInspector->assertSafe($archive, $backupId);
                 $hasDatabase = false;
                 $hasFiles = false;
 
                 for ($index = 0; $index < $archive->numFiles; $index++) {
                     $entry = $archive->getNameIndex($index);
-
-                    if (! is_string($entry) || $this->unsafeArchiveEntry($entry) || $this->archiveEntryIsSymlink($archive, $index)) {
-                        throw new RuntimeException("Backup [{$backupId}] contains an unsafe archive entry.");
-                    }
 
                     $normalized = ltrim(str_replace('\\', '/', $entry), '/');
                     $hasDatabase = $hasDatabase || str_contains("/{$normalized}", '/db-dumps/');
@@ -342,159 +339,6 @@ final readonly class BackupManager
 
             throw $exception;
         }
-    }
-
-    /** @return array<string, mixed> */
-    public function prepareRestore(string $backupId, ?string $requestedDisk = null, string $mode = 'all'): array
-    {
-        if (! in_array($mode, ['all', 'database', 'files'], true)) {
-            throw new RuntimeException('Restore mode must be all, database, or files.');
-        }
-
-        $verified = $this->verify($backupId, $requestedDisk);
-        $manifest = $verified['manifest'];
-
-        if (! is_array($manifest)) {
-            throw new RuntimeException("Backup [{$backupId}] has no Accelerator manifest.");
-        }
-
-        foreach ([
-            'deployment_key' => (string) config('accelerator.operations.deployment_key'),
-            'stage' => (string) config('accelerator.operations.stage'),
-        ] as $key => $expected) {
-            if (($manifest[$key] ?? null) !== $expected) {
-                throw new RuntimeException("Backup [{$backupId}] {$key} does not match this runtime.");
-            }
-        }
-
-        $revision = is_file(base_path('REVISION')) ? trim((string) file_get_contents(base_path('REVISION'))) : '';
-
-        if ($revision === '' || ($manifest['revision'] ?? null) !== $revision) {
-            throw new RuntimeException(sprintf(
-                'Backup [%s] requires active revision [%s], current [%s].',
-                $backupId,
-                $manifest['revision'] ?? 'unknown',
-                $revision ?: 'unknown',
-            ));
-        }
-
-        $backupMode = (string) ($manifest['mode'] ?? '');
-
-        if (($mode === 'database' && $backupMode === 'files') || ($mode === 'files' && $backupMode === 'database')) {
-            throw new RuntimeException("Backup [{$backupId}] does not contain the requested {$mode} data.");
-        }
-
-        $directory = storage_path("framework/accelerator-restore/{$backupId}");
-        $availableBytes = disk_free_space(storage_path());
-        $requiredBytes = ((int) ($verified['size_bytes'] ?? 0) * 2) + (100 * 1024 * 1024);
-
-        if (! is_float($availableBytes) || $availableBytes < $requiredBytes) {
-            throw new RuntimeException("Backup [{$backupId}] cannot be prepared because local free disk space is insufficient.");
-        }
-
-        File::deleteDirectory($directory);
-
-        if (! File::makeDirectory($directory, 0700, true)) {
-            throw new RuntimeException('Unable to create the restore preparation directory.');
-        }
-
-        $archivePath = $directory.'/backup.zip';
-        $disk = Storage::disk((string) $verified['disk']);
-        $input = $disk->readStream((string) $verified['path']);
-        $output = fopen($archivePath, 'wb');
-
-        if (! is_resource($input) || ! is_resource($output)) {
-            throw new RuntimeException("Unable to materialize backup [{$backupId}] for restoration.");
-        }
-
-        try {
-            stream_copy_to_stream($input, $output);
-        } finally {
-            fclose($input);
-            fclose($output);
-        }
-
-        $extractedPath = $directory.'/extracted';
-        File::makeDirectory($extractedPath, 0700, true);
-        $archive = new ZipArchive;
-
-        if ($archive->open($archivePath) !== true) {
-            throw new RuntimeException("Backup [{$backupId}] cannot be opened for restoration.");
-        }
-
-        try {
-            $password = config('backup.backup.password');
-
-            if (is_string($password) && $password !== '') {
-                $archive->setPassword($password);
-            }
-
-            for ($index = 0; $index < $archive->numFiles; $index++) {
-                $entry = $archive->getNameIndex($index);
-
-                if (! is_string($entry) || $this->unsafeArchiveEntry($entry) || $this->archiveEntryIsSymlink($archive, $index)) {
-                    throw new RuntimeException("Backup [{$backupId}] contains an unsafe archive entry.");
-                }
-            }
-
-            if (! $archive->extractTo($extractedPath)) {
-                throw new RuntimeException("Backup [{$backupId}] could not be extracted.");
-            }
-        } finally {
-            $archive->close();
-        }
-
-        $databaseDump = $this->findDatabaseDump($extractedPath);
-        $filesPath = $extractedPath.'/storage/app';
-
-        if (in_array($mode, ['all', 'database'], true) && $databaseDump === null) {
-            throw new RuntimeException("Backup [{$backupId}] contains no database dump.");
-        }
-
-        if (in_array($mode, ['all', 'files'], true) && ! is_dir($filesPath)) {
-            throw new RuntimeException("Backup [{$backupId}] contains no storage/app file tree.");
-        }
-
-        return [
-            'status' => 'OK',
-            'backup_id' => $backupId,
-            'mode' => $mode,
-            'prepared_path' => $directory,
-            'database_dump' => $databaseDump,
-            'files_path' => is_dir($filesPath) ? $filesPath : null,
-            'manifest' => $manifest,
-        ];
-    }
-
-    /** @return array<string, mixed> */
-    public function discardPreparedRestore(string $backupId): array
-    {
-        $this->assertBackupId($backupId);
-        $directory = storage_path("framework/accelerator-restore/{$backupId}");
-        File::deleteDirectory($directory);
-
-        return [
-            'status' => 'OK',
-            'backup_id' => $backupId,
-            'discarded' => ! is_dir($directory),
-        ];
-    }
-
-    /** @return array<string, mixed> */
-    public function postRestoreHealth(): array
-    {
-        DB::connection()->getPdo();
-        $storage = storage_path('app');
-
-        if (! is_dir($storage) || ! is_readable($storage) || ! is_writable($storage)) {
-            throw new RuntimeException('Restored storage/app is not readable and writable by the Laravel runtime.');
-        }
-
-        return [
-            'status' => 'OK',
-            'database' => 'connected',
-            'storage' => 'readable-writable',
-        ];
     }
 
     /** @return array<string, mixed> */
@@ -653,39 +497,6 @@ final readonly class BackupManager
         if (preg_match('/^[a-z0-9][a-z0-9._-]*$/i', $backupId) !== 1) {
             throw new RuntimeException('Backup ID contains unsafe characters.');
         }
-    }
-
-    private function unsafeArchiveEntry(string $entry): bool
-    {
-        $normalized = str_replace('\\', '/', $entry);
-
-        return str_starts_with($normalized, '/')
-            || preg_match('/^[a-z]:\//i', $normalized) === 1
-            || in_array('..', explode('/', $normalized), true);
-    }
-
-    private function archiveEntryIsSymlink(ZipArchive $archive, int $index): bool
-    {
-        if (! $archive->getExternalAttributesIndex($index, $operatingSystem, $attributes)) {
-            return false;
-        }
-
-        return $operatingSystem === ZipArchive::OPSYS_UNIX && (($attributes >> 16) & 0170000) === 0120000;
-    }
-
-    private function findDatabaseDump(string $extractedPath): ?string
-    {
-        $files = new RecursiveIteratorIterator(
-            new RecursiveDirectoryIterator($extractedPath, RecursiveDirectoryIterator::SKIP_DOTS),
-        );
-
-        foreach ($files as $file) {
-            if ($file->isFile() && str_contains(str_replace('\\', '/', $file->getPathname()), '/db-dumps/')) {
-                return $file->getPathname();
-            }
-        }
-
-        return null;
     }
 
     private function recordLifecycleState(string $result, ?string $backupId, ?string $error): void

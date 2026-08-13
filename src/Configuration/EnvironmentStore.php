@@ -85,6 +85,12 @@ final readonly class EnvironmentStore
             throw new RuntimeException("Unable to read [{$relativePath}].");
         }
 
+        $this->write($relativePath, $this->mergeContents($contents, $values));
+    }
+
+    /** @param array<string, string> $values */
+    public function mergeContents(string $contents, array $values): string
+    {
         foreach ($values as $key => $value) {
             if (preg_match('/^[A-Z][A-Z0-9_]*$/', $key) !== 1 || str_contains($value, "\n") || str_contains($value, "\r")) {
                 throw new RuntimeException("Invalid environment value for [{$key}].");
@@ -94,13 +100,13 @@ final readonly class EnvironmentStore
             $pattern = '/^(?:#\s*)?'.preg_quote($key, '/').'=.*$/m';
 
             if (preg_match($pattern, $contents) === 1) {
-                $contents = (string) preg_replace($pattern, $line, $contents, 1);
+                $contents = (string) preg_replace_callback($pattern, static fn (): string => $line, $contents, 1);
             } else {
                 $contents = rtrim($contents).PHP_EOL.$line.PHP_EOL;
             }
         }
 
-        $this->write($relativePath, rtrim($contents).PHP_EOL);
+        return rtrim($contents).PHP_EOL;
     }
 
     public function write(string $relativePath, string $contents): void

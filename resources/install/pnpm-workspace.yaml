@@ -1,0 +1,17 @@
+minimumReleaseAge: 10080
+minimumReleaseAgeExclude:
+  - concurrently@10.0.4
+  - filelist@2.0.2
+  - sharp@0.35.3
+minimumReleaseAgeIgnoreMissingTime: false
+overrides:
+  filelist: 2.0.2
+  sharp: 0.35.3
+strictDepBuilds: true
+allowBuilds:
+  'sharp@0.35.3': true
+blockExoticSubdeps: true
+trustPolicy: no-downgrade
+trustPolicyExclude:
+  - '@trickfilm400/rollup-plugin-off-main-thread@3.0.0-pre1'
+  - 'semver@6.3.1'

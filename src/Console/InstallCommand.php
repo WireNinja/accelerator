@@ -43,7 +43,10 @@ final class InstallCommand extends Command
         try {
             $this->confirmReinstallation($projectRoot);
             $processRunner = new ProcessRunner(quiet: (bool) $this->option('json'));
-            $plan = (new Onboarding($projectRoot))->plan($this->installerArguments());
+            $plan = (new Onboarding($projectRoot))->plan(
+                options: $this->installerOptions(),
+                interactive: $this->input->isInteractive() && ! $this->option('json'),
+            );
 
             (new Installer(
                 projectRoot: $projectRoot,
@@ -77,11 +80,11 @@ final class InstallCommand extends Command
     }
 
     /**
-     * @return list<string>
+     * @return array<string, string|bool>
      */
-    private function installerArguments(): array
+    private function installerOptions(): array
     {
-        $arguments = $this->input->isInteractive() && ! $this->option('json') ? [] : ['--no-interaction'];
+        $options = [];
 
         foreach (self::INSTALLER_OPTIONS as $name) {
             $value = $this->option($name);
@@ -90,10 +93,10 @@ final class InstallCommand extends Command
                 continue;
             }
 
-            $arguments[] = $value === true ? "--{$name}" : "--{$name}={$value}";
+            $options[$name] = $value;
         }
 
-        return $arguments;
+        return $options;
     }
 
     private function confirmReinstallation(string $projectRoot): void

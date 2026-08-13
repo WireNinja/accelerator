@@ -6,8 +6,10 @@ namespace WireNinja\Accelerator\Console\Runtime;
 
 use Illuminate\Console\Command;
 use JsonException;
+use RuntimeException;
 use Throwable;
 use WireNinja\Accelerator\Support\Backup\BackupManager;
+use WireNinja\Accelerator\Support\Backup\BackupRestorer;
 use WireNinja\Accelerator\Support\Operations\OperatorTelegramNotifier;
 
 final class BackupCommand extends Command
@@ -26,6 +28,7 @@ final class BackupCommand extends Command
 
     public function __construct(
         private readonly BackupManager $backups,
+        private readonly BackupRestorer $restorer,
         private readonly OperatorTelegramNotifier $notifier,
     ) {
         parent::__construct();
@@ -42,15 +45,15 @@ final class BackupCommand extends Command
                 'status' => $this->backups->status(verifyNewest: true),
                 'verify' => $this->backups->verify($this->backupId(), $this->disk()),
                 'cleanup' => $this->backups->cleanup(),
-                'prepare' => $this->backups->prepareRestore($this->backupId(), $this->disk(), (string) $this->option('only')),
+                'prepare' => $this->restorer->prepare($this->backupId(), $this->disk(), (string) $this->option('only')),
                 'restore-context' => $this->restoreContext(),
-                'discard' => $this->backups->discardPreparedRestore($this->backupId()),
-                'post-restore-health' => $this->backups->postRestoreHealth(),
+                'discard' => $this->restorer->discard($this->backupId()),
+                'post-restore-health' => $this->restorer->health(),
                 'notify-test' => $this->notifyTest(),
                 'restore-started' => $this->notifyRestore('started'),
                 'restore-succeeded' => $this->notifyRestore('success'),
                 'restore-failed' => $this->notifyRestore('failed'),
-                default => throw new \RuntimeException("Unknown backup runtime action [{$action}]."),
+                default => throw new RuntimeException("Unknown backup runtime action [{$action}]."),
             };
             $this->writeResult($result);
 
@@ -134,7 +137,7 @@ final class BackupCommand extends Command
         $backupId = $this->option('backup');
 
         if (! is_string($backupId) || $backupId === '') {
-            throw new \RuntimeException('--backup is required for verification.');
+            throw new RuntimeException('--backup is required for verification.');
         }
 
         return $backupId;
@@ -156,7 +159,7 @@ final class BackupCommand extends Command
         }
 
         if (preg_match('/^[a-f0-9]{40,64}$/i', $revision) !== 1) {
-            throw new \RuntimeException('--revision must be a full Git commit hash.');
+            throw new RuntimeException('--revision must be a full Git commit hash.');
         }
 
         return $revision;

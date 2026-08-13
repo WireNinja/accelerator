@@ -40,18 +40,16 @@ final class Onboarding
     public function __construct(private readonly string $projectRoot) {}
 
     /**
-     * @param  list<string>  $arguments
+     * @param  array<string, string|bool>  $options
      *
      * @throws JsonException
      */
-    public function plan(array $arguments): InstallPlan
+    public function plan(array $options, bool $interactive): InstallPlan
     {
         if ($savedPlan = $this->savedPlan()) {
             return $savedPlan;
         }
 
-        $options = $this->parseArguments($arguments);
-        $interactive = ! isset($options['no-interaction']);
         $directoryName = basename($this->projectRoot);
         $defaultProject = Str::slug($directoryName);
 
@@ -188,7 +186,7 @@ final class Onboarding
     }
 
     /**
-     * @param  array<string, string|true>  $options
+     * @param  array<string, string|bool>  $options
      */
     private function nonInteractivePlan(array $options, string $directoryName, string $defaultProject): InstallPlan
     {
@@ -283,33 +281,7 @@ final class Onboarding
     }
 
     /**
-     * @param  list<string>  $arguments
-     * @return array<string, string|true>
-     */
-    private function parseArguments(array $arguments): array
-    {
-        $options = [];
-
-        foreach ($arguments as $argument) {
-            if (! str_starts_with($argument, '--')) {
-                throw new RuntimeException("Unexpected installer argument: {$argument}");
-            }
-
-            $option = substr($argument, 2);
-
-            if (str_contains($option, '=')) {
-                [$key, $value] = explode('=', $option, 2);
-                $options[$key] = $value;
-            } else {
-                $options[$option] = true;
-            }
-        }
-
-        return $options;
-    }
-
-    /**
-     * @param  array<string, string|true>  $options
+     * @param  array<string, string|bool>  $options
      */
     private function option(array $options, string $key, string $default = ''): string
     {

@@ -99,34 +99,20 @@ final readonly class DependencyInstaller
     private function configureFrontendPolicy(): void
     {
         $manager = $this->context->plan->packageManager;
-        $selectedLock = $manager === 'pnpm' ? 'pnpm-lock.yaml' : 'package-lock.json';
 
+        // The Laravel skeleton lockfile was resolved before Accelerator's policy existed.
         foreach (['pnpm-lock.yaml', 'package-lock.json', 'yarn.lock'] as $lockFile) {
-            if ($lockFile !== $selectedLock) {
-                $this->deleteIfFile($lockFile);
-            }
+            $this->deleteIfFile($lockFile);
         }
 
         if ($manager === 'pnpm') {
-            $this->context->writeFile('pnpm-workspace.yaml', <<<'YAML'
-minimumReleaseAge: 10080
-minimumReleaseAgeExclude:
-  - concurrently
-  - filelist
-  - sharp
-minimumReleaseAgeIgnoreMissingTime: false
-overrides:
-  filelist: ^2.0.2
-  sharp: ^0.35.3
-strictDepBuilds: true
-allowBuilds:
-  'sharp@0.35.3': true
-blockExoticSubdeps: true
-trustPolicy: no-downgrade
-trustPolicyExclude:
-  - '@trickfilm400/rollup-plugin-off-main-thread@3.0.0-pre1'
-  - 'semver@6.3.1'
-YAML);
+            $policy = file_get_contents($this->context->packageRoot.'/resources/install/pnpm-workspace.yaml');
+
+            if (! is_string($policy)) {
+                throw new RuntimeException('Unable to read the pnpm supply-chain policy.');
+            }
+
+            $this->context->writeFile('pnpm-workspace.yaml', $policy);
             $this->deleteIfFile('.npmrc');
 
             return;

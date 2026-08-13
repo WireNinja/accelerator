@@ -22,7 +22,6 @@ use Spatie\Backup\Tasks\Monitor\HealthChecks\MaximumStorageInMegabytes;
 use WireNinja\Accelerator\Console\Agent\DoctorCommand;
 use WireNinja\Accelerator\Console\ConfigureCommand;
 use WireNinja\Accelerator\Console\ContextCommand;
-use WireNinja\Accelerator\Console\DependenciesCommand;
 use WireNinja\Accelerator\Console\EnvCommand;
 use WireNinja\Accelerator\Console\FeatureListCommand;
 use WireNinja\Accelerator\Console\InstallCommand;
@@ -76,7 +75,6 @@ final class CoreServiceProvider extends ServiceProvider
             DoctorCommand::class,
             ConfigureCommand::class,
             ContextCommand::class,
-            DependenciesCommand::class,
             BackupCommand::class,
             NotifyCommand::class,
             EnvCommand::class,
