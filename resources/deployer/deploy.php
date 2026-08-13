@@ -69,7 +69,10 @@ task('accelerator:environment', function () use ($config): void {
     run('mkdir -p {{deploy_path}}/shared');
     $temporary = '{{deploy_path}}/shared/.env.accelerator-upload';
     upload($config->runtimeEnvironmentFile(), $temporary);
-    run('chmod 0600 '.$temporary.' && mv -f '.$temporary.' {{deploy_path}}/shared/.env');
+    run('runtime_group="$(id -gn '.escapeshellarg($config->runUser).')"'
+        .' && command sudo -n chown "$(id -un):${runtime_group}" '.escapeshellarg($temporary)
+        .' && chmod 0640 '.escapeshellarg($temporary)
+        .' && mv -f '.escapeshellarg($temporary).' {{deploy_path}}/shared/.env');
 });
 
 task('accelerator:runtime-acl', function () use ($config): void {

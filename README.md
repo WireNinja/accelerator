@@ -85,6 +85,8 @@ php artisan accelerator:logs scheduler --stage=production
 
 Stable root is `/var/www/{domain}` with Deployer `releases`, `shared`, and `current`. Deploy reloads the exact PHP-FPM service, replaces the exact stage cron file, and removes only an old Accelerator-owned Supervisor group for the same deployment key and stage. It never uninstalls Supervisor or touches unrelated projects.
 
+The shared runtime `.env` remains owned by the SSH deploy user, uses the application runtime user's primary group, and has mode `0640`. This keeps secrets private while allowing PHP-FPM and native cron to load the same configuration.
+
 Dual stages run identical code and features. They isolate database, uploads, APP_KEY, sessions/cache namespace, Reverb credentials, OTLP credential and identity, backups, domain, and cron entry. Production promotion deploys the exact successful staging revision. A code rollback never reverses database migrations.
 
 ## Centralized Reverb
