@@ -9,12 +9,11 @@ use Stringable;
 
 final class Cast
 {
-    public static function asString(mixed $value, string $default = ''): string
+    /**
+     * @return ($default is null ? string|null : string)
+     */
+    public static function string(mixed $value, ?string $default = ''): ?string
     {
-        if ($value === null) {
-            return $default;
-        }
-
         if (is_scalar($value) || $value instanceof Stringable) {
             return (string) $value;
         }
@@ -22,16 +21,24 @@ final class Cast
         return $default;
     }
 
-    public static function strictString(mixed $value): string
+    public static function mustString(mixed $value): string
     {
-        if (is_scalar($value) || $value instanceof Stringable) {
-            return (string) $value;
+        $cast = self::string($value, null);
+
+        if ($cast === null) {
+            throw new InvalidArgumentException(sprintf(
+                'Value of type [%s] cannot be cast to string.',
+                get_debug_type($value),
+            ));
         }
 
-        throw new InvalidArgumentException('Value cannot be cast to string.');
+        return $cast;
     }
 
-    public static function asInt(mixed $value, int $default = 0): int
+    /**
+     * @return ($default is null ? int|null : int)
+     */
+    public static function int(mixed $value, ?int $default = 0): ?int
     {
         if (is_int($value)) {
             return $value;
@@ -42,5 +49,19 @@ final class Cast
         }
 
         return is_numeric($value) ? (int) $value : $default;
+    }
+
+    public static function mustInt(mixed $value): int
+    {
+        $cast = self::int($value, null);
+
+        if ($cast === null) {
+            throw new InvalidArgumentException(sprintf(
+                'Value of type [%s] cannot be cast to int.',
+                get_debug_type($value),
+            ));
+        }
+
+        return $cast;
     }
 }

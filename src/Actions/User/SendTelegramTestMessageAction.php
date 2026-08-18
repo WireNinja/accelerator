@@ -56,15 +56,15 @@ final class SendTelegramTestMessageAction
 
     private function buildMessage(Model&AcceleratorUser $user): string
     {
-        $username = Cast::asString($user->getAttribute('username'));
+        $username = Cast::string($user->getAttribute('username'));
         $identifier = $username !== ''
             ? sprintf('Username: %s', $username)
-            : sprintf('Email: %s', Cast::asString($user->getAttribute('email')));
+            : sprintf('Email: %s', Cast::string($user->getAttribute('email')));
 
         return implode("\n", [
             'Tes koneksi Telegram berhasil.',
             sprintf('Aplikasi: %s', $this->systemSettings->brand_name),
-            sprintf('Pengguna: %s', Cast::asString($user->getAttribute('name'))),
+            sprintf('Pengguna: %s', Cast::string($user->getAttribute('name'))),
             $identifier,
             sprintf('Waktu: %s', now()->format('d M Y H:i:s')),
         ]);
