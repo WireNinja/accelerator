@@ -15,7 +15,7 @@ use SensitiveParameter;
 class Login extends BaseLogin
 {
     /** Keep login throttle keys compact and free of raw user input. */
-    protected function getRateLimitKey($method, $component = null): string
+    protected function getRateLimitKey(mixed $method, mixed $component = null): string
     {
         $method ??= debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, limit: 2)[1]['function'];
         $component ??= static::class;

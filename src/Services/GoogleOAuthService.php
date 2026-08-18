@@ -3,12 +3,14 @@
 namespace WireNinja\Accelerator\Services;
 
 use Illuminate\Auth\AuthenticationException;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Laravel\Socialite\Contracts\User as SocialiteUser;
 use Laravel\Socialite\Two\User as OAuth2User;
 use LogicException;
 use WireNinja\Accelerator\Contracts\AcceleratorUser;
+use WireNinja\Accelerator\Support\Cast;
 use WireNinja\Accelerator\Support\UserModel;
 
 final class GoogleOAuthService
@@ -95,9 +97,8 @@ final class GoogleOAuthService
     private function domainIsAllowed(string $email): bool
     {
         $domain = str($email)->afterLast('@')->lower()->toString();
-        $allowedDomains = collect(config('accelerator.oauth.allowed_domains', []))
-            ->filter(fn (mixed $allowedDomain): bool => is_string($allowedDomain))
-            ->map(fn (string $allowedDomain): string => strtolower(trim($allowedDomain)))
+        $allowedDomains = collect(Arr::wrap(config('accelerator.oauth.allowed_domains')))
+            ->map(fn (mixed $allowedDomain): string => strtolower(trim(Cast::string($allowedDomain))))
             ->filter()
             ->all();
 

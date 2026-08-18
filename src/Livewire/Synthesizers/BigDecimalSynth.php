@@ -18,7 +18,7 @@ final class BigDecimalSynth extends Synth
     /**
      * Tell Livewire which object this synth handles.
      */
-    public static function match($target): bool
+    public static function match(mixed $target): bool
     {
         return $target instanceof BigDecimal;
     }
@@ -27,20 +27,18 @@ final class BigDecimalSynth extends Synth
      * SERVER -> BROWSER
      * Convert BigDecimal to a format that can be sent to JS (String).
      *
-     * @param  BigDecimal  $target
-     * @param  mixed  $dehydrate
+     * @return array{string, array{}}
      */
-    public function dehydrate($target, $dehydrate): array
+    public function dehydrate(mixed $target, mixed $dehydrate): array
     {
-        // Send as string so precision is not lost in JavaScript
-        return [(string) $target->__toString(), []];
+        return [(string) $target, []];
     }
 
     /**
      * BROWSER -> SERVER
      * Convert form input (String/Number) back to BigDecimal.
      */
-    public function hydrate($value, $meta, $hydrate): ?BigDecimal
+    public function hydrate(mixed $value, mixed $meta, mixed $hydrate): ?BigDecimal
     {
         // Handle empty input (empty string or null)
         if ($value === null || $value === '') {
@@ -48,10 +46,7 @@ final class BigDecimalSynth extends Synth
         }
 
         try {
-            $value = (string) $value;
-
-            // Convert string from browser back to BigDecimal object
-            return BigDecimal::of($value);
+            return BigDecimal::of((string) $value);
         } catch (MathException) {
             // If user types invalid characters (e.g. "abc"), return null.
             // Let Laravel Validation Rules (e.g. 'numeric') handle the error.

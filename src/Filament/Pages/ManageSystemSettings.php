@@ -50,6 +50,7 @@ class ManageSystemSettings extends Page implements HasForms
 
     protected static ?string $slug = 'system/settings';
 
+    /** @var array<string, mixed>|null */
     public ?array $data = [];
 
     /** @var SystemSettings */

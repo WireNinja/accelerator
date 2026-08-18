@@ -12,6 +12,7 @@ class EnvReader
      * Each env key is split by `_` then checked per token. More precise than substring
      * matching — `WIDGET_KEY` matches `key`, but `KEYCHAIN_HINT` does not.
      */
+    /** @var list<string> */
     protected static array $sensitiveTokens = [
         'key',
         'secret',
@@ -37,6 +38,7 @@ class EnvReader
      * Tokens that downgrade a key from sensitive to non-sensitive.
      * Example: `GOOGLE_CLIENT_ID` has token `id` -> treated as public identifier.
      */
+    /** @var list<string> */
     protected static array $publicTokens = [
         'id',
         'public',
@@ -46,11 +48,16 @@ class EnvReader
      * Tokens that cancel the public downgrade above. If the key also contains one
      * of these tokens, the `public/id` whitelist must not activate.
      */
+    /** @var list<string> */
     protected static array $hardSensitiveTokens = [
         'secret',
         'private',
     ];
 
+    /**
+     * @param  list<string>  $specificKeys
+     * @return array<string, string>
+     */
     public static function redacted(array $specificKeys = []): array
     {
         $allEnv = self::readFromEnvFile();
@@ -85,7 +92,7 @@ class EnvReader
                 continue;
             }
 
-            $data[$key] = is_string($value) ? trim($value, " \t\n\r\0\x0B\"'") : $value;
+            $data[$key] = trim($value, " \t\n\r\0\x0B\"'");
         }
 
         ksort($data);
@@ -122,6 +129,7 @@ class EnvReader
         return array_values(array_filter(explode('_', strtolower($key)), fn (string $token): bool => $token !== ''));
     }
 
+    /** @return array<string, string> */
     protected static function readFromEnvFile(): array
     {
         $path = base_path('.env');

@@ -93,7 +93,10 @@ final readonly class CompactResourceScanner
         return $files;
     }
 
-    /** @param list<string> $files @return list<string> */
+    /**
+     * @param  list<string>  $files
+     * @return list<string>
+     */
     private function sourceActions(array $files): array
     {
         $actions = [];
