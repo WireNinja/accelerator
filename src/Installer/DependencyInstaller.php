@@ -35,10 +35,7 @@ final readonly class DependencyInstaller
             '@php artisan package:discover --ansi',
             '@php artisan filament:upgrade',
         ];
-        $composer['scripts']['dev'] = [
-            'Composer\\Config::disableProcessTimeout',
-            $this->context->packageBinaryCommand('concurrently').' -c "#93c5fd,#c4b5fd,#fb7185,#fdba74" "php artisan serve" "php artisan schedule:work" "php artisan pail --timeout=0" "'.$this->context->packageScriptCommand('dev').'" --names=server,scheduler,logs,vite --kill-others',
-        ];
+        unset($composer['scripts']['dev']);
         $composer['scripts']['format'] = 'pint --format=json';
         $composer['scripts']['refactor'] = 'rector --output-format=json';
         $composer['scripts']['phpstan'] = 'phpstan analyse --memory-limit=2G --no-progress';

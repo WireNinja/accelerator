@@ -14,10 +14,11 @@ final class ProcessRunner
 
     /**
      * @param  list<string>  $command
+     * @param  array<string, string>  $environment
      */
-    public function run(array $command, string $workingDirectory): void
+    public function run(array $command, string $workingDirectory, array $environment = []): void
     {
-        $process = new Process($command, $workingDirectory);
+        $process = new Process($command, $workingDirectory, $environment === [] ? null : $environment);
         $process->setTimeout(null);
         $process->run(function (string $type, string $output): void {
             if (! $this->quiet) {

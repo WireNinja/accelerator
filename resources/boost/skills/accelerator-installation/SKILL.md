@@ -12,7 +12,7 @@ composer require wireninja/accelerator:^2.0@dev -W --no-interaction
 php artisan accelerator:install
 ```
 
-Inspect `php artisan accelerator:install --help` for non-interactive options. Non-interactive runs require `--admin-password` or `ACCELERATOR_ADMIN_PASSWORD`; never print it. Use `--json` for one stable result. Reinstallation after a finished receipt additionally requires `--force`. Default to pnpm 11+; use npm 12+ only when requested. The installer rejects older package-manager versions because they cannot enforce the committed policy. Never install a Laravel starter kit first.
+Inspect `php artisan accelerator:install --help` for non-interactive options. Non-interactive runs require `ACCELERATOR_ADMIN_PASSWORD`; never pass or print the password on the command line. Use `--json` for one stable result. Reinstallation after a finished receipt additionally requires `--force`. Default to pnpm 11+; use npm 12+ only when requested. The installer rejects older package-manager versions because they cannot enforce the committed policy. Never install a Laravel starter kit first. Local development uses native `php artisan dev`.
 
 When realtime is selected, Accelerator generates local centralized-Reverb credentials. Easyploy stage environments own distinct staging/production credentials. Never print or commit the ignored registry or stage envs.
 
@@ -20,7 +20,7 @@ Deployment is deliberately absent from the installer. After application installa
 
 The installer owns and overwrites its recipe targets. It preserves root `/`, installs Filament/System/RBAC/auth as core, configures selected OAuth/PWA/Telegram/realtime/Scout/observability integrations, publishes native vendor migrations by exact command/tag, copies only Accelerator-owned user/settings migrations, runs `migrate:fresh --seed`, provisions Super Admin, generates Shield permissions, builds frontend assets, installs Boost resources, and runs non-test quality checks. Vendor config is not copied wholesale. A finished install receipt requires interactive confirmation or `--force` before destructive reinstallation; an unfinished receipt resumes completed steps.
 
-Supply-chain policy is mandatory: one lockfile, seven-day minimum release age, no exotic transitive sources, no trust downgrade except reviewed exact-version exceptions, and explicit build-script allowlisting. The destructive installer removes skeleton or stale lockfiles before the first policy-governed resolution. Security-only exceptions currently force patched `concurrently`, `sharp`, and `filelist`; do not broaden them or disable the age window globally. An emergency age bypass must name one reviewed package/version and be removed after the window.
+Supply-chain policy is mandatory: one lockfile, seven-day minimum release age, no exotic transitive sources, no trust downgrade except reviewed exact-version exceptions, and explicit build-script allowlisting. The destructive installer removes skeleton or stale lockfiles before the first policy-governed resolution. Security and native-dev compatibility exceptions currently pin `concurrently`, `sharp`, and `filelist`; do not broaden them or disable the age window globally. An emergency age bypass must name one reviewed package/version and be removed after the window.
 
 Files: `.env` local runtime, ignored `.accelerator/install-state.json` receipt, committed `.easyploy/manifest.json` topology, and ignored Easyploy stage envs. Never treat the receipt as config.
 

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace WireNinja\Accelerator\Installer;
 
+use Closure;
 use JsonException;
 use RuntimeException;
 
@@ -15,30 +16,31 @@ final readonly class ApplicationFinalizer
     {
         $runner = $this->context->processRunner;
         $root = $this->context->projectRoot;
-        $runner->run(['composer', 'dump-autoload', '--no-interaction'], $root);
+        $this->operation($journal, 'application.autoload', fn () => $runner->run(['composer', 'dump-autoload', '--no-interaction'], $root));
         $this->publishApplicationMigrations($journal);
-        $this->ensureLocalDatabase();
-        $runner->run(['php', 'artisan', 'lang:add', 'id', '--no-interaction'], $root);
-        $runner->run(['php', 'artisan', 'lang:update', '--no-interaction'], $root);
-        $runner->run(['php', 'artisan', 'migrate:fresh', '--seed', '--force', '--no-interaction'], $root);
-        $runner->run(['php', 'artisan', 'storage:link', '--force', '--no-interaction'], $root);
-        $runner->run(['php', 'artisan', 'shield:safe-regenerate', '--no-interaction'], $root);
-        $runner->run([
+        $this->operation($journal, 'application.database-file', $this->ensureLocalDatabase(...));
+        $this->operation($journal, 'application.language.add', fn () => $runner->run(['php', 'artisan', 'lang:add', 'id', '--no-interaction'], $root));
+        $this->operation($journal, 'application.language.update', fn () => $runner->run(['php', 'artisan', 'lang:update', '--no-interaction'], $root));
+        $this->operation($journal, 'application.database.rebuild', fn () => $runner->run(['php', 'artisan', 'migrate:fresh', '--seed', '--force', '--no-interaction'], $root));
+        $this->operation($journal, 'application.storage-link', fn () => $runner->run(['php', 'artisan', 'storage:link', '--force', '--no-interaction'], $root));
+        $this->operation($journal, 'application.shield', fn () => $runner->run(['php', 'artisan', 'shield:safe-regenerate', '--no-interaction'], $root));
+        $this->operation($journal, 'application.admin', fn () => $runner->run([
             'php',
             'artisan',
             'accelerator:provision-admin',
             '--name='.$this->context->plan->adminName,
             '--username='.$this->context->plan->adminUsername,
             '--email='.$this->context->plan->adminEmail,
-            '--password-hash='.$this->context->plan->adminPasswordHash,
             '--no-interaction',
-        ], $root);
+        ], $root, [
+            'ACCELERATOR_ADMIN_PASSWORD_HASH' => $this->context->plan->adminPasswordHash,
+        ]));
 
         if ($this->context->hasFeature('pwa')) {
-            $runner->run($this->context->packageBinaryArguments('laravel-pwa', 'icons'), $root);
+            $this->operation($journal, 'application.pwa-icons', fn () => $runner->run($this->context->packageBinaryArguments('laravel-pwa', 'icons'), $root));
         }
 
-        $runner->run([$this->context->plan->packageManager, 'run', 'build'], $root);
+        $this->operation($journal, 'application.frontend-build', fn () => $runner->run([$this->context->plan->packageManager, 'run', 'build'], $root));
     }
 
     /** @throws JsonException */
@@ -69,10 +71,17 @@ final readonly class ApplicationFinalizer
             ['php', 'artisan', 'vendor:publish', '--tag=pennant-migrations', '--no-interaction'],
         ];
 
-        foreach ($commands as $command) {
+        foreach ($commands as $index => $command) {
+            $operation = 'application.migrations.'.($index + 1);
+
+            if ($journal->isCompleted($operation)) {
+                continue;
+            }
+
             $before = $this->applicationMigrationFiles();
             $this->context->processRunner->run($command, $this->context->projectRoot);
             $journal->recordPublish(implode(' ', $command), array_values(array_diff($this->applicationMigrationFiles(), $before)));
+            $journal->complete($operation);
         }
     }
 
@@ -102,6 +111,16 @@ final readonly class ApplicationFinalizer
         if (! is_file($databasePath) && touch($databasePath) === false) {
             throw new RuntimeException('Unable to create database/database.sqlite.');
         }
+    }
+
+    private function operation(InstallJournal $journal, string $name, Closure $operation): void
+    {
+        if ($journal->isCompleted($name)) {
+            return;
+        }
+
+        $operation();
+        $journal->complete($name);
     }
 
     /** @throws JsonException */

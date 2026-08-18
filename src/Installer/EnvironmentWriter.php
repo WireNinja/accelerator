@@ -53,7 +53,7 @@ final readonly class EnvironmentWriter
             'SESSION_STORE' => $cacheDriver,
             'QUEUE_CONNECTION' => 'database',
             'BROADCAST_CONNECTION' => $this->context->hasFeature('realtime') ? 'reverb' : 'log',
-            'SCOUT_DRIVER' => $this->context->hasFeature('scout') ? 'database' : 'collection',
+            'SCOUT_DRIVER' => 'database',
             'LOG_STACK' => $this->context->hasFeature('observability') ? 'daily,otlp' : 'daily',
             'OTEL_SDK_DISABLED' => $this->context->boolean(! $this->context->hasFeature('observability')),
             'OTEL_INSTRUMENTATION_HTTP_SERVER' => 'false',

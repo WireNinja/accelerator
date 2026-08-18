@@ -16,7 +16,7 @@ final class InstallCommand extends Command
 {
     /** @var list<string> */
     private const INSTALLER_OPTIONS = [
-        'app-name', 'app-url', 'admin-name', 'admin-username', 'admin-email', 'admin-password',
+        'app-name', 'app-url', 'admin-name', 'admin-username', 'admin-email',
         'package-manager', 'database', 'redis', 'features',
     ];
 
@@ -26,11 +26,10 @@ final class InstallCommand extends Command
         {--admin-name=}
         {--admin-username=}
         {--admin-email=}
-        {--admin-password=}
         {--package-manager=pnpm}
         {--database=sqlite}
         {--redis}
-        {--features= : Comma-separated features; realtime also requires ACCELERATOR_REVERB_APP_ID/KEY/SECRET in non-interactive mode}
+        {--features= : Comma-separated features; realtime generates isolated local Reverb credentials}
         {--force : Reinstall destructively without interactive confirmation}
         {--json : Emit one stable JSON result and suppress progress output}';
 

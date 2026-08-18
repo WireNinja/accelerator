@@ -80,7 +80,14 @@ final readonly class Scaffolder
     public function render(string $contents): string
     {
         return strtr($contents, [
-            '{{ app_name }}' => $this->context->plan->appName,
+            '{{ app_name_json }}' => json_encode(
+                $this->context->plan->appName,
+                JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE,
+            ),
+            '{{ app_description_json }}' => json_encode(
+                $this->context->plan->appName.' internal application',
+                JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE,
+            ),
             '{{ package_manager_spec }}' => $this->packageManagerSpecification(),
             '{{ provider_imports }}' => implode(PHP_EOL, [
                 'use App\\Providers\\AppServiceProvider;',

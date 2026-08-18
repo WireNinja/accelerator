@@ -10,6 +10,7 @@ use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Application;
+use Illuminate\Foundation\DevCommands;
 use Illuminate\Support\Facades\Schema;
 use InvalidArgumentException;
 use JsonException;
@@ -17,6 +18,7 @@ use Symfony\Component\Process\ExecutableFinder;
 use Symfony\Component\Process\Process;
 use Throwable;
 use WireNinja\Accelerator\AcceleratorServiceProvider;
+use WireNinja\Accelerator\Configuration\FeatureRegistry;
 use WireNinja\Accelerator\Contracts\AcceleratorUser;
 
 #[Signature('accelerator:doctor {--json : Output as JSON} {--compact : Compact JSON output} {--section= : runtime, database, frontend, or security}')]
@@ -97,6 +99,17 @@ final class DoctorCommand extends Command
             AcceleratorServiceProvider::class,
             app()->getProvider(AcceleratorServiceProvider::class) !== null,
             'Composer did not discover AcceleratorServiceProvider.',
+        );
+
+        $developmentCommands = array_column(DevCommands::commands(), 'name');
+        $validDevelopmentCommands = in_array('scheduler', $developmentCommands, true)
+            && ! in_array('queue', $developmentCommands, true);
+        $this->assert(
+            'Runtime',
+            'Native dev processes',
+            implode(', ', $developmentCommands),
+            $validDevelopmentCommands,
+            'php artisan dev must include scheduler and exclude Laravel\'s default queue listener.',
         );
     }
 
@@ -188,7 +201,7 @@ final class DoctorCommand extends Command
 
     private function inspectConfiguration(): void
     {
-        foreach (['oauth', 'pwa', 'telegram', 'realtime', 'scout', 'observability'] as $feature) {
+        foreach (FeatureRegistry::names() as $feature) {
             $key = 'ACCELERATOR_FEATURE_'.strtoupper($feature);
             $valid = true;
 

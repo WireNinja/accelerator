@@ -27,10 +27,10 @@ The installer is resumable and intentionally destructive: package-owned recipe f
 Local development:
 
 ```bash
-composer dev
+php artisan dev
 ```
 
-This runs Laravel, `schedule:work`, Pail, and Vite. The package-owned schedule drains the database queue every 10 seconds with a bounded `queue:work --stop-when-empty` process.
+This runs Laravel, `schedule:work`, Pail, and Vite. Accelerator excludes Laravel's default queue listener because the package-owned schedule drains the database queue every 10 seconds with a bounded `queue:work --stop-when-empty` process.
 
 ## Runtime
 

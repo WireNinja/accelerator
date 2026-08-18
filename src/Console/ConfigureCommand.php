@@ -5,9 +5,13 @@ declare(strict_types=1);
 namespace WireNinja\Accelerator\Console;
 
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use JsonException;
 use RuntimeException;
 use WireNinja\Accelerator\Configuration\EnvironmentStore;
+use WireNinja\Accelerator\Configuration\FeatureRegistry;
 use WireNinja\Accelerator\Configuration\ReverbApplicationRegistry;
 
 use function Laravel\Prompts\multiselect;
@@ -22,20 +26,9 @@ final class ConfigureCommand extends Command
         {--app-url= : Absolute local application URL}
         {--features= : Comma-separated enabled optional features}
         {--rotate-reverb-app : Generate new centralized Reverb credentials for local development}
-        {--force : Confirm a validated non-interactive write}
         {--json : Emit a stable JSON result}';
 
     protected $description = 'Configure Accelerator through validated local files';
-
-    /** @var array<string, string> */
-    private const FEATURE_KEYS = [
-        'oauth' => 'ACCELERATOR_FEATURE_OAUTH',
-        'pwa' => 'ACCELERATOR_FEATURE_PWA',
-        'telegram' => 'ACCELERATOR_FEATURE_TELEGRAM',
-        'realtime' => 'ACCELERATOR_FEATURE_REALTIME',
-        'scout' => 'ACCELERATOR_FEATURE_SCOUT',
-        'observability' => 'ACCELERATOR_FEATURE_OBSERVABILITY',
-    ];
 
     public function handle(): int
     {
@@ -60,6 +53,8 @@ final class ConfigureCommand extends Command
                 'features' => $this->configureFeatures($store),
                 default => throw new RuntimeException("Unknown configuration section [{$scope}]."),
             };
+        } catch (ValidationException $exception) {
+            return $this->failure($exception->validator->errors()->first());
         } catch (RuntimeException|JsonException $exception) {
             return $this->failure($exception->getMessage());
         }
@@ -71,9 +66,13 @@ final class ConfigureCommand extends Command
         $name = $this->stringOption('app-name') ?? ($this->interactive() ? text('Application name', default: $current['APP_NAME'] ?? 'Laravel', required: true) : ($current['APP_NAME'] ?? 'Laravel'));
         $url = $this->stringOption('app-url') ?? ($this->interactive() ? text('Local application URL', default: $current['APP_URL'] ?? 'http://localhost:8000', required: true) : ($current['APP_URL'] ?? 'http://localhost:8000'));
 
-        if ($name === '' || filter_var($url, FILTER_VALIDATE_URL) === false) {
-            throw new RuntimeException('Application name and an absolute application URL are required.');
-        }
+        Validator::make([
+            'name' => $name,
+            'url' => $url,
+        ], [
+            'name' => ['required', 'string', 'max:100', 'not_regex:/[\x00-\x1F\x7F]/'],
+            'url' => ['required', 'url:http,https'],
+        ])->validate();
 
         $draft = ['APP_NAME' => $name, 'APP_URL' => $url, 'VITE_APP_NAME' => $name, 'GOOGLE_REDIRECT_URI' => rtrim($url, '/').'/auth/google/callback'];
         $store->merge('.env', $draft);
@@ -90,26 +89,29 @@ final class ConfigureCommand extends Command
         if (is_string($option)) {
             $selected = array_values(array_filter(explode(',', $option)));
         } elseif ($this->interactive()) {
-            $selected = multiselect('Active optional integrations', array_combine(array_keys(self::FEATURE_KEYS), array_keys(self::FEATURE_KEYS)), default: array_keys(array_filter(self::FEATURE_KEYS, static fn (string $key): bool => ($current[$key] ?? 'false') === 'true')));
+            $featureKeys = FeatureRegistry::environmentKeys();
+            $selected = multiselect('Active optional integrations', FeatureRegistry::labels(), default: array_keys(array_filter($featureKeys, static fn (string $key): bool => ($current[$key] ?? 'false') === 'true')));
         } else {
             throw new RuntimeException('Non-interactive feature configuration requires --features=.');
         }
 
-        $unknown = array_diff($selected, array_keys(self::FEATURE_KEYS));
-
-        if ($unknown !== []) {
-            throw new RuntimeException('Unknown Accelerator features: '.implode(', ', $unknown));
-        }
+        Validator::make(
+            ['features' => $selected],
+            [
+                'features' => ['array'],
+                'features.*' => ['string', 'distinct', Rule::in(FeatureRegistry::names())],
+            ],
+        )->validate();
 
         $draft = [];
 
-        foreach (self::FEATURE_KEYS as $feature => $key) {
+        foreach (FeatureRegistry::environmentKeys() as $feature => $key) {
             $draft[$key] = in_array($feature, $selected, true) ? 'true' : 'false';
         }
 
         $draft += [
             'BROADCAST_CONNECTION' => in_array('realtime', $selected, true) ? 'reverb' : 'log',
-            'SCOUT_DRIVER' => in_array('scout', $selected, true) ? 'database' : 'collection',
+            'SCOUT_DRIVER' => 'database',
             'LOG_STACK' => in_array('observability', $selected, true) ? 'daily,otlp' : 'daily',
             'OTEL_SDK_DISABLED' => in_array('observability', $selected, true) ? 'false' : 'true',
             'OTEL_INSTRUMENTATION_HTTP_SERVER' => 'false',

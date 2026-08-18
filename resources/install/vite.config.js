@@ -38,9 +38,9 @@ export default defineConfig(({ mode }) => {
     if (env.ACCELERATOR_FEATURE_PWA === 'true') {
         plugins.push(
             laravelPwa({
-                name: env.VITE_APP_NAME || '{{ app_name }}',
-                shortName: env.VITE_APP_NAME || '{{ app_name }}',
-                description: '{{ app_name }} internal application',
+                name: env.VITE_APP_NAME || {{ app_name_json }},
+                shortName: env.VITE_APP_NAME || {{ app_name_json }},
+                description: {{ app_description_json }},
                 themeColor: '#18181b',
                 registerType: 'prompt',
             }),

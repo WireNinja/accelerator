@@ -7,7 +7,7 @@ description: Add or review Spatie laravel-activitylog v5 auditing in Accelerator
 
 ## Model workflow
 
-1. Add an explicit model entry to `config/audit.php`.
+1. Add an explicit model entry to `audit.models` in `config/accelerator.php`.
 2. Allowlist business attributes; keep secrets in `default_except`.
 3. Use `HasConfiguredActivity` for the User/causer model and `LogsConfiguredActivity` for ordinary models.
 4. Use a custom pivot model only when it has an integer `id` and `$incrementing = true`.
@@ -36,7 +36,7 @@ final class UpdateOrderItems
 
 Keep `ActivitiesRelationManager` read-only and group it with native `RelationGroup` when exposing audit history.
 
-`AuditConfig` caches normalized metadata for the PHP process. Flush it only when runtime config is deliberately mutated in an interactive diagnostic session.
+`AuditConfig` resolves a scoped service. Its normalized metadata is reused only within the current request or job lifecycle and is automatically discarded between Octane requests. Flush it only when runtime config is deliberately mutated during the same lifecycle.
 
 ## Verification
 

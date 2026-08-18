@@ -7,6 +7,7 @@ namespace WireNinja\Accelerator\Providers;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Application;
+use Illuminate\Foundation\DevCommands;
 use Illuminate\Http\Middleware\TrustProxies;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Date;
@@ -59,8 +60,6 @@ final class CoreServiceProvider extends ServiceProvider
 
         $this->configureTrustedProxy();
         $this->configureBackup();
-        $this->configureBackupSchedule();
-        $this->configureQueueSchedule();
         $this->configureEloquent();
         $this->configureApplicationDefaults();
         $this->configureSuperAdminGate();
@@ -70,6 +69,10 @@ final class CoreServiceProvider extends ServiceProvider
         if (! $this->app->runningInConsole()) {
             return;
         }
+
+        $this->configureBackupSchedule();
+        $this->configureQueueSchedule();
+        $this->configureDevelopmentCommands();
 
         $this->commands([
             DoctorCommand::class,
@@ -82,6 +85,12 @@ final class CoreServiceProvider extends ServiceProvider
             InstallCommand::class,
             ProvisionAdminCommand::class,
         ]);
+    }
+
+    private function configureDevelopmentCommands(): void
+    {
+        DevCommands::artisan('schedule:work', 'scheduler');
+        DevCommands::except('queue');
     }
 
     private function configureTrustedProxy(): void

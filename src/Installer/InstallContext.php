@@ -52,14 +52,4 @@ final readonly class InstallContext
             ? ['pnpm', 'exec', ...$arguments]
             : ['npm', 'exec', '--', ...$arguments];
     }
-
-    public function packageBinaryCommand(string $binary): string
-    {
-        return implode(' ', $this->packageBinaryArguments($binary));
-    }
-
-    public function packageScriptCommand(string $script): string
-    {
-        return "{$this->plan->packageManager} run {$script}";
-    }
 }

@@ -96,6 +96,8 @@ return [
         'default_except' => [
             'password',
             'remember_token',
+            'two_factor_secret',
+            'two_factor_recovery_codes',
             'app_authentication_secret',
             'app_authentication_recovery_codes',
         ],

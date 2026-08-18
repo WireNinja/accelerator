@@ -4,9 +4,13 @@ declare(strict_types=1);
 
 namespace WireNinja\Accelerator\Installer;
 
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rules\Password;
 use JsonException;
 use RuntimeException;
+use WireNinja\Accelerator\Configuration\FeatureRegistry;
 use WireNinja\Accelerator\Configuration\ReverbApplicationRegistry;
 
 use function Laravel\Prompts\confirm;
@@ -19,24 +23,6 @@ use function Laravel\Prompts\text;
 
 final class Onboarding
 {
-    /**
-     * @var array<string, string>
-     */
-    private const FEATURES = [
-        'oauth' => 'Google OAuth (safe default: existing users only)',
-        'pwa' => 'Progressive Web App assets',
-        'telegram' => 'Telegram notification channel',
-        'realtime' => 'Realtime broadcasting through centralized Reverb',
-        'scout' => 'Scout search with the database driver',
-        'observability' => 'OpenTelemetry export to centralized OpenObserve',
-    ];
-
-    /** @var list<string> */
-    private const DEFAULT_FEATURES = [
-        'pwa',
-        'scout',
-    ];
-
     public function __construct(private readonly string $projectRoot) {}
 
     /**
@@ -130,8 +116,8 @@ final class Onboarding
         );
         $features = $this->resolveFeatures(multiselect(
             label: 'Activate optional runtime features',
-            options: self::FEATURES,
-            default: self::DEFAULT_FEATURES,
+            options: FeatureRegistry::labels(),
+            default: FeatureRegistry::defaults(),
             hint: 'Filament, settings, and RBAC are always installed. External-service integrations remain optional.',
             required: false,
         ));
@@ -145,19 +131,19 @@ final class Onboarding
             note('Accelerator generated isolated Reverb credentials for each runtime. Register the ignored .accelerator/reverb-apps.json entries on the centralized Reverb server before connecting.');
         }
 
-        return new InstallPlan(
-            appName: $appName,
-            appUrl: $appUrl,
-            adminName: trim($adminName),
-            adminUsername: strtolower(trim($adminUsername)),
-            adminEmail: strtolower(trim($adminEmail)),
-            adminPasswordHash: $this->hashPassword($adminPassword),
-            packageManager: $packageManager,
-            database: $database,
-            useRedis: $useRedis,
-            features: $features,
-            reverbApplications: $reverbApplications,
-        );
+        return InstallPlan::fromArray([
+            'appName' => $appName,
+            'appUrl' => $appUrl,
+            'adminName' => trim($adminName),
+            'adminUsername' => strtolower(trim($adminUsername)),
+            'adminEmail' => strtolower(trim($adminEmail)),
+            'adminPasswordHash' => $this->hashPassword($adminPassword),
+            'packageManager' => $packageManager,
+            'database' => $database,
+            'useRedis' => $useRedis,
+            'features' => $features,
+            'reverbApplications' => $reverbApplications,
+        ]);
     }
 
     /**
@@ -190,11 +176,11 @@ final class Onboarding
      */
     private function nonInteractivePlan(array $options, string $directoryName, string $defaultProject): InstallPlan
     {
-        $features = self::DEFAULT_FEATURES;
+        $features = FeatureRegistry::defaults();
 
         if (isset($options['features']) && is_string($options['features'])) {
             $requestedFeatures = array_values(array_filter(explode(',', $options['features'])));
-            $unknownFeatures = array_values(array_diff($requestedFeatures, array_keys(self::FEATURES)));
+            $unknownFeatures = array_values(array_diff($requestedFeatures, FeatureRegistry::names()));
 
             if ($unknownFeatures !== []) {
                 throw new RuntimeException('Unknown Accelerator features: '.implode(', ', $unknownFeatures));
@@ -202,32 +188,32 @@ final class Onboarding
 
             $features = $this->resolveFeatures($requestedFeatures);
         }
-        $adminPassword = $this->option($options, 'admin-password', (string) getenv('ACCELERATOR_ADMIN_PASSWORD'));
+        $adminPassword = (string) getenv('ACCELERATOR_ADMIN_PASSWORD');
         if ($adminPassword === '') {
-            throw new RuntimeException('Non-interactive installation requires --admin-password or ACCELERATOR_ADMIN_PASSWORD. The password is never generated or printed.');
+            throw new RuntimeException('Non-interactive installation requires ACCELERATOR_ADMIN_PASSWORD. Never pass the password on the command line.');
         }
 
         if ($error = $this->validatePassword($adminPassword)) {
             throw new RuntimeException($error);
         }
 
-        return new InstallPlan(
-            appName: $this->option($options, 'app-name', Str::headline($directoryName)),
-            appUrl: $this->option($options, 'app-url', 'http://localhost:8000'),
-            adminName: trim($this->option($options, 'admin-name', 'Super Administrator')),
-            adminUsername: strtolower(trim($this->option($options, 'admin-username', 'superadmin'))),
-            adminEmail: strtolower(trim($this->option($options, 'admin-email', 'admin@example.com'))),
-            adminPasswordHash: $this->hashPassword($adminPassword),
-            packageManager: $this->option($options, 'package-manager', 'pnpm'),
-            database: $this->option($options, 'database', 'sqlite'),
-            useRedis: isset($options['redis']),
-            features: $features,
-            reverbApplications: $this->reverbApplications(
+        return InstallPlan::fromArray([
+            'appName' => $this->option($options, 'app-name', Str::headline($directoryName)),
+            'appUrl' => $this->option($options, 'app-url', 'http://localhost:8000'),
+            'adminName' => trim($this->option($options, 'admin-name', 'Super Administrator')),
+            'adminUsername' => strtolower(trim($this->option($options, 'admin-username', 'superadmin'))),
+            'adminEmail' => strtolower(trim($this->option($options, 'admin-email', 'admin@example.com'))),
+            'adminPasswordHash' => $this->hashPassword($adminPassword),
+            'packageManager' => $this->option($options, 'package-manager', 'pnpm'),
+            'database' => $this->option($options, 'database', 'sqlite'),
+            'useRedis' => isset($options['redis']),
+            'features' => $features,
+            'reverbApplications' => $this->reverbApplications(
                 features: $features,
                 deploymentKey: $defaultProject,
                 localUrl: $this->option($options, 'app-url', 'http://localhost:8000'),
             ),
-        );
+        ]);
     }
 
     /**
@@ -239,7 +225,7 @@ final class Onboarding
         $selected = array_fill_keys($features, true);
 
         return array_values(array_filter(
-            array_keys(self::FEATURES),
+            FeatureRegistry::names(),
             static fn (string $feature): bool => isset($selected[$feature]),
         ));
     }
@@ -264,20 +250,19 @@ final class Onboarding
 
     private function validatePassword(string $password): ?string
     {
-        $isValid = strlen($password) >= 12
-            && preg_match('/[a-z]/', $password) === 1
-            && preg_match('/[A-Z]/', $password) === 1
-            && preg_match('/[0-9]/', $password) === 1
-            && preg_match('/[^a-zA-Z0-9]/', $password) === 1;
+        $validator = Validator::make(
+            ['password' => $password],
+            ['password' => ['required', 'string', Password::min(12)->mixedCase()->letters()->numbers()->symbols()]],
+        );
 
-        return $isValid
-            ? null
-            : 'Super Admin password must contain at least 12 characters, upper/lowercase letters, a number, and a symbol.';
+        return $validator->fails()
+            ? 'Super Admin password must contain at least 12 characters, upper/lowercase letters, a number, and a symbol.'
+            : null;
     }
 
     private function hashPassword(string $password): string
     {
-        return password_hash($password, PASSWORD_BCRYPT, ['cost' => 12]);
+        return Hash::make($password);
     }
 
     /**

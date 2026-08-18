@@ -7,6 +7,7 @@ namespace WireNinja\Accelerator\Console;
 use Composer\InstalledVersions;
 use Illuminate\Console\Command;
 use JsonException;
+use WireNinja\Accelerator\Configuration\FeatureRegistry;
 use WireNinja\Accelerator\Providers\OAuthServiceProvider;
 use WireNinja\Accelerator\Providers\PwaServiceProvider;
 
@@ -21,7 +22,7 @@ final class FeatureListCommand extends Command
     {
         $features = array_map(
             fn (string $feature): array => $this->feature($feature),
-            ['oauth', 'pwa', 'telegram', 'realtime', 'scout', 'observability'],
+            FeatureRegistry::names(),
         );
         $mismatches = array_values(array_filter(
             $features,

@@ -11,7 +11,7 @@ laravel new
   -> commit
 ```
 
-Local `composer dev` runs Laravel, `schedule:work`, Pail, and Vite. Root `/` remains userland-owned.
+Local `php artisan dev` runs Laravel, `schedule:work`, Pail, and Vite. Accelerator excludes Laravel's default queue listener because its schedule owns database queue draining. Root `/` remains userland-owned.
 
 ## Single stage
 

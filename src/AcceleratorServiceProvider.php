@@ -3,39 +3,30 @@
 namespace WireNinja\Accelerator;
 
 use Illuminate\Support\ServiceProvider;
-use Keepsuit\LaravelOpenTelemetry\LaravelOpenTelemetryServiceProvider;
 use Override;
+use WireNinja\Accelerator\Configuration\FeatureRegistry;
 use WireNinja\Accelerator\Providers\CoreServiceProvider;
 use WireNinja\Accelerator\Providers\FilamentServiceProvider;
 use WireNinja\Accelerator\Providers\HeadServiceProvider;
-use WireNinja\Accelerator\Providers\OAuthServiceProvider;
 use WireNinja\Accelerator\Providers\PanelServiceProvider;
-use WireNinja\Accelerator\Providers\PwaServiceProvider;
+use WireNinja\Accelerator\Support\ActivityLog\AuditConfiguration;
 use WireNinja\Accelerator\Support\Filament\ShieldPermissions;
 
 class AcceleratorServiceProvider extends ServiceProvider
 {
-    /**
-     * @var array<string, class-string<ServiceProvider>>
-     */
-    private const FEATURE_PROVIDERS = [
-        'oauth' => OAuthServiceProvider::class,
-        'pwa' => PwaServiceProvider::class,
-        'observability' => LaravelOpenTelemetryServiceProvider::class,
-    ];
-
     #[Override]
     public function register(): void
     {
         $this->mergeConfigFrom(__DIR__.'/../config/accelerator.php', 'accelerator');
         $this->configureUnpublishedShieldDefaults();
+        $this->app->scoped(AuditConfiguration::class);
 
         $this->app->register(CoreServiceProvider::class);
         $this->app->register(FilamentServiceProvider::class);
         $this->app->register(HeadServiceProvider::class);
         $this->app->register(PanelServiceProvider::class);
 
-        foreach (self::FEATURE_PROVIDERS as $feature => $provider) {
+        foreach (FeatureRegistry::providers() as $feature => $provider) {
             if (! config("accelerator.features.{$feature}", false)) {
                 continue;
             }

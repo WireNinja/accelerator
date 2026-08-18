@@ -17,8 +17,7 @@ use WireNinja\Accelerator\Support\UserModel;
 #[Signature('accelerator:provision-admin
     {--name= : Super Admin display name}
     {--username= : Unique Super Admin username}
-    {--email= : Unique Super Admin email}
-    {--password-hash= : Bcrypt password hash}')]
+    {--email= : Unique Super Admin email}')]
 #[Description('Provision the initial Accelerator Super Admin account')]
 final class ProvisionAdminCommand extends Command
 {
@@ -27,7 +26,7 @@ final class ProvisionAdminCommand extends Command
         $name = trim((string) $this->option('name'));
         $username = strtolower(trim((string) $this->option('username')));
         $email = strtolower(trim((string) $this->option('email')));
-        $passwordHash = (string) $this->option('password-hash');
+        $passwordHash = (string) getenv('ACCELERATOR_ADMIN_PASSWORD_HASH');
 
         if ($name === ''
             || preg_match('/^[a-z0-9._-]+$/', $username) !== 1
