@@ -55,6 +55,7 @@ final readonly class ApplicationFinalizer
         $runner->run(['vendor/bin/pint', '--format=agent'], $root);
         $runner->run(['composer', 'phpstan'], $root);
         $runner->run([$this->context->plan->packageManager, 'run', 'lint:check'], $root);
+        $runner->run([$this->context->plan->packageManager, 'run', 'format'], $root);
         $runner->run([$this->context->plan->packageManager, 'run', 'format:check'], $root);
         $runner->run([$this->context->plan->packageManager, 'run', 'types:check'], $root);
         $runner->run(['php', 'artisan', 'accelerator:doctor'], $root);
