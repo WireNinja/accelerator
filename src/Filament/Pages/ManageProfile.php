@@ -19,6 +19,7 @@ use Illuminate\Database\Eloquent\Relations\Relation;
 use Override;
 use WireNinja\Accelerator\Actions\User\SendTelegramTestMessageAction;
 use WireNinja\Accelerator\Filament\Schemas\Components\VerticalWizard;
+use WireNinja\Accelerator\Support\Cast;
 use WireNinja\Accelerator\Support\UserModel;
 
 class ManageProfile extends EditProfile
@@ -173,7 +174,7 @@ class ManageProfile extends EditProfile
                                         ->action(function (Get $get): void {
                                             resolve(SendTelegramTestMessageAction::class)->handle(
                                                 UserModel::current(),
-                                                (string) $get('telegram_chat_id'),
+                                                Cast::mustString($get('telegram_chat_id')),
                                             );
 
                                             Notification::make()

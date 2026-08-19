@@ -7,6 +7,7 @@ namespace WireNinja\Accelerator\Livewire\Synthesizers;
 use Brick\Math\BigDecimal;
 use Brick\Math\Exception\MathException;
 use Livewire\Mechanisms\HandleComponents\Synthesizers\Synth;
+use WireNinja\Accelerator\Support\Cast;
 
 final class BigDecimalSynth extends Synth
 {
@@ -31,7 +32,7 @@ final class BigDecimalSynth extends Synth
      */
     public function dehydrate(mixed $target, mixed $dehydrate): array
     {
-        return [(string) $target, []];
+        return [Cast::mustString($target), []];
     }
 
     /**
@@ -46,7 +47,7 @@ final class BigDecimalSynth extends Synth
         }
 
         try {
-            return BigDecimal::of((string) $value);
+            return BigDecimal::of(Cast::mustString($value));
         } catch (MathException) {
             // If user types invalid characters (e.g. "abc"), return null.
             // Let Laravel Validation Rules (e.g. 'numeric') handle the error.

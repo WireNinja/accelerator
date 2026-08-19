@@ -48,8 +48,8 @@ final readonly class InstallContext
     /** @return list<string> */
     public function packageBinaryArguments(string ...$arguments): array
     {
-        return $this->plan->packageManager === 'pnpm'
+        return array_values($this->plan->packageManager === 'pnpm'
             ? ['pnpm', 'exec', ...$arguments]
-            : ['npm', 'exec', '--', ...$arguments];
+            : ['npm', 'exec', '--', ...$arguments]);
     }
 }

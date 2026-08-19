@@ -12,6 +12,7 @@ use JsonException;
 use RuntimeException;
 use WireNinja\Accelerator\Configuration\FeatureRegistry;
 use WireNinja\Accelerator\Configuration\ReverbApplicationRegistry;
+use WireNinja\Accelerator\Support\Cast;
 
 use function Laravel\Prompts\confirm;
 use function Laravel\Prompts\intro;
@@ -114,13 +115,13 @@ final class Onboarding
             default: false,
             hint: 'The queue always uses the database driver.',
         );
-        $features = $this->resolveFeatures(multiselect(
+        $features = $this->resolveFeatures(Cast::stringList(multiselect(
             label: 'Activate optional runtime features',
             options: FeatureRegistry::labels(),
             default: FeatureRegistry::defaults(),
             hint: 'Filament, settings, and RBAC are always installed. External-service integrations remain optional.',
             required: false,
-        ));
+        )));
         $reverbApplications = $this->reverbApplications(
             features: $features,
             deploymentKey: $defaultProject,
@@ -168,7 +169,7 @@ final class Onboarding
             note('Resuming the unfinished Accelerator installation.');
         }
 
-        return InstallPlan::fromArray($state['plan']);
+        return InstallPlan::fromArray(Cast::stringKeyedArray($state['plan']));
     }
 
     /**

@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace WireNinja\Accelerator\Support\ActivityLog;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Support\Collection;
+use WireNinja\Accelerator\Support\Cast;
 use WireNinja\Accelerator\Support\UserModel;
 
 class RelationshipActivityLogger
@@ -63,12 +65,18 @@ class RelationshipActivityLogger
             return [];
         }
 
+        $relationship = $model->{$relationshipName}();
+
+        if (! $relationship instanceof Relation) {
+            return [];
+        }
+
         /** @var Collection<int, Model> $records */
-        $records = $model->{$relationshipName}()->get();
+        $records = $relationship->get();
 
         return $records
             ->mapWithKeys(fn (Model $record): array => [
-                (int) $record->getKey() => (string) data_get($record, $attribute, $record->getKey()),
+                Cast::mustInt($record->getKey()) => Cast::mustString(data_get($record, $attribute, $record->getKey())),
             ])
             ->sortKeys()
             ->all();

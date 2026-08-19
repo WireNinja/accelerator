@@ -14,6 +14,7 @@ use ReflectionClass;
 use ReflectionMethod;
 use ReflectionNamedType;
 use RuntimeException;
+use SplFileInfo;
 use Throwable;
 
 final class CompactModelScanner
@@ -130,6 +131,10 @@ final class CompactModelScanner
         $files = [];
 
         foreach ($iterator as $file) {
+            if (! $file instanceof SplFileInfo) {
+                continue;
+            }
+
             if ($file->isFile() && $file->getExtension() === 'php') {
                 $files[] = $file->getPathname();
             }

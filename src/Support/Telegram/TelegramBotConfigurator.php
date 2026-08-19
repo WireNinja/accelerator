@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace WireNinja\Accelerator\Support\Telegram;
 
 use NotificationChannels\Telegram\Telegram;
+use WireNinja\Accelerator\Support\Cast;
 
 final class TelegramBotConfigurator
 {
@@ -25,13 +26,13 @@ final class TelegramBotConfigurator
     {
         $botToken = config('services.telegram.token');
 
-        return filled($botToken) ? (string) $botToken : null;
+        return filled($botToken) ? Cast::mustString($botToken) : null;
     }
 
     public function getApiBaseUri(): ?string
     {
         $apiBaseUri = config('services.telegram.base_uri');
 
-        return filled($apiBaseUri) ? (string) $apiBaseUri : null;
+        return filled($apiBaseUri) ? Cast::mustString($apiBaseUri) : null;
     }
 }

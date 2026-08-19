@@ -7,6 +7,7 @@ namespace WireNinja\Accelerator\Installer;
 use Closure;
 use JsonException;
 use RuntimeException;
+use WireNinja\Accelerator\Support\Cast;
 
 final readonly class ApplicationFinalizer
 {
@@ -140,7 +141,7 @@ final readonly class ApplicationFinalizer
             throw new RuntimeException('Project boost.json packages must be an array.');
         }
 
-        $config['packages'] = array_values(array_unique([...$packages, 'wireninja/accelerator']));
+        $config['packages'] = array_values(array_unique([...Cast::stringList($packages), 'wireninja/accelerator']));
         ksort($config);
         $this->context->writeFile('boost.json', json_encode(
             $config,
@@ -161,7 +162,7 @@ final readonly class ApplicationFinalizer
 
         $skillFiles = glob($this->context->packageRoot.'/resources/boost/skills/*/SKILL.md') ?: [];
         $expectedSkills = array_map(static fn (string $skillFile): string => basename(dirname($skillFile)), $skillFiles);
-        $missingSkills = array_values(array_diff($expectedSkills, $installedSkills));
+        $missingSkills = array_values(array_diff($expectedSkills, Cast::stringList($installedSkills)));
 
         if ($missingSkills !== []) {
             throw new RuntimeException('Boost did not install Accelerator skills: '.implode(', ', $missingSkills));

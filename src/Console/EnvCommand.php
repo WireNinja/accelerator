@@ -5,6 +5,7 @@ namespace WireNinja\Accelerator\Console;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
+use WireNinja\Accelerator\Support\Cast;
 use WireNinja\Accelerator\Support\EnvReader;
 
 #[Signature('accelerator:env {--json : Output as JSON} {--compact : Compact JSON output}')]
@@ -67,7 +68,7 @@ class EnvCommand extends Command
 
         $flags = ($this->option('compact') ? 0 : JSON_PRETTY_PRINT) | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE;
 
-        $this->output->writeln(json_encode($payload, $flags));
+        $this->output->writeln(Cast::mustString(json_encode($payload, $flags)));
 
         return $data === [] ? 1 : 0;
     }

@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
 use RuntimeException;
+use WireNinja\Accelerator\Support\Cast;
 use ZipArchive;
 
 final readonly class BackupRestorer
@@ -32,26 +33,27 @@ final readonly class BackupRestorer
         }
 
         foreach ([
-            'deployment_key' => (string) config('accelerator.operations.deployment_key'),
-            'stage' => (string) config('accelerator.operations.stage'),
+            'deployment_key' => Cast::mustString(config('accelerator.operations.deployment_key')),
+            'stage' => Cast::mustString(config('accelerator.operations.stage')),
         ] as $key => $expected) {
             if (($manifest[$key] ?? null) !== $expected) {
                 throw new RuntimeException("Backup [{$backupId}] {$key} does not match this runtime.");
             }
         }
 
-        $revision = is_file(base_path('REVISION')) ? trim((string) file_get_contents(base_path('REVISION'))) : '';
+        $revisionContents = is_file(base_path('REVISION')) ? file_get_contents(base_path('REVISION')) : false;
+        $revision = is_string($revisionContents) ? trim($revisionContents) : '';
 
         if ($revision === '' || ($manifest['revision'] ?? null) !== $revision) {
             throw new RuntimeException(sprintf(
                 'Backup [%s] requires active revision [%s], current [%s].',
                 $backupId,
-                $manifest['revision'] ?? 'unknown',
+                Cast::mustString($manifest['revision'] ?? 'unknown'),
                 $revision ?: 'unknown',
             ));
         }
 
-        $backupMode = (string) ($manifest['mode'] ?? '');
+        $backupMode = Cast::mustString($manifest['mode'] ?? '');
 
         if (($mode === 'database' && $backupMode === 'files') || ($mode === 'files' && $backupMode === 'database')) {
             throw new RuntimeException("Backup [{$backupId}] does not contain the requested {$mode} data.");
@@ -59,7 +61,7 @@ final readonly class BackupRestorer
 
         $directory = storage_path("framework/accelerator-restore/{$backupId}");
         $availableBytes = disk_free_space(storage_path());
-        $requiredBytes = ((int) ($verified['size_bytes'] ?? 0) * 2) + (100 * 1024 * 1024);
+        $requiredBytes = (Cast::mustInt($verified['size_bytes'] ?? 0) * 2) + (100 * 1024 * 1024);
 
         if (! is_float($availableBytes) || $availableBytes < $requiredBytes) {
             throw new RuntimeException("Backup [{$backupId}] cannot be prepared because local free disk space is insufficient.");
@@ -72,8 +74,8 @@ final readonly class BackupRestorer
         }
 
         $archivePath = $directory.'/backup.zip';
-        $disk = Storage::disk((string) $verified['disk']);
-        $input = $disk->readStream((string) $verified['path']);
+        $disk = Storage::disk(Cast::mustString($verified['disk'] ?? null));
+        $input = $disk->readStream(Cast::mustString($verified['path'] ?? null));
         $output = fopen($archivePath, 'wb');
 
         if (! is_resource($input) || ! is_resource($output)) {

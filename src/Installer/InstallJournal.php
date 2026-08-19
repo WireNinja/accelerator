@@ -6,6 +6,7 @@ namespace WireNinja\Accelerator\Installer;
 
 use JsonException;
 use RuntimeException;
+use WireNinja\Accelerator\Support\Cast;
 
 final class InstallJournal
 {
@@ -100,8 +101,8 @@ final class InstallJournal
         $publishes = $state['publishes'] ?? [];
         $this->publishes = is_array($publishes)
             ? array_map(
-                static fn (mixed $files): array => is_array($files) ? array_values(array_filter($files, is_string(...))) : [],
-                $publishes,
+                static fn (mixed $files): array => Cast::stringList($files),
+                Cast::stringKeyedArray($publishes),
             )
             : [];
     }

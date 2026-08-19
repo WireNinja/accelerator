@@ -37,6 +37,7 @@ use WireNinja\Accelerator\Console\Filament\VerifyResourceCommand;
 use WireNinja\Accelerator\Console\Shield\SafeRegenerateCommand;
 use WireNinja\Accelerator\Policies\ActivityPolicy;
 use WireNinja\Accelerator\Support\BuiltinExceptions;
+use WireNinja\Accelerator\Support\Cast;
 
 final class FilamentServiceProvider extends ServiceProvider
 {
@@ -135,7 +136,7 @@ final class FilamentServiceProvider extends ServiceProvider
 
     private function configureFilament(): void
     {
-        FilamentTimezone::set(config('app.timezone'));
+        FilamentTimezone::set(Cast::mustString(config('app.timezone')));
 
         Table::configureUsing(static function (Table $table): void {
             $table
@@ -170,7 +171,7 @@ final class FilamentServiceProvider extends ServiceProvider
             $fileUpload
                 ->imageEditor()
                 ->maxParallelUploads(5)
-                ->maxSize(((int) config('accelerator.uploads.max_megabytes', 100)) * 1024);
+                ->maxSize(Cast::mustInt(config('accelerator.uploads.max_megabytes', 100)) * 1024);
         });
 
         Select::configureUsing(static function (Select $select): void {

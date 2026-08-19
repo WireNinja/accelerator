@@ -8,6 +8,7 @@ use Illuminate\Support\ServiceProvider;
 use Laravel\Head\Enums\ImageType;
 use Laravel\Head\Facades\Head;
 use Laravel\Head\HeadBuilder;
+use WireNinja\Accelerator\Support\Cast;
 
 final class PwaServiceProvider extends ServiceProvider
 {
@@ -19,9 +20,9 @@ final class PwaServiceProvider extends ServiceProvider
             ->favicon('/favicon.ico', type: ImageType::Ico, sizes: '64x64')
             ->icon('/favicon.svg', type: ImageType::Svg, sizes: 'any')
             ->pwa(
-                name: (string) config('app.name'),
+                name: Cast::mustString(config('app.name')),
                 manifest: '/build/manifest.webmanifest',
-                themeColor: (string) config('accelerator.pwa.theme_color', '#ffffff'),
+                themeColor: Cast::mustString(config('accelerator.pwa.theme_color', '#ffffff')),
                 appleTouchIcon: '/apple-touch-icon-180x180.png',
                 appleWebAppStatusBarStyle: 'default',
             ));

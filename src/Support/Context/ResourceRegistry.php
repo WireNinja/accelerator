@@ -6,6 +6,7 @@ namespace WireNinja\Accelerator\Support\Context;
 
 use Illuminate\Support\Str;
 use RuntimeException;
+use WireNinja\Accelerator\Support\Cast;
 
 final class ResourceRegistry
 {
@@ -37,7 +38,7 @@ final class ResourceRegistry
         $resources = $this->all();
 
         if (isset($resources[$requested])) {
-            return $requested;
+            return Cast::mustClassString($requested);
         }
 
         $normalized = $this->normalize($requested);
@@ -56,7 +57,7 @@ final class ResourceRegistry
                 : "Resource [{$requested}] is ambiguous: ".implode(', ', $matches));
         }
 
-        return $matches[0];
+        return Cast::mustClassString($matches[0]);
     }
 
     private function normalize(string $value): string

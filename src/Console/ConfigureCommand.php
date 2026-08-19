@@ -13,6 +13,7 @@ use RuntimeException;
 use WireNinja\Accelerator\Configuration\EnvironmentStore;
 use WireNinja\Accelerator\Configuration\FeatureRegistry;
 use WireNinja\Accelerator\Configuration\ReverbApplicationRegistry;
+use WireNinja\Accelerator\Support\Cast;
 
 use function Laravel\Prompts\multiselect;
 use function Laravel\Prompts\select;
@@ -210,7 +211,7 @@ final class ConfigureCommand extends Command
     private function success(string $scope, array $files): int
     {
         if ($this->option('json')) {
-            $this->output->writeln(json_encode(['schema' => 1, 'status' => 'OK', 'scope' => $scope, 'files' => $files], JSON_UNESCAPED_SLASHES));
+            $this->output->writeln(Cast::mustString(json_encode(['schema' => 1, 'status' => 'OK', 'scope' => $scope, 'files' => $files], JSON_UNESCAPED_SLASHES)));
         } else {
             $this->components->info('Accelerator configuration updated: '.implode(', ', $files));
         }
@@ -221,7 +222,7 @@ final class ConfigureCommand extends Command
     private function failure(string $message): int
     {
         if ($this->option('json')) {
-            $this->output->writeln(json_encode(['schema' => 1, 'status' => 'ERROR', 'error' => $message], JSON_UNESCAPED_SLASHES));
+            $this->output->writeln(Cast::mustString(json_encode(['schema' => 1, 'status' => 'ERROR', 'error' => $message], JSON_UNESCAPED_SLASHES)));
         } else {
             $this->components->error($message);
         }

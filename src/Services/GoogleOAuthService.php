@@ -20,7 +20,7 @@ final class GoogleOAuthService
      */
     public function handle(SocialiteUser $googleUser): AcceleratorUser
     {
-        $mode = (string) config('accelerator.oauth.mode', 'disabled');
+        $mode = Cast::mustString(config('accelerator.oauth.mode', 'disabled'));
         $email = strtolower(trim((string) $googleUser->getEmail()));
         $googleId = trim((string) $googleUser->getId());
 
@@ -57,7 +57,7 @@ final class GoogleOAuthService
                     throw new LogicException('The configured user model does not implement '.AcceleratorUser::class.'.');
                 }
 
-                $defaultRole = trim((string) config('accelerator.oauth.default_role', 'user'));
+                $defaultRole = trim(Cast::mustString(config('accelerator.oauth.default_role', 'user')));
 
                 if ($defaultRole !== '') {
                     $user->syncRoles([$defaultRole]);
@@ -75,7 +75,7 @@ final class GoogleOAuthService
             throw new AuthenticationException('This user account is suspended.');
         }
 
-        $storedGoogleId = trim((string) $user->getAttribute('google_id'));
+        $storedGoogleId = trim(Cast::mustString($user->getAttribute('google_id')));
 
         if (($storedGoogleId !== '') && (! hash_equals($storedGoogleId, $googleId))) {
             throw new AuthenticationException('This email is already linked to another Google identity.');

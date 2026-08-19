@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace WireNinja\Accelerator\Support\ActivityLog;
 
 use Illuminate\Database\Eloquent\Model;
+use WireNinja\Accelerator\Support\Cast;
 
 final class AuditConfiguration
 {
@@ -21,7 +22,7 @@ final class AuditConfiguration
      */
     public function forModel(string|Model $model): array
     {
-        $modelClass = is_string($model) ? $model : $model::class;
+        $modelClass = Cast::mustClassString(is_string($model) ? $model : $model::class);
 
         return $this->modelConfigs[$modelClass] ??= $this->normalizeModelConfig($modelClass);
     }
@@ -80,7 +81,7 @@ final class AuditConfiguration
             'attributes' => $this->attributeList($config['attributes'] ?? []),
             'except' => [
                 ...$this->defaultExcept(),
-                ...$this->stringList($modelExcept),
+                ...Cast::stringList($modelExcept),
             ],
             'relationships' => $this->stringMap($config['relationships'] ?? []),
             'attribute_labels' => [
@@ -93,17 +94,7 @@ final class AuditConfiguration
     /** @return array<int, string> */
     private function defaultExcept(): array
     {
-        return $this->defaultExcept ??= $this->stringList(config('accelerator.audit.default_except', []));
-    }
-
-    /** @return array<int, string> */
-    private function stringList(mixed $value): array
-    {
-        if (! is_array($value)) {
-            return [];
-        }
-
-        return array_values(array_filter($value, is_string(...)));
+        return $this->defaultExcept ??= Cast::stringList(config('accelerator.audit.default_except', []));
     }
 
     /** @return array<int, string> */

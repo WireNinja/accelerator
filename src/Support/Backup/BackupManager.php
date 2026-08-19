@@ -7,6 +7,7 @@ namespace WireNinja\Accelerator\Support\Backup;
 use Carbon\CarbonImmutable;
 use Composer\InstalledVersions;
 use Illuminate\Contracts\Filesystem\Filesystem;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
@@ -14,6 +15,7 @@ use Illuminate\Support\Str;
 use JsonException;
 use RuntimeException;
 use Throwable;
+use WireNinja\Accelerator\Support\Cast;
 use WireNinja\Accelerator\Support\Operations\OperatorTelegramNotifier;
 use ZipArchive;
 
@@ -119,8 +121,8 @@ final readonly class BackupManager
 
             usort(
                 $backups,
-                static fn (array $left, array $right): int => CarbonImmutable::parse((string) $right['created_at'])->getTimestamp()
-                    <=> CarbonImmutable::parse((string) $left['created_at'])->getTimestamp(),
+                static fn (array $left, array $right): int => CarbonImmutable::parse(Cast::mustString($right['created_at'] ?? null))->getTimestamp()
+                    <=> CarbonImmutable::parse(Cast::mustString($left['created_at'] ?? null))->getTimestamp(),
             );
             $destinations[] = [
                 'disk' => $diskName,
@@ -142,15 +144,19 @@ final readonly class BackupManager
             '--no-interaction' => true,
         ]) === 0;
         $inventory = $this->inventory();
-        $maximumAge = (int) config('accelerator.backup.maximum_age_days', 2);
-        $maximumStorage = (int) config('accelerator.backup.maximum_storage_megabytes', 5000) * 1024 * 1024;
+        $maximumAge = Cast::mustInt(config('accelerator.backup.maximum_age_days', 2));
+        $maximumStorage = Cast::mustInt(config('accelerator.backup.maximum_storage_megabytes', 5000)) * 1024 * 1024;
         $healthy = $monitorHealthy;
         $destinations = [];
         $availableBytes = disk_free_space(storage_path());
         $diskHealthy = is_float($availableBytes) && $availableBytes >= 512 * 1024 * 1024;
 
-        foreach ($inventory['destinations'] as $destination) {
-            $backups = $destination['backups'];
+        foreach (Arr::wrap($inventory['destinations'] ?? null) as $destination) {
+            if (! is_array($destination)) {
+                continue;
+            }
+
+            $backups = array_values(array_filter(Arr::wrap($destination['backups'] ?? null), is_array(...)));
             $newest = $backups[0] ?? null;
             $totalSize = array_sum(array_column($backups, 'size_bytes'));
             $ageDays = is_array($newest) && is_string($newest['created_at'] ?? null)
@@ -165,7 +171,7 @@ final readonly class BackupManager
 
             if ($verifyNewest && is_array($newest) && is_string($newest['backup_id'] ?? null)) {
                 try {
-                    $verification = $this->verify($newest['backup_id'], (string) $destination['disk']);
+                    $verification = $this->verify($newest['backup_id'], Cast::mustString($destination['disk'] ?? null));
                 } catch (Throwable $exception) {
                     $destinationHealthy = false;
                     $verification = ['status' => 'ERROR', 'error' => Str::limit($exception->getMessage(), 800)];
@@ -174,7 +180,7 @@ final readonly class BackupManager
 
             $healthy = $healthy && $destinationHealthy;
             $destinations[] = [
-                'disk' => $destination['disk'],
+                'disk' => Cast::mustString($destination['disk'] ?? null),
                 'healthy' => $destinationHealthy,
                 'backup_count' => count($backups),
                 'total_size_bytes' => $totalSize,
@@ -188,7 +194,7 @@ final readonly class BackupManager
 
         if (! $healthy) {
             $this->notifier->send('backup health', 'failed', [
-                'next_command' => 'easyploy backup status --stage='.config('accelerator.operations.stage').' --json',
+                'next_command' => 'easyploy backup status --stage='.Cast::mustString(config('accelerator.operations.stage')).' --json',
             ]);
         }
 
@@ -196,7 +202,7 @@ final readonly class BackupManager
             'status' => $healthy ? 'OK' : 'ERROR',
             'healthy' => $healthy,
             'maximum_age_days' => $maximumAge,
-            'maximum_storage_megabytes' => (int) config('accelerator.backup.maximum_storage_megabytes', 5000),
+            'maximum_storage_megabytes' => Cast::mustInt(config('accelerator.backup.maximum_storage_megabytes', 5000)),
             'available_local_bytes' => is_float($availableBytes) ? (int) $availableBytes : null,
             'local_disk_healthy' => $diskHealthy,
             'last_lifecycle_result' => $this->lifecycleState(),
@@ -240,7 +246,7 @@ final readonly class BackupManager
 
             $checksum = hash_file('sha256', $temporary);
 
-            if (! is_string($checksum) || ! hash_equals((string) ($manifest['sha256'] ?? ''), $checksum)) {
+            if (! is_string($checksum) || ! hash_equals(Cast::mustString($manifest['sha256'] ?? ''), $checksum)) {
                 throw new RuntimeException("Backup [{$backupId}] checksum does not match its manifest.");
             }
 
@@ -268,12 +274,16 @@ final readonly class BackupManager
                 for ($index = 0; $index < $archive->numFiles; $index++) {
                     $entry = $archive->getNameIndex($index);
 
+                    if (! is_string($entry)) {
+                        throw new RuntimeException("Backup [{$backupId}] contains an unreadable ZIP entry.");
+                    }
+
                     $normalized = ltrim(str_replace('\\', '/', $entry), '/');
                     $hasDatabase = $hasDatabase || str_contains("/{$normalized}", '/db-dumps/');
                     $hasFiles = $hasFiles || str_starts_with($normalized, 'storage/app/');
                 }
 
-                $mode = (string) ($manifest['mode'] ?? '');
+                $mode = Cast::mustString($manifest['mode'] ?? '');
 
                 if (in_array($mode, ['all', 'database'], true) && ! $hasDatabase) {
                     throw new RuntimeException("Backup [{$backupId}] contains no database dump.");
@@ -346,30 +356,31 @@ final readonly class BackupManager
     {
         $disk = Storage::disk($diskName);
         $revisionPath = base_path('REVISION');
-        $revision = $requestedRevision ?? (is_file($revisionPath) ? trim((string) file_get_contents($revisionPath)) : '');
-        $connection = (string) config('database.default');
+        $revisionContents = is_file($revisionPath) ? file_get_contents($revisionPath) : false;
+        $revision = $requestedRevision ?? (is_string($revisionContents) ? trim($revisionContents) : '');
+        $connection = Cast::mustString(config('database.default'));
         $realBasePath = realpath(base_path());
 
         return [
             'schema' => 1,
             'backup_id' => $backupId,
-            'deployment_key' => (string) config('accelerator.operations.deployment_key'),
-            'stage' => (string) config('accelerator.operations.stage'),
-            'domain' => (string) config('accelerator.operations.domain'),
-            'deploy_root' => (string) config('accelerator.operations.deploy_root'),
+            'deployment_key' => Cast::mustString(config('accelerator.operations.deployment_key')),
+            'stage' => Cast::mustString(config('accelerator.operations.stage')),
+            'domain' => Cast::mustString(config('accelerator.operations.domain')),
+            'deploy_root' => Cast::mustString(config('accelerator.operations.deploy_root')),
             'created_at' => now('UTC')->toIso8601String(),
-            'timezone' => (string) config('app.timezone'),
+            'timezone' => Cast::mustString(config('app.timezone')),
             'revision' => $revision,
             'release' => is_string($realBasePath) ? basename($realBasePath) : null,
-            'application' => (string) config('app.name'),
-            'environment' => (string) config('app.env'),
+            'application' => Cast::mustString(config('app.name')),
+            'environment' => Cast::mustString(config('app.env')),
             'database' => [
-                'driver' => (string) config("database.connections.{$connection}.driver", $connection),
+                'driver' => Cast::mustString(config("database.connections.{$connection}.driver", $connection)),
                 'connection' => $connection,
-                'database' => (string) config("database.connections.{$connection}.database", ''),
+                'database' => Cast::mustString(config("database.connections.{$connection}.database", '')),
             ],
             'mode' => $mode,
-            'include' => array_values((array) config('accelerator.backup.include', [storage_path('app')])),
+            'include' => array_values(array_filter(Arr::wrap(config('accelerator.backup.include', [storage_path('app')])), is_string(...))),
             'disk' => $diskName,
             'path' => $path,
             'size_bytes' => $disk->size($path),
@@ -423,12 +434,18 @@ final readonly class BackupManager
         }
 
         try {
-            $manifest = json_decode($disk->get($path), true, flags: JSON_THROW_ON_ERROR);
+            $contents = $disk->get($path);
+
+            if (! is_string($contents)) {
+                throw new RuntimeException("Backup manifest [{$path}] could not be read.");
+            }
+
+            $manifest = json_decode($contents, true, flags: JSON_THROW_ON_ERROR);
         } catch (JsonException $exception) {
             throw new RuntimeException("Backup manifest [{$path}] is invalid JSON.", previous: $exception);
         }
 
-        return is_array($manifest) ? $manifest : null;
+        return is_array($manifest) ? Cast::stringKeyedArray($manifest) : null;
     }
 
     private function findPath(string $diskName, string $filename): string
@@ -465,7 +482,7 @@ final readonly class BackupManager
     /** @return list<string> */
     private function disks(): array
     {
-        $disks = array_values(array_filter((array) config('accelerator.backup.disks', ['local']), is_string(...)));
+        $disks = array_values(array_filter(Arr::wrap(config('accelerator.backup.disks', ['local'])), is_string(...)));
 
         if ($disks === []) {
             throw new RuntimeException('At least one Accelerator backup disk is required.');
@@ -476,7 +493,7 @@ final readonly class BackupManager
 
     private function backupName(): string
     {
-        $name = trim((string) config('accelerator.backup.name'));
+        $name = trim(Cast::mustString(config('accelerator.backup.name')));
 
         if ($name === '' || preg_match('/^[a-z0-9][a-z0-9._-]*$/i', $name) !== 1) {
             throw new RuntimeException('ACCELERATOR_BACKUP_NAME must contain only letters, numbers, dots, underscores, and dashes.');
@@ -522,8 +539,14 @@ final readonly class BackupManager
             return null;
         }
 
-        $state = json_decode((string) file_get_contents($path), true);
+        $contents = file_get_contents($path);
 
-        return is_array($state) ? $state : null;
+        if (! is_string($contents)) {
+            return null;
+        }
+
+        $state = json_decode($contents, true);
+
+        return is_array($state) ? Cast::stringKeyedArray($state) : null;
     }
 }

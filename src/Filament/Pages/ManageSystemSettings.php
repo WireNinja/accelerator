@@ -28,6 +28,7 @@ use UnitEnum;
 use WireNinja\Accelerator\Enums\GoogleFontEnum;
 use WireNinja\Accelerator\Filament\Schemas\Components\VerticalWizard;
 use WireNinja\Accelerator\Settings\SystemSettings;
+use WireNinja\Accelerator\Support\Cast;
 
 /**
  * @property-read Schema $form
@@ -99,11 +100,11 @@ class ManageSystemSettings extends Page implements HasForms
                                         '%s %s',
                                         filled($get('google_font')) ? sprintf(
                                             '<link href="https://fonts.googleapis.com/css2?family=%s&display=swap" rel="stylesheet">',
-                                            str_replace(' ', '+', self::resolveGoogleFontValue($get('google_font')))
+                                            str_replace(' ', '+', self::resolveGoogleFontValue(Cast::string($get('google_font'), null)))
                                         ) : '',
                                         filled($get('google_font')) ? sprintf(
                                             '<span style="font-family: %s; font-size: 32px !important;">The quick brown fox jumps over the lazy dog.</span>',
-                                            self::resolveGoogleFontValue($get('google_font'))
+                                            self::resolveGoogleFontValue(Cast::string($get('google_font'), null))
                                         ) : '',
                                     )))->columnSpanFull(),
                                     FileUpload::make('brand_logo')
@@ -168,12 +169,12 @@ class ManageSystemSettings extends Page implements HasForms
 
         $state = $this->form->getState();
 
-        $this->settings->brand_name = $state['brand_name'];
-        $this->settings->brand_logo = $state['brand_logo'];
-        $this->settings->brand_favicon = $state['brand_favicon'];
-        $this->settings->support_enabled = $state['support_enabled'];
-        $this->settings->google_font = self::resolveGoogleFontEnum($state['google_font']);
-        $this->settings->app_notice = $state['app_notice'];
+        $this->settings->brand_name = Cast::mustString($state['brand_name'] ?? null);
+        $this->settings->brand_logo = Cast::string($state['brand_logo'] ?? null, null);
+        $this->settings->brand_favicon = Cast::string($state['brand_favicon'] ?? null, null);
+        $this->settings->support_enabled = Cast::bool($state['support_enabled'] ?? false);
+        $this->settings->google_font = self::resolveGoogleFontEnum(Cast::string($state['google_font'] ?? null, null));
+        $this->settings->app_notice = Cast::string($state['app_notice'] ?? null, null);
 
         $this->settings->save();
 

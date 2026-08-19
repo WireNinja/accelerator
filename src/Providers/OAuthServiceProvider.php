@@ -8,12 +8,13 @@ use Filament\Support\Facades\FilamentView;
 use Filament\View\PanelsRenderHook;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\ServiceProvider;
+use WireNinja\Accelerator\Support\Cast;
 
 final class OAuthServiceProvider extends ServiceProvider
 {
     public function boot(): void
     {
-        $mode = (string) config('accelerator.oauth.mode', 'disabled');
+        $mode = Cast::mustString(config('accelerator.oauth.mode', 'disabled'));
 
         if (! in_array($mode, ['existing_only', 'allowed_domains'], true)
             || blank(config('services.google.client_id'))

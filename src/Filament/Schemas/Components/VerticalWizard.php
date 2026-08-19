@@ -4,12 +4,13 @@ namespace WireNinja\Accelerator\Filament\Schemas\Components;
 
 use Closure;
 use Filament\Schemas\Components\Wizard;
+use WireNinja\Accelerator\Support\Cast;
 
 class VerticalWizard extends Wizard
 {
     protected string $view = 'accelerator::filament.schemas.components.vertical-wizard';
 
-    protected bool $isSticky = true;
+    protected bool|Closure $isSticky = true;
 
     protected string|Closure|null $navigationHeading = null;
 
@@ -36,7 +37,7 @@ class VerticalWizard extends Wizard
 
     public function getNavigationHeading(): ?string
     {
-        return $this->evaluate($this->navigationHeading);
+        return Cast::string($this->evaluate($this->navigationHeading), null);
     }
 
     public function navigationDescription(string|Closure|null $description): static
@@ -48,6 +49,6 @@ class VerticalWizard extends Wizard
 
     public function getNavigationDescription(): ?string
     {
-        return $this->evaluate($this->navigationDescription);
+        return Cast::string($this->evaluate($this->navigationDescription), null);
     }
 }

@@ -11,6 +11,7 @@ use Illuminate\Support\HtmlString;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use SensitiveParameter;
+use WireNinja\Accelerator\Support\Cast;
 
 class Login extends BaseLogin
 {
@@ -21,9 +22,9 @@ class Login extends BaseLogin
         $component ??= static::class;
 
         $panelId = Filament::getCurrentOrDefaultPanel()?->getId() ?? 'default';
-        $login = Str::lower(trim((string) ($this->data['login'] ?? 'unknown')));
+        $login = Str::lower(trim(Cast::mustString($this->data['login'] ?? 'unknown')));
 
-        return 'lrl:'.sha1($panelId.'|'.$component.'|'.$method.'|'.$login.'|'.(request()->ip() ?? 'unknown'));
+        return 'lrl:'.sha1($panelId.'|'.Cast::mustString($component).'|'.Cast::mustString($method).'|'.$login.'|'.(request()->ip() ?? 'unknown'));
     }
 
     protected function getEmailFormComponent(): Component
@@ -62,7 +63,7 @@ class Login extends BaseLogin
      */
     protected function getCredentialsFromFormData(#[SensitiveParameter] array $data): array
     {
-        $login = trim((string) ($data['login'] ?? ''));
+        $login = trim(Cast::mustString($data['login'] ?? ''));
 
         return [
             filter_var($login, FILTER_VALIDATE_EMAIL) ? 'email' : 'username' => $login,

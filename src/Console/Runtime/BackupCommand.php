@@ -10,6 +10,7 @@ use RuntimeException;
 use Throwable;
 use WireNinja\Accelerator\Support\Backup\BackupManager;
 use WireNinja\Accelerator\Support\Backup\BackupRestorer;
+use WireNinja\Accelerator\Support\Cast;
 use WireNinja\Accelerator\Support\Operations\OperatorTelegramNotifier;
 
 final class BackupCommand extends Command
@@ -36,16 +37,16 @@ final class BackupCommand extends Command
 
     public function handle(): int
     {
-        $action = (string) $this->argument('action');
+        $action = Cast::mustString($this->argument('action'));
 
         try {
             $result = match ($action) {
-                'create' => $this->backups->create((string) $this->option('only'), $this->revision()),
+                'create' => $this->backups->create(Cast::mustString($this->option('only')), $this->revision()),
                 'list' => $this->backups->inventory(),
                 'status' => $this->backups->status(verifyNewest: true),
                 'verify' => $this->backups->verify($this->backupId(), $this->disk()),
                 'cleanup' => $this->backups->cleanup(),
-                'prepare' => $this->restorer->prepare($this->backupId(), $this->disk(), (string) $this->option('only')),
+                'prepare' => $this->restorer->prepare($this->backupId(), $this->disk(), Cast::mustString($this->option('only'))),
                 'restore-context' => $this->restoreContext(),
                 'discard' => $this->restorer->discard($this->backupId()),
                 'post-restore-health' => $this->restorer->health(),
@@ -65,7 +66,7 @@ final class BackupCommand extends Command
                 $this->notifier->send('backup restore', 'failed', [
                     'backup_id' => is_string($this->option('backup')) ? $this->option('backup') : null,
                     'error' => $exception->getMessage(),
-                    'next_command' => 'easyploy backup status --stage='.config('accelerator.operations.stage').' --json',
+                    'next_command' => 'easyploy backup status --stage='.Cast::mustString(config('accelerator.operations.stage')).' --json',
                 ], force: true);
             }
 
@@ -95,21 +96,22 @@ final class BackupCommand extends Command
     /** @return array<string, mixed> */
     private function restoreContext(): array
     {
-        $connection = (string) config('database.default');
+        $connection = Cast::mustString(config('database.default'));
         $revisionPath = base_path('REVISION');
+        $revisionContents = is_file($revisionPath) ? file_get_contents($revisionPath) : false;
 
         return [
             'status' => 'OK',
-            'deployment_key' => (string) config('accelerator.operations.deployment_key'),
-            'stage' => (string) config('accelerator.operations.stage'),
-            'revision' => is_file($revisionPath) ? trim((string) file_get_contents($revisionPath)) : '',
-            'backup_name' => (string) config('accelerator.backup.name'),
+            'deployment_key' => Cast::mustString(config('accelerator.operations.deployment_key')),
+            'stage' => Cast::mustString(config('accelerator.operations.stage')),
+            'revision' => is_string($revisionContents) ? trim($revisionContents) : '',
+            'backup_name' => Cast::mustString(config('accelerator.backup.name')),
             'database' => [
-                'driver' => (string) config("database.connections.{$connection}.driver", $connection),
-                'database' => (string) config("database.connections.{$connection}.database", ''),
-                'username' => (string) config("database.connections.{$connection}.username", ''),
-                'host' => (string) config("database.connections.{$connection}.host", ''),
-                'socket' => (string) config("database.connections.{$connection}.unix_socket", ''),
+                'driver' => Cast::mustString(config("database.connections.{$connection}.driver", $connection)),
+                'database' => Cast::mustString(config("database.connections.{$connection}.database", '')),
+                'username' => Cast::mustString(config("database.connections.{$connection}.username", '')),
+                'host' => Cast::mustString(config("database.connections.{$connection}.host", '')),
+                'socket' => Cast::mustString(config("database.connections.{$connection}.unix_socket", '')),
             ],
         ];
     }
@@ -120,7 +122,7 @@ final class BackupCommand extends Command
         $delivered = $this->notifier->send('backup restore', $result, [
             'backup_id' => $this->backupId(),
             'next_command' => $result === 'failed'
-                ? 'easyploy status --stage='.config('accelerator.operations.stage').' --json'
+                ? 'easyploy status --stage='.Cast::mustString(config('accelerator.operations.stage')).' --json'
                 : null,
         ], force: true);
 

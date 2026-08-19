@@ -6,6 +6,7 @@ use Filament\AvatarProviders\Contracts\AvatarProvider;
 use Filament\Facades\Filament;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Database\Eloquent\Model;
+use WireNinja\Accelerator\Support\Cast;
 
 class DiceBearAvatarProvider implements AvatarProvider
 {
@@ -17,9 +18,9 @@ class DiceBearAvatarProvider implements AvatarProvider
 
         return sprintf(
             '%s/%s/%s/svg?%s',
-            rtrim((string) config('accelerator.dicebear.url'), '/'),
-            trim((string) config('accelerator.dicebear.version'), '/'),
-            trim((string) config('accelerator.dicebear.style'), '/'),
+            rtrim(Cast::mustString(config('accelerator.dicebear.url')), '/'),
+            trim(Cast::mustString(config('accelerator.dicebear.version')), '/'),
+            trim(Cast::mustString(config('accelerator.dicebear.style')), '/'),
             $query,
         );
     }

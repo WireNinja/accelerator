@@ -10,6 +10,8 @@ use Illuminate\Foundation\Application;
 use Illuminate\Foundation\DevCommands;
 use Illuminate\Http\Middleware\TrustProxies;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
@@ -31,6 +33,7 @@ use WireNinja\Accelerator\Console\Runtime\BackupCommand;
 use WireNinja\Accelerator\Console\Runtime\NotifyCommand;
 use WireNinja\Accelerator\Contracts\AcceleratorUser;
 use WireNinja\Accelerator\Livewire\Synthesizers\BigDecimalSynth;
+use WireNinja\Accelerator\Support\Cast;
 use WireNinja\Accelerator\Support\Observability\AuthenticatedOpenTelemetryHandler;
 use WireNinja\Accelerator\Support\Telegram\TelegramBotConfigurator;
 
@@ -110,40 +113,39 @@ final class CoreServiceProvider extends ServiceProvider
 
     private function configureBackup(): void
     {
-        $config = $this->app['config'];
-        $disks = array_values(array_filter((array) $config->get('accelerator.backup.disks', ['local']), is_string(...)));
+        $disks = array_values(array_filter(Arr::wrap(Config::get('accelerator.backup.disks', ['local'])), is_string(...)));
 
-        if ($config->get('accelerator.backup.s3.enabled', true)) {
-            $disks[] = (string) $config->get('accelerator.backup.s3.disk', 'accelerator-s3');
+        if (Config::get('accelerator.backup.s3.enabled', true)) {
+            $disks[] = Cast::mustString(Config::get('accelerator.backup.s3.disk', 'accelerator-s3'));
         }
 
         $disks = array_values(array_unique($disks));
-        $config->set('accelerator.backup.disks', $disks);
-        $config->set('backup.backup.name', $config->get('accelerator.backup.name', $config->get('app.name')));
-        $config->set('backup.backup.source.files.include', $config->get('accelerator.backup.include', [storage_path('app')]));
-        $config->set('backup.backup.source.files.relative_path', base_path());
-        $config->set('backup.backup.source.files.exclude', array_values(array_unique([
-            ...(array) $config->get('backup.backup.source.files.exclude', []),
+        Config::set('accelerator.backup.disks', $disks);
+        Config::set('backup.backup.name', Config::get('accelerator.backup.name', Config::get('app.name')));
+        Config::set('backup.backup.source.files.include', Config::get('accelerator.backup.include', [storage_path('app')]));
+        Config::set('backup.backup.source.files.relative_path', base_path());
+        Config::set('backup.backup.source.files.exclude', array_values(array_unique([
+            ...array_values(array_filter(Arr::wrap(Config::get('backup.backup.source.files.exclude', [])), is_string(...))),
             storage_path('app/backup-temp'),
             storage_path('framework/accelerator-restore'),
-            storage_path('app/private/'.$config->get('accelerator.backup.name')),
-            storage_path('app/'.$config->get('accelerator.backup.name')),
+            storage_path('app/private/'.Cast::mustString(Config::get('accelerator.backup.name'))),
+            storage_path('app/'.Cast::mustString(Config::get('accelerator.backup.name'))),
         ])));
-        $config->set('backup.backup.destination.disks', $disks);
-        $config->set('backup.backup.verify_backup', true);
-        $nativeNotifications = (array) $config->get('backup.notifications.notifications', []);
-        $config->set('backup.notifications.notifications', array_fill_keys(array_keys($nativeNotifications), []));
-        $config->set('backup.monitor_backups', [[
-            'name' => $config->get('accelerator.backup.name', $config->get('app.name')),
+        Config::set('backup.backup.destination.disks', $disks);
+        Config::set('backup.backup.verify_backup', true);
+        $nativeNotifications = Arr::wrap(Config::get('backup.notifications.notifications', []));
+        Config::set('backup.notifications.notifications', array_fill_keys(array_keys($nativeNotifications), []));
+        Config::set('backup.monitor_backups', [[
+            'name' => Config::get('accelerator.backup.name', Config::get('app.name')),
             'disks' => $disks,
             'health_checks' => [
-                MaximumAgeInDays::class => $config->get('accelerator.backup.maximum_age_days', 2),
-                MaximumStorageInMegabytes::class => $config->get('accelerator.backup.maximum_storage_megabytes', 5000),
+                MaximumAgeInDays::class => Config::get('accelerator.backup.maximum_age_days', 2),
+                MaximumStorageInMegabytes::class => Config::get('accelerator.backup.maximum_storage_megabytes', 5000),
             ],
         ]]);
 
-        foreach ((array) $config->get('accelerator.backup.retention', []) as $key => $value) {
-            $config->set("backup.cleanup.default_strategy.{$key}", $value);
+        foreach (Arr::wrap(Config::get('accelerator.backup.retention', [])) as $key => $value) {
+            Config::set('backup.cleanup.default_strategy.'.Cast::mustString($key), $value);
         }
     }
 
@@ -153,11 +155,11 @@ final class CoreServiceProvider extends ServiceProvider
             return;
         }
 
-        $deploymentKey = (string) config('accelerator.operations.deployment_key', 'local');
-        $stage = (string) config('accelerator.operations.stage', 'local');
-        $prefix = trim((string) config('accelerator.backup.s3.prefix', 'accelerator'), '/');
+        $deploymentKey = Cast::mustString(config('accelerator.operations.deployment_key', 'local'));
+        $stage = Cast::mustString(config('accelerator.operations.stage', 'local'));
+        $prefix = trim(Cast::mustString(config('accelerator.backup.s3.prefix', 'accelerator')), '/');
         $root = implode('/', array_filter([$prefix, $deploymentKey, $stage]));
-        $disk = (string) config('accelerator.backup.s3.disk', 'accelerator-s3');
+        $disk = Cast::mustString(config('accelerator.backup.s3.disk', 'accelerator-s3'));
 
         config()->set("filesystems.disks.{$disk}", [
             'driver' => 's3',
@@ -189,9 +191,9 @@ final class CoreServiceProvider extends ServiceProvider
             return;
         }
 
-        $timeout = max(1, (int) config('accelerator.queue.worker_timeout', 120));
-        $buffer = max(1, (int) config('accelerator.queue.retry_after_buffer_seconds', 30));
-        $configuredRetryAfter = (int) config('queue.connections.database.retry_after', 90);
+        $timeout = max(1, Cast::mustInt(config('accelerator.queue.worker_timeout', 120)));
+        $buffer = max(1, Cast::mustInt(config('accelerator.queue.retry_after_buffer_seconds', 30)));
+        $configuredRetryAfter = Cast::mustInt(config('queue.connections.database.retry_after', 90));
 
         config()->set('queue.connections.database.retry_after', max($configuredRetryAfter, $timeout + $buffer));
     }
@@ -202,8 +204,8 @@ final class CoreServiceProvider extends ServiceProvider
             return;
         }
 
-        $backupTime = (string) config('accelerator.backup.time', '02:00');
-        $parsed = CarbonImmutable::createFromFormat('H:i', $backupTime, config('app.timezone'));
+        $backupTime = Cast::mustString(config('accelerator.backup.time', '02:00'));
+        $parsed = CarbonImmutable::createFromFormat('H:i', $backupTime, Cast::mustString(config('app.timezone')));
 
         if (! $parsed instanceof CarbonImmutable || $parsed->format('H:i') !== $backupTime) {
             return;
@@ -226,15 +228,15 @@ final class CoreServiceProvider extends ServiceProvider
             return;
         }
 
-        $timeout = max(1, (int) config('accelerator.queue.worker_timeout', 120));
-        $maxTime = max(1, (int) config('accelerator.queue.worker_max_time', 50));
+        $timeout = max(1, Cast::mustInt(config('accelerator.queue.worker_timeout', 120)));
+        $maxTime = max(1, Cast::mustInt(config('accelerator.queue.worker_max_time', 50)));
         $mutexMinutes = max(2, (int) ceil((max($timeout, $maxTime) + 30) / 60));
         $event = Schedule::command("queue:work database --queue=default --stop-when-empty --max-time={$maxTime} --timeout={$timeout} --tries=3 --memory=128")
             ->name('accelerator-database-queue-drain')
             ->withoutOverlapping($mutexMinutes)
             ->runInBackground();
 
-        match ((int) config('accelerator.queue.drain_interval_seconds', 10)) {
+        match (Cast::mustInt(config('accelerator.queue.drain_interval_seconds', 10))) {
             5 => $event->everyFiveSeconds(),
             15 => $event->everyFifteenSeconds(),
             20 => $event->everyTwentySeconds(),

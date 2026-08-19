@@ -10,6 +10,7 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
 use WireNinja\Accelerator\Configuration\FeatureRegistry;
+use WireNinja\Accelerator\Support\Cast;
 
 final readonly class InstallPlan
 {
@@ -34,7 +35,7 @@ final readonly class InstallPlan
     /** @return array<string, mixed> */
     public function toArray(): array
     {
-        return get_object_vars($this);
+        return Cast::stringKeyedArray(get_object_vars($this));
     }
 
     /** @param array<string, mixed> $data */
@@ -99,8 +100,27 @@ final readonly class InstallPlan
             packageManager: self::string($input, 'packageManager'),
             database: self::string($input, 'database'),
             useRedis: (bool) $input['useRedis'],
-            features: array_values(array_filter((array) $input['features'], is_string(...))),
-            reverbApplications: is_array($input['reverbApplications']) ? $input['reverbApplications'] : [],
+            features: Cast::stringList($input['features']),
+            reverbApplications: self::reverbApplications($input['reverbApplications']),
+        );
+    }
+
+    /** @return array<string, array{name: string, app_id: string, key: string, secret: string, allowed_origins: list<string>}> */
+    private static function reverbApplications(mixed $value): array
+    {
+        return array_map(
+            static function (mixed $application): array {
+                $values = Cast::stringKeyedArray($application);
+
+                return [
+                    'name' => Cast::mustString($values['name'] ?? null),
+                    'app_id' => Cast::mustString($values['app_id'] ?? null),
+                    'key' => Cast::mustString($values['key'] ?? null),
+                    'secret' => Cast::mustString($values['secret'] ?? null),
+                    'allowed_origins' => Cast::stringList($values['allowed_origins'] ?? null),
+                ];
+            },
+            Cast::stringKeyedArray($value),
         );
     }
 

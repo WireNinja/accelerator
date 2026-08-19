@@ -30,6 +30,7 @@ use WireNinja\Accelerator\Livewire\Sidebar;
 use WireNinja\Accelerator\Livewire\Topbar;
 use WireNinja\Accelerator\Settings\SystemSettings;
 use WireNinja\Accelerator\Support\BuiltinExceptions;
+use WireNinja\Accelerator\Support\Cast;
 
 final class PanelPreset
 {
@@ -41,7 +42,7 @@ final class PanelPreset
         $railWidth = config('accelerator.ui.density') === 'compact'
             ? config('accelerator.ui.sidebar.compact_rail_width', 52)
             : config('accelerator.ui.sidebar.rail_width', 56);
-        $navigationGroupEnum = config('accelerator.enums.navigation_group');
+        $navigationGroupEnum = Cast::unitEnumClass(config('accelerator.enums.navigation_group'));
 
         return $panel
             ->id($id)
@@ -83,8 +84,8 @@ final class PanelPreset
             ->maxContentWidth(Width::Full)
             ->sidebarLivewireComponent(Sidebar::class)
             ->topbarLivewireComponent(Topbar::class)
-            ->sidebarWidth(sprintf('%dpx', (int) config('accelerator.ui.sidebar.default_width', 336)))
-            ->collapsedSidebarWidth(sprintf('%dpx', (int) $railWidth))
+            ->sidebarWidth(sprintf('%dpx', Cast::mustInt(config('accelerator.ui.sidebar.default_width', 336))))
+            ->collapsedSidebarWidth(sprintf('%dpx', Cast::mustInt($railWidth)))
             ->discoverResources(in: "{$panelDirectory}/Resources", for: "{$panelNamespace}\\Resources")
             ->discoverPages(in: "{$panelDirectory}/Pages", for: "{$panelNamespace}\\Pages")
             ->pages([
@@ -106,14 +107,15 @@ final class PanelPreset
                 Authenticate::class,
             ])
             ->databaseNotifications()
+            ->databaseNotificationsPolling(null)
             ->broadcasting(static fn (): bool => config('broadcasting.default') === 'reverb')
             ->spa()
             ->globalSearchKeyBindings(['command+k', 'ctrl+k'])
             ->darkMode(false)
             ->defaultThemeMode(ThemeMode::Light)
             ->when(
-                is_string($navigationGroupEnum) && enum_exists($navigationGroupEnum),
-                static fn (Panel $configuredPanel): Panel => $configuredPanel->navigationGroups($navigationGroupEnum),
+                $navigationGroupEnum !== null,
+                static fn (Panel $configuredPanel): Panel => $configuredPanel->navigationGroups(Cast::mustUnitEnumClass($navigationGroupEnum)),
             )
             ->collapsibleNavigationGroups()
             ->sidebarCollapsibleOnDesktop()
@@ -129,8 +131,8 @@ final class PanelPreset
             ->lazyLoadedDatabaseNotifications()
             ->bootUsing(static function (Panel $panel): void {
                 $settings = resolve(SystemSettings::class);
-                $whatsapp = preg_replace('/\D+/', '', (string) config('accelerator.support.whatsapp'));
-                $telegram = ltrim((string) config('accelerator.support.telegram'), '@');
+                $whatsapp = preg_replace('/\D+/', '', Cast::mustString(config('accelerator.support.whatsapp')));
+                $telegram = ltrim(Cast::mustString(config('accelerator.support.telegram')), '@');
 
                 $panel
                     ->font($settings->google_font->value, provider: GoogleFontProvider::class)

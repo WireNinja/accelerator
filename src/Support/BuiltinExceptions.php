@@ -67,8 +67,8 @@ final class BuiltinExceptions
             'businessExceptionEventName' => self::BUSINESS_EXCEPTION_EVENT_NAME,
             'businessExceptionHeaderName' => self::BUSINESS_EXCEPTION_HEADER,
             'businessExceptionModalId' => self::BUSINESS_EXCEPTION_MODAL_ID,
-            'businessExceptionSessionBody' => session(self::BUSINESS_EXCEPTION_SESSION_BODY),
-            'businessExceptionSessionTitle' => session(self::BUSINESS_EXCEPTION_SESSION_TITLE),
+            'businessExceptionSessionBody' => Cast::string(session(self::BUSINESS_EXCEPTION_SESSION_BODY), null),
+            'businessExceptionSessionTitle' => Cast::string(session(self::BUSINESS_EXCEPTION_SESSION_TITLE), null),
             'businessExceptionTitleHeaderName' => self::BUSINESS_EXCEPTION_TITLE_HEADER,
         ];
     }
@@ -88,7 +88,7 @@ final class BuiltinExceptions
             return true;
         }
 
-        return Str::contains($request->headers->get('referer', ''), '/admin');
+        return Str::contains($request->headers->get('referer') ?? '', '/admin');
     }
 
     private static function isFilamentLivewireRequest(Request $request): bool

@@ -6,6 +6,7 @@ namespace WireNinja\Accelerator\Installer;
 
 use JsonException;
 use RuntimeException;
+use WireNinja\Accelerator\Support\Cast;
 
 final readonly class DependencyInstaller
 {
@@ -22,26 +23,40 @@ final readonly class DependencyInstaller
             throw new RuntimeException('Unable to parse project composer.json.');
         }
 
-        $autoloadFiles = $composer['autoload']['files'] ?? [];
+        $composer = Cast::stringKeyedArray($composer);
+        $autoload = Cast::stringKeyedArray(Cast::array($composer['autoload'] ?? null));
+        $autoloadFilesValue = $autoload['files'] ?? [];
 
-        if (! is_array($autoloadFiles)) {
+        if (! is_array($autoloadFilesValue)) {
             throw new RuntimeException('Project composer.json autoload.files must be an array.');
         }
 
-        $composer['autoload']['files'] = array_values(array_unique([...$autoloadFiles, 'app/Support/helpers.php']));
-        unset($composer['extra']['laravel']['dont-discover']);
-        $composer['scripts']['post-autoload-dump'] = [
+        $autoloadFiles = Cast::stringList($autoloadFilesValue);
+
+        $autoload['files'] = array_values(array_unique([...$autoloadFiles, 'app/Support/helpers.php']));
+        $composer['autoload'] = $autoload;
+
+        $extra = Cast::stringKeyedArray(Cast::array($composer['extra'] ?? null));
+        $laravel = Cast::stringKeyedArray(Cast::array($extra['laravel'] ?? null));
+        unset($laravel['dont-discover']);
+        $extra['laravel'] = $laravel;
+        $composer['extra'] = $extra;
+
+        $scripts = Cast::stringKeyedArray(Cast::array($composer['scripts'] ?? null));
+        $scripts['post-autoload-dump'] = [
             'Illuminate\\Foundation\\ComposerScripts::postAutoloadDump',
             '@php artisan package:discover --ansi',
             '@php artisan filament:upgrade',
         ];
-        unset($composer['scripts']['dev']);
-        $composer['scripts']['format'] = 'pint --format=json';
-        $composer['scripts']['refactor'] = 'rector --output-format=json';
-        $composer['scripts']['phpstan'] = 'phpstan analyse --memory-limit=2G --no-progress';
-        unset($composer['scripts']['analyse']);
-        $composer['config']['sort-packages'] = true;
-        $composer['config']['policy'] = [
+        unset($scripts['dev'], $scripts['analyse']);
+        $scripts['format'] = 'pint --format=json';
+        $scripts['refactor'] = 'rector --output-format=json';
+        $scripts['phpstan'] = 'phpstan analyse --memory-limit=2G --no-progress';
+        $composer['scripts'] = $scripts;
+
+        $config = Cast::stringKeyedArray(Cast::array($composer['config'] ?? null));
+        $config['sort-packages'] = true;
+        $config['policy'] = [
             'advisories' => [
                 'block' => true,
                 'audit' => 'fail',
@@ -52,7 +67,10 @@ final readonly class DependencyInstaller
                 'audit' => 'fail',
             ],
         ];
-        unset($composer['config']['allow-plugins']['wireninja/accelerator']);
+        $allowPlugins = Cast::stringKeyedArray(Cast::array($config['allow-plugins'] ?? null));
+        unset($allowPlugins['wireninja/accelerator']);
+        $config['allow-plugins'] = $allowPlugins;
+        $composer['config'] = $config;
 
         $this->context->writeFile('composer.json', json_encode(
             $composer,

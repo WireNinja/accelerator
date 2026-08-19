@@ -7,6 +7,7 @@ namespace WireNinja\Accelerator\Support\Backup;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
 use RuntimeException;
+use SplFileInfo;
 use ZipArchive;
 
 final readonly class BackupArchive
@@ -29,6 +30,10 @@ final readonly class BackupArchive
         );
 
         foreach ($files as $file) {
+            if (! $file instanceof SplFileInfo) {
+                continue;
+            }
+
             if ($file->isFile() && str_contains(str_replace('\\', '/', $file->getPathname()), '/db-dumps/')) {
                 return $file->getPathname();
             }
@@ -52,6 +57,9 @@ final readonly class BackupArchive
             return false;
         }
 
-        return $operatingSystem === ZipArchive::OPSYS_UNIX && (($attributes >> 16) & 0170000) === 0120000;
+        return is_int($operatingSystem)
+            && is_int($attributes)
+            && $operatingSystem === ZipArchive::OPSYS_UNIX
+            && (($attributes >> 16) & 0170000) === 0120000;
     }
 }

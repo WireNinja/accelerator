@@ -20,6 +20,7 @@ use Throwable;
 use WireNinja\Accelerator\AcceleratorServiceProvider;
 use WireNinja\Accelerator\Configuration\FeatureRegistry;
 use WireNinja\Accelerator\Contracts\AcceleratorUser;
+use WireNinja\Accelerator\Support\Cast;
 
 #[Signature('accelerator:doctor {--json : Output as JSON} {--compact : Compact JSON output} {--section= : runtime, database, frontend, or security}')]
 #[Description('Verify the Accelerator installation contract and report actionable failures')]
@@ -213,7 +214,7 @@ final class DoctorCommand extends Command
         }
 
         $this->assert('Configuration', 'Application key', filled(config('app.key')) ? 'set' : 'empty', filled(config('app.key')), 'APP_KEY is empty.');
-        $upload = (int) config('accelerator.uploads.max_megabytes', 100);
+        $upload = Cast::mustInt(config('accelerator.uploads.max_megabytes', 100));
         $this->assert('Configuration', 'Upload limit', "{$upload} MB", $upload > 0, 'ACCELERATOR_UPLOAD_MAX_MB must be positive.');
     }
 
@@ -224,7 +225,7 @@ final class DoctorCommand extends Command
             $missing = array_values(array_filter($required, fn (string $table): bool => ! Schema::hasTable($table)));
             $this->assert('Database', 'Core schema', $missing === [] ? 'ready' : implode(', ', $missing), $missing === [], 'Database schema is incomplete.');
         } catch (Throwable $exception) {
-            $this->record('Database', 'Connection', (string) config('database.default'), 'error', 'Database is unavailable: '.$exception->getMessage());
+            $this->record('Database', 'Connection', Cast::mustString(config('database.default')), 'error', 'Database is unavailable: '.$exception->getMessage());
         }
     }
 

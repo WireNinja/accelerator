@@ -11,7 +11,7 @@ final class ShieldPermissions
     /** @return list<string> */
     public static function crud(string ...$additional): array
     {
-        return ['viewAny', 'view', 'create', 'update', 'delete', 'deleteAny', ...$additional];
+        return array_values(['viewAny', 'view', 'create', 'update', 'delete', 'deleteAny', ...$additional]);
     }
 
     /** @return array<class-string, list<string>> */

@@ -10,6 +10,7 @@ use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
+use WireNinja\Accelerator\Support\Cast;
 
 #[Signature('shield:safe-regenerate
     {--panel=admin : Filament panel ID to regenerate policies for}
@@ -44,7 +45,7 @@ final class SafeRegenerateCommand extends Command
             ];
 
             $flags = ($this->option('compact') ? 0 : JSON_PRETTY_PRINT) | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE;
-            $this->output->writeln(json_encode($payload, $flags));
+            $this->output->writeln(Cast::mustString(json_encode($payload, $flags)));
 
             return $exitCode === 0 ? 0 : 1;
         }
@@ -69,7 +70,7 @@ final class SafeRegenerateCommand extends Command
         }
 
         $permissions = Permission::query()->get()->keyBy('name');
-        $superAdminRole = (string) config('filament-shield.super_admin.name', 'super_admin');
+        $superAdminRole = Cast::mustString(config('filament-shield.super_admin.name', 'super_admin'));
         $count = 0;
 
         foreach ($roleEnum::cases() as $case) {
@@ -89,7 +90,7 @@ final class SafeRegenerateCommand extends Command
             $defaults = $case->defaultPermissions();
             $role->syncPermissions($defaults === null
                 ? $permissions->values()
-                : $permissions->only($defaults)->values());
+                : $permissions->only(Cast::list($defaults))->values());
             $count++;
         }
 

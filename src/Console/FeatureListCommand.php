@@ -10,6 +10,7 @@ use JsonException;
 use WireNinja\Accelerator\Configuration\FeatureRegistry;
 use WireNinja\Accelerator\Providers\OAuthServiceProvider;
 use WireNinja\Accelerator\Providers\PwaServiceProvider;
+use WireNinja\Accelerator\Support\Cast;
 
 final class FeatureListCommand extends Command
 {
@@ -91,14 +92,14 @@ final class FeatureListCommand extends Command
     /** @return array{engine_installed: bool, scheduled: bool, offsite_destination: bool, operator_telegram: bool, last_backup_health: string} */
     private function backupCapability(): array
     {
-        $disks = (array) config('accelerator.backup.disks', ['local']);
+        $disks = Cast::stringList(config('accelerator.backup.disks', ['local']));
         $statePath = storage_path('framework/accelerator-backup-state.json');
         $state = is_file($statePath) ? json_decode((string) file_get_contents($statePath), true) : null;
         $lastResult = is_array($state) && is_array($state['last_success'] ?? null) ? 'healthy' : 'unknown';
 
         if (is_array($state) && is_array($state['last_failure'] ?? null)) {
-            $successAt = is_array($state['last_success'] ?? null) ? (string) ($state['last_success']['occurred_at'] ?? '') : '';
-            $failureAt = (string) ($state['last_failure']['occurred_at'] ?? '');
+            $successAt = is_array($state['last_success'] ?? null) ? Cast::mustString($state['last_success']['occurred_at'] ?? '') : '';
+            $failureAt = Cast::mustString($state['last_failure']['occurred_at'] ?? '');
             $lastResult = $failureAt > $successAt ? 'unhealthy' : $lastResult;
         }
 

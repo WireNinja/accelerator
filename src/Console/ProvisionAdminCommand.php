@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\DB;
 use LogicException;
 use Spatie\Permission\Models\Role;
 use WireNinja\Accelerator\Contracts\AcceleratorUser;
+use WireNinja\Accelerator\Support\Cast;
 use WireNinja\Accelerator\Support\UserModel;
 
 #[Signature('accelerator:provision-admin
@@ -48,8 +49,8 @@ final class ProvisionAdminCommand extends Command
                 throw new LogicException('The configured user model is incompatible with Accelerator.');
             }
 
-            $sameIdentity = strtolower((string) $existing->getAttribute('email')) === $email
-                && strtolower((string) $existing->getAttribute('username')) === $username;
+            $sameIdentity = strtolower(Cast::mustString($existing->getAttribute('email'))) === $email
+                && strtolower(Cast::mustString($existing->getAttribute('username'))) === $username;
 
             if (! $sameIdentity) {
                 $this->components->error('The Super Admin email or username is already in use by another identity.');
@@ -99,7 +100,7 @@ final class ProvisionAdminCommand extends Command
             }
         }
 
-        $superAdminRole = (string) config('filament-shield.super_admin.name', 'super_admin');
+        $superAdminRole = Cast::mustString(config('filament-shield.super_admin.name', 'super_admin'));
         Role::findOrCreate($superAdminRole);
 
         return $superAdminRole;

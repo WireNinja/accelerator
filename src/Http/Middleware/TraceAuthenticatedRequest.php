@@ -13,6 +13,7 @@ use OpenTelemetry\API\Common\Time\Clock;
 use OpenTelemetry\API\Trace\StatusCode;
 use Symfony\Component\HttpFoundation\Response;
 use Throwable;
+use WireNinja\Accelerator\Support\Cast;
 
 final class TraceAuthenticatedRequest extends TraceRequestMiddleware
 {
@@ -30,7 +31,7 @@ final class TraceAuthenticatedRequest extends TraceRequestMiddleware
         $requestStartedAt = $this->requestStartTimestamp($request);
         $span = $this->startTracing($request, $requestStartedAt);
         $scope = $span->activate();
-        $span->setAttribute('enduser.id', (string) $request->user()->getAuthIdentifier());
+        $span->setAttribute('enduser.id', Cast::mustString($request->user()->getAuthIdentifier()));
         Tracer::updateLogContext();
 
         $bootedTimestamp = HttpServerInstrumentation::getBootedTimestamp() ?? Clock::getDefault()->now();

@@ -17,6 +17,7 @@ use SplFileInfo;
 use Symfony\Component\Process\Process;
 use Throwable;
 use UnitEnum;
+use WireNinja\Accelerator\Support\Cast;
 
 #[Signature('accelerator:make-resource
     {name : Eloquent model name}
@@ -97,7 +98,7 @@ final class MakeResourceCommand extends Command
 
     private function stringOption(string $name): ?string
     {
-        $value = trim((string) $this->option($name));
+        $value = trim(Cast::string($this->option($name)));
 
         return $value === '' ? null : $value;
     }
@@ -108,15 +109,15 @@ final class MakeResourceCommand extends Command
             return null;
         }
 
-        $enum = config('accelerator.enums.navigation_group');
+        $enum = Cast::unitEnumClass(config('accelerator.enums.navigation_group'));
 
-        if (! is_string($enum) || ! enum_exists($enum)) {
+        if ($enum === null) {
             throw new RuntimeException('Configure accelerator.enums.navigation_group before using --group.');
         }
 
         foreach ($enum::cases() as $case) {
             $value = $case instanceof BackedEnum ? (string) $case->value : $case->name;
-            $label = method_exists($case, 'getLabel') ? (string) $case->getLabel() : $value;
+            $label = method_exists($case, 'getLabel') ? Cast::mustString($case->getLabel()) : $value;
 
             if (in_array(Str::lower($requested), [Str::lower($case->name), Str::lower($value), Str::lower($label)], true)) {
                 return $case;
@@ -174,7 +175,7 @@ final class MakeResourceCommand extends Command
             $pattern = '/(?:^[ \t]*#\[(?:\\\\)?Override\][ \t]*\R)?^[ \t]*protected static [^\n;]*\$'.preg_quote($property, '/').'\s*=\s*[^;]+;\R?/m';
 
             if (preg_match($pattern, $contents) === 1) {
-                $contents = (string) preg_replace($pattern, $declaration."\n", $contents, 1);
+                $contents = Cast::mustString(preg_replace($pattern, $declaration."\n", $contents, 1));
             } else {
                 $missing[] = $declaration;
             }
@@ -230,10 +231,14 @@ final class MakeResourceCommand extends Command
     private function emit(array $payload, int $exitCode): int
     {
         if (! $this->option('json')) {
-            $message = $payload['message'] ?? "Resource [{$payload['resource']}] {$payload['status']}";
+            $message = $payload['message'] ?? sprintf(
+                'Resource [%s] %s',
+                Cast::mustString($payload['resource'] ?? null),
+                Cast::mustString($payload['status'] ?? null),
+            );
             $exitCode === self::SUCCESS
-                ? $this->components->success((string) $message)
-                : $this->components->error((string) $message);
+                ? $this->components->success(Cast::mustString($message))
+                : $this->components->error(Cast::mustString($message));
 
             return $exitCode;
         }

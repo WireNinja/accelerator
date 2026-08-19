@@ -16,6 +16,7 @@ use InvalidArgumentException;
  */
 class BigDecimalCast implements CastsAttributes
 {
+    /** @var int<0, max>|null */
     private readonly ?int $scale;
 
     private readonly RoundingMode $roundingMode;
@@ -114,6 +115,7 @@ class BigDecimalCast implements CastsAttributes
         }
     }
 
+    /** @return int<0, max>|null */
     private static function resolveScale(string|int|null $scale): ?int
     {
         if ($scale === null || $scale === '') {

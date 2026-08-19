@@ -7,6 +7,7 @@ namespace WireNinja\Accelerator\Configuration;
 use Illuminate\Support\Str;
 use JsonException;
 use RuntimeException;
+use WireNinja\Accelerator\Support\Cast;
 
 final readonly class ReverbApplicationRegistry
 {
@@ -110,7 +111,7 @@ final readonly class ReverbApplicationRegistry
         $appId = is_string($application['app_id'] ?? null) ? trim($application['app_id']) : '';
         $key = is_string($application['key'] ?? null) ? trim($application['key']) : '';
         $secret = is_string($application['secret'] ?? null) ? trim($application['secret']) : '';
-        $origins = array_values(array_filter($application['allowed_origins'] ?? [], is_string(...)));
+        $origins = Cast::stringList($application['allowed_origins'] ?? null);
 
         if ($name === '' || $appId === '' || $key === '' || $secret === '' || $origins === []) {
             throw new RuntimeException('Every Reverb application requires a name, app ID, key, secret, and allowed origin.');

@@ -9,14 +9,15 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use NotificationChannels\Telegram\Telegram;
 use Throwable;
+use WireNinja\Accelerator\Support\Cast;
 
 final class OperatorTelegramNotifier
 {
     /** @param array<string, scalar|null> $context */
     public function send(string $operation, string $result, array $context = [], bool $force = false): bool
     {
-        $token = trim((string) config('accelerator.operations.telegram.bot_token', ''));
-        $chatId = trim((string) config('accelerator.operations.telegram.chat_id', ''));
+        $token = trim(Cast::mustString(config('accelerator.operations.telegram.bot_token', '')));
+        $chatId = trim(Cast::mustString(config('accelerator.operations.telegram.chat_id', '')));
 
         return $this->sendWith(
             token: $token,
@@ -24,11 +25,11 @@ final class OperatorTelegramNotifier
             operation: $operation,
             result: $result,
             identity: [
-                'deployment_key' => (string) config('accelerator.operations.deployment_key', config('app.name')),
-                'stage' => (string) config('accelerator.operations.stage', config('app.env')),
-                'domain' => (string) config('accelerator.operations.domain', config('app.url')),
+                'deployment_key' => Cast::mustString(config('accelerator.operations.deployment_key', config('app.name'))),
+                'stage' => Cast::mustString(config('accelerator.operations.stage', config('app.env'))),
+                'domain' => Cast::mustString(config('accelerator.operations.domain', config('app.url'))),
                 'notify_successes' => (bool) config('accelerator.operations.telegram.notify_successes', false),
-                'base_uri' => (string) config('accelerator.operations.telegram.base_uri', 'https://api.telegram.org'),
+                'base_uri' => Cast::mustString(config('accelerator.operations.telegram.base_uri', 'https://api.telegram.org')),
             ],
             context: $context,
             force: $force,
