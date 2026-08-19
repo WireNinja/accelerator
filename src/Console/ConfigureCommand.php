@@ -114,7 +114,7 @@ final class ConfigureCommand extends Command
             'BROADCAST_CONNECTION' => in_array('realtime', $selected, true) ? 'reverb' : 'log',
             'SCOUT_DRIVER' => 'database',
             'LOG_STACK' => in_array('observability', $selected, true) ? 'daily,otlp' : 'daily',
-            'OTEL_SDK_DISABLED' => in_array('observability', $selected, true) ? 'false' : 'true',
+            'OTEL_SDK_DISABLED' => in_array('observability', $selected, true) ? ($current['OTEL_SDK_DISABLED'] ?? 'true') : 'true',
             'OTEL_INSTRUMENTATION_HTTP_SERVER' => 'false',
             'ACCELERATOR_OAUTH_MODE' => in_array('oauth', $selected, true) ? ($current['ACCELERATOR_OAUTH_MODE'] ?? 'existing_only') : 'disabled',
         ];

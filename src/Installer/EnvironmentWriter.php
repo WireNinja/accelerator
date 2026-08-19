@@ -55,7 +55,7 @@ final readonly class EnvironmentWriter
             'BROADCAST_CONNECTION' => $this->context->hasFeature('realtime') ? 'reverb' : 'log',
             'SCOUT_DRIVER' => 'database',
             'LOG_STACK' => $this->context->hasFeature('observability') ? 'daily,otlp' : 'daily',
-            'OTEL_SDK_DISABLED' => $this->context->boolean(! $this->context->hasFeature('observability')),
+            'OTEL_SDK_DISABLED' => 'true',
             'OTEL_INSTRUMENTATION_HTTP_SERVER' => 'false',
             'ACCELERATOR_FEATURE_OAUTH' => $this->context->boolean($this->context->hasFeature('oauth')),
             'ACCELERATOR_FEATURE_PWA' => $this->context->boolean($this->context->hasFeature('pwa')),
