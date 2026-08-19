@@ -26,13 +26,11 @@ final class TelegramBotConfigurator
     {
         $botToken = config('services.telegram.token');
 
-        return filled($botToken) ? Cast::mustString($botToken) : null;
+        return Cast::filledString($botToken);
     }
 
     public function getApiBaseUri(): ?string
     {
-        $apiBaseUri = config('services.telegram.base_uri');
-
-        return filled($apiBaseUri) ? Cast::mustString($apiBaseUri) : null;
+        return Cast::filledString(config('services.telegram.base_uri'));
     }
 }

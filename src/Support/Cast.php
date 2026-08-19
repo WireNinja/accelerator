@@ -36,6 +36,17 @@ final class Cast
         return $cast;
     }
 
+    public static function filledString(mixed $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $cast = self::mustString($value);
+
+        return trim($cast) === '' ? null : $cast;
+    }
+
     /**
      * @return ($default is null ? int|null : int)
      */
