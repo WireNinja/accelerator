@@ -84,7 +84,16 @@ final readonly class InstallPlan
                 'reverbApplications.local.key' => [Rule::requiredIf($usesRealtime), 'string'],
                 'reverbApplications.local.secret' => [Rule::requiredIf($usesRealtime), 'string'],
                 'reverbApplications.local.allowed_origins' => [Rule::requiredIf($usesRealtime), 'array', 'min:1'],
-                'reverbApplications.local.allowed_origins.*' => ['url:http,https'],
+                'reverbApplications.local.allowed_origins.*' => [
+                    'required',
+                    'string',
+                    'distinct',
+                    static function (string $attribute, mixed $value, Closure $fail): void {
+                        if (! is_string($value) || ! self::isValidReverbAllowedOrigin($value)) {
+                            $fail("The {$attribute} field must be a valid Reverb origin host.");
+                        }
+                    },
+                ],
             ])->validate();
         } catch (ValidationException $exception) {
             throw new InvalidArgumentException($exception->validator->errors()->first(), previous: $exception);
@@ -128,5 +137,32 @@ final readonly class InstallPlan
     private static function string(array $data, string $key): string
     {
         return is_string($data[$key] ?? null) ? $data[$key] : '';
+    }
+
+    private static function isValidReverbAllowedOrigin(string $origin): bool
+    {
+        if ($origin === '*') {
+            return true;
+        }
+
+        if ($origin === '' || trim($origin) !== $origin) {
+            return false;
+        }
+
+        $parts = parse_url("http://{$origin}");
+
+        if (! is_array($parts) || ! is_string($parts['host'] ?? null)) {
+            return false;
+        }
+
+        if (array_intersect(['user', 'pass', 'path', 'query', 'fragment'], array_keys($parts)) !== []) {
+            return false;
+        }
+
+        $host = $parts['host'];
+        $ip = trim($host, '[]');
+
+        return filter_var($ip, FILTER_VALIDATE_IP) !== false
+            || filter_var($host, FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME) !== false;
     }
 }
