@@ -121,8 +121,8 @@ return [
     ],
 
     'support' => [
-        'whatsapp' => env('ACCELERATOR_SUPPORT_WHATSAPP'),
-        'telegram' => env('ACCELERATOR_SUPPORT_TELEGRAM'),
+        'whatsapp' => (string) (env('ACCELERATOR_SUPPORT_WHATSAPP') ?? ''),
+        'telegram' => (string) (env('ACCELERATOR_SUPPORT_TELEGRAM') ?? ''),
     ],
 
     'dicebear' => [
