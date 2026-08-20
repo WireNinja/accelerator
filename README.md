@@ -1,6 +1,6 @@
 # WireNinja Accelerator
 
-Opinionated Laravel 13 + Filament foundation for one solo developer shipping repeated single-VPS monoliths.
+Opinionated Laravel 13.26.1+ and Filament foundation for one solo developer shipping repeated single-VPS monoliths.
 
 ## Fixed product contract
 

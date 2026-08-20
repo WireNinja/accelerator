@@ -14,7 +14,7 @@
     },
     "require": {
         "php": "^8.5",
-        "laravel/framework": "^13.22",
+        "laravel/framework": "^13.26.1",
         "brick/math": "^0.17",
         "bezhansalleh/filament-shield": "^4.3",
         "blade-ui-kit/blade-icons": "^1.10",
