@@ -14,10 +14,10 @@ Ship the smallest complete business slice. Keep ordinary CRUD native; add archit
 3. Design the schema around real query paths. Add foreign keys, uniqueness, nullability, precision, and indexes deliberately. Never edit a deployed migration; create a forward migration.
 4. Create or update the model with explicit casts, typed relationships, useful local scopes, and defaults matching the database. Use Accelerator's BigDecimal stack for money or precision-sensitive values.
 5. Run the migration before schema-driven Filament generation. Native `make:filament-resource --generate` requires an existing migrated table; never combine `--generate` with `--migration`.
-6. Generate the resource through native `make:filament-resource`, configure its navigation metadata, then run `shield:safe-regenerate --panel={panel}` and `accelerator:verify-resource {Resource}` explicitly.
+6. Generate the resource through native `make:filament-resource`, configure its navigation metadata, then run `shield:safe-regenerate --panel={panel}`.
 7. Complete the resource using native Filament fields, relationships, actions, and policies. Keep security in policies; UI visibility is not authorization.
 8. Add activity logging when business history matters. Allowlist attributes and snapshot configured relationship changes.
-9. Verify the complete slice with context/verifier commands, static analysis, formatting, and the affected authenticated UI.
+9. Verify the complete slice through direct source inspection, static analysis, formatting, and the affected authenticated UI.
 
 ## Architecture boundary
 
@@ -57,8 +57,6 @@ Use the narrowest relevant set:
 ```bash
 php artisan migrate:status
 php artisan accelerator:context model {Model}
-php artisan accelerator:context resource {Resource}
-php artisan accelerator:verify-resource {Resource}
 vendor/bin/pint --dirty --format agent
 composer phpstan
 ```

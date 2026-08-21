@@ -1,6 +1,6 @@
 ---
 name: accelerator-filament
-description: Build or review Accelerator Filament v5 panels, resources, forms, tables, actions, policies, Shield permissions, BigDecimal inputs, and custom components. Use for all Filament UI or authorization work, including resource context and verification.
+description: Build or review Accelerator Filament v5 panels, resources, forms, tables, actions, policies, Shield permissions, BigDecimal inputs, and custom components. Use for all Filament UI and authorization work.
 ---
 
 # Accelerator Filament
@@ -11,17 +11,15 @@ description: Build or review Accelerator Filament v5 panels, resources, forms, t
 2. Search version-specific Filament documentation before changing an unfamiliar API.
 3. Prefer native Filament/Laravel behavior; add package abstractions only for repeated real invariants.
 4. Make authorization policy-driven; UI visibility is not security.
-5. Run the focused resource verifier if present, then static analysis and the affected authenticated page.
+5. Run static analysis, cache the views, and exercise the affected authenticated page.
 
 For an end-to-end model-backed business feature, activate `accelerator-feature-development`; this skill owns Filament-specific implementation details, not the whole domain workflow.
-
-Context output is navigation, not truth. Do not add UI code merely to satisfy a scanner.
 
 ## Resource truth
 
 Filament's registered panel/resource is authoritative. Use Filament's native `make:filament-resource` command for scaffolding. Navigation groups come from app-owned `App\Enums\System\NavigationGroup`; keep each resource icon, label, policy, and panel placement in the resource itself. Do not recreate `BetterResource` or a resource registry enum.
 
-Run migrations before using `make:filament-resource --generate`. Schema-driven generation requires the current database table and may not be combined with `--migration`. After generation, configure navigation metadata in the resource, then run `shield:safe-regenerate --panel={panel}` and `accelerator:verify-resource {Resource}` explicitly.
+Run migrations before using `make:filament-resource --generate`. Schema-driven generation requires the current database table and may not be combined with `--migration`. After generation, configure navigation metadata in the resource, then run `shield:safe-regenerate --panel={panel}`.
 
 Custom Shield abilities belong in a permission-specific declaration, not navigation metadata. Super Admin bypass/access must remain valid after Shield regeneration.
 
@@ -33,6 +31,30 @@ Custom Shield abilities belong in a permission-specific declaration, not navigat
 - Put mutually exclusive state rules in policy methods.
 - Block unsafe self-mutation and protect Super Admin targets explicitly.
 - Run `shield:safe-regenerate` only through the Accelerator-safe workflow.
+
+Custom record actions must name the corresponding policy ability explicitly. Filament resolves the current Eloquent record for the policy call:
+
+```php
+use App\Actions\PublishPost;
+use App\Models\Post;
+use Filament\Actions\Action;
+
+Action::make('publish')
+    ->authorize('publish')
+    ->requiresConfirmation()
+    ->action(fn (Post $record, PublishPost $publishPost): mixed => $publishPost->handle($record));
+```
+
+The model policy owns both actor permissions and record-state rules:
+
+```php
+public function publish(User $user, Post $post): bool
+{
+    return $user->can('Publish:Post') && $post->isDraft();
+}
+```
+
+Built-in resource actions such as `CreateAction`, `EditAction`, and `DeleteAction` read their standard policy methods automatically. `visible()` and `hidden()` may still control presentation for non-security reasons, but they never replace `authorize()` on a custom action.
 
 Bulk actions are disabled by default because auditability and per-record authorization are preferred. Add one only for an explicit business need with policy checks, per-record safety, activity logging, bounded workload, and a clear partial-failure strategy.
 
@@ -70,17 +92,11 @@ LocationPicker::make('latitude')
     ->longitudeField('longitude');
 ```
 
-## Context and verification
+## Verification
 
-Target compact inspection:
+Inspect the resource, page, form, table, model, and policy source directly. Confirm the resource is registered in the intended panel, run `shield:safe-regenerate --panel={panel}`, Pint, PHPStan, and `php artisan view:cache`, then exercise the affected page and custom actions as users with allowed and denied roles.
 
-```bash
-php artisan accelerator:context resource {resource}
-php artisan accelerator:context resource {resource} --expand
-php artisan accelerator:verify-resource {resource}
-```
-
-Default context does not execute field closures or instantiate schemas with a null record. The verifier is independent and enforces only registration, model, and policy invariants.
+`accelerator:context resource` and `accelerator:verify-resource` are legacy compatibility commands. Do not use them as development workflow or completion gates.
 
 ## Taste gate
 

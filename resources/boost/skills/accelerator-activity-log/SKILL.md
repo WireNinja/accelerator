@@ -40,4 +40,4 @@ Keep `ActivitiesRelationManager` read-only and group it with native `RelationGro
 
 ## Verification
 
-Inspect the model/resource source, run scoped Pint and static analysis, then exercise the affected authenticated resource page. Use compact model/resource context only if the command exists and its output is relevant.
+Inspect the model/resource source directly, run scoped Pint and static analysis, then exercise the affected authenticated resource page.

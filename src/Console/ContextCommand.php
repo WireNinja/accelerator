@@ -11,6 +11,11 @@ use WireNinja\Accelerator\Support\Context\CompactModelScanner;
 use WireNinja\Accelerator\Support\Context\CompactResourceScanner;
 use WireNinja\Accelerator\Support\Context\ResourceRegistry;
 
+/**
+ * The `resource` subject is a legacy compatibility path. Inspect registered
+ * Filament resources and their policies directly instead. Model and list
+ * context remain supported.
+ */
 final class ContextCommand extends Command
 {
     /** @var string */
