@@ -31,7 +31,6 @@ use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 use Spatie\Activitylog\Models\Activity;
-use WireNinja\Accelerator\Console\Filament\MakeResourceCommand;
 use WireNinja\Accelerator\Console\Filament\VerifyResourceCommand;
 use WireNinja\Accelerator\Console\Shield\SafeRegenerateCommand;
 use WireNinja\Accelerator\Policies\ActivityPolicy;
@@ -51,7 +50,6 @@ final class FilamentServiceProvider extends ServiceProvider
         if ($this->app->runningInConsole()) {
             $this->commands([
                 SafeRegenerateCommand::class,
-                MakeResourceCommand::class,
                 VerifyResourceCommand::class,
             ]);
         }

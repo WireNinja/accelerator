@@ -19,9 +19,9 @@ Context output is navigation, not truth. Do not add UI code merely to satisfy a 
 
 ## Resource truth
 
-Filament's registered panel/resource is authoritative. Use `accelerator:make-resource` for deterministic scaffolding. Navigation groups come from app-owned `App\Enums\System\NavigationGroup`; keep each resource icon, label, policy, and panel placement in the resource itself. Do not recreate `BetterResource` or a resource registry enum.
+Filament's registered panel/resource is authoritative. Use Filament's native `make:filament-resource` command for scaffolding. Navigation groups come from app-owned `App\Enums\System\NavigationGroup`; keep each resource icon, label, policy, and panel placement in the resource itself. Do not recreate `BetterResource` or a resource registry enum.
 
-Run migrations before using `accelerator:make-resource --generate`. Schema-driven generation requires the current database table and may not be combined with `--migration`.
+Run migrations before using `make:filament-resource --generate`. Schema-driven generation requires the current database table and may not be combined with `--migration`. After generation, configure navigation metadata in the resource, then run `shield:safe-regenerate --panel={panel}` and `accelerator:verify-resource {Resource}` explicitly.
 
 Custom Shield abilities belong in a permission-specific declaration, not navigation metadata. Super Admin bypass/access must remain valid after Shield regeneration.
 

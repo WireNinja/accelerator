@@ -13,8 +13,8 @@ Ship the smallest complete business slice. Keep ordinary CRUD native; add archit
 2. Inspect installed versions, sibling conventions, relevant schema/model/policy/resource, and version-specific documentation. Activate `accelerator-model-context`, `accelerator-filament`, `accelerator-activity-log`, and relevant Laravel domain skills as needed.
 3. Design the schema around real query paths. Add foreign keys, uniqueness, nullability, precision, and indexes deliberately. Never edit a deployed migration; create a forward migration.
 4. Create or update the model with explicit casts, typed relationships, useful local scopes, and defaults matching the database. Use Accelerator's BigDecimal stack for money or precision-sensitive values.
-5. Run the migration before schema-driven Filament generation. `accelerator:make-resource --generate` requires an existing migrated table; never combine `--generate` with `--migration`.
-6. Generate the resource through `accelerator:make-resource`. It applies requested navigation metadata, safely regenerates Shield, and verifies resource/model/policy registration.
+5. Run the migration before schema-driven Filament generation. Native `make:filament-resource --generate` requires an existing migrated table; never combine `--generate` with `--migration`.
+6. Generate the resource through native `make:filament-resource`, configure its navigation metadata, then run `shield:safe-regenerate --panel={panel}` and `accelerator:verify-resource {Resource}` explicitly.
 7. Complete the resource using native Filament fields, relationships, actions, and policies. Keep security in policies; UI visibility is not authorization.
 8. Add activity logging when business history matters. Allowlist attributes and snapshot configured relationship changes.
 9. Verify the complete slice with context/verifier commands, static analysis, formatting, and the affected authenticated UI.
@@ -33,7 +33,7 @@ Ship the smallest complete business slice. Keep ordinary CRUD native; add archit
 
 ## Filament and Shield
 
-- Let `accelerator:make-resource` own safe Shield regeneration; do not call destructive vendor generation shortcuts.
+- Use `shield:safe-regenerate` after native resource generation; do not call destructive vendor generation shortcuts.
 - Keep standard CRUD abilities policy-driven. Declare custom string abilities for non-CRUD domain actions.
 - Preserve Super Admin access and protect unsafe self-mutation or privileged targets explicitly.
 - Bulk actions are disabled by default. Add one only for an explicit business need with policy checks, per-record safety, auditability, and bounded workload.

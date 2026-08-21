@@ -14,6 +14,7 @@ Target contract:
 - restore Filament's native sidebar and topbar; move dense-shell classes, views, and styles into one `legacy/filament-dense-ui` tree, then remove their active providers, hooks, imports, env values, and config;
 - keep Google OAuth on the native login layout and use the package's native-topbar panel select, which stays hidden when only one panel is accessible;
 - fresh installs default to one Admin panel with Shield and System settings inside it; preserve additional app-owned panels and their resources during an existing-app migration;
+- replace `accelerator:make-resource` usage with Filament's native `make:filament-resource`, followed explicitly by `shield:safe-regenerate` and `accelerator:verify-resource`;
 - root `/` remains app-owned;
 - remove Inertia/Vue/Wayfinder only when the app does not independently need them;
 - remove ticketing/custom telemetry/Insider/Envoy/Bun remnants;
