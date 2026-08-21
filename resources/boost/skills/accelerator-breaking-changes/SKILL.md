@@ -5,6 +5,8 @@ description: Surgically migrate an existing Laravel or Accelerator application t
 
 # Accelerator existing-app migration
 
+Target release: `v2.1.0`.
+
 Record current routes, panels/resources, schema, schedules, feature env, lockfiles, deployment topology, and user auth fields. Back up data before schema changes. Keep application domain code unless a removed Accelerator subsystem owns it.
 
 Target contract:
