@@ -5,7 +5,7 @@ description: Surgically migrate an existing Laravel or Accelerator application t
 
 # Accelerator existing-app migration
 
-Target release: `v2.1.0`.
+Target release: `v2.2.0`.
 
 Record current routes, panels/resources, schema, schedules, feature env, lockfiles, deployment topology, and user auth fields. Back up data before schema changes. Keep application domain code unless a removed Accelerator subsystem owns it.
 
@@ -16,7 +16,8 @@ Target contract:
 - restore Filament's native sidebar and topbar; move dense-shell classes, views, and styles into one `legacy/filament-dense-ui` tree, then remove their active providers, hooks, imports, env values, and config;
 - keep Google OAuth on the native login layout and use the package's native-topbar panel select, which stays hidden when only one panel is accessible;
 - fresh installs default to one Admin panel with Shield and System settings inside it; preserve additional app-owned panels and their resources during an existing-app migration;
-- replace `accelerator:make-resource` usage with Filament's native `make:filament-resource`, followed by `shield:safe-regenerate`;
+- generate resources with Filament's native `make:filament-resource`, followed by `shield:safe-regenerate`;
+- replace `VerticalWizard` and wizard `Step` usage with `VerticalTab` and native `Tabs\Tab`; remove wizard-only navigation options such as `skippable()`;
 - root `/` remains app-owned;
 - remove Inertia/Vue/Wayfinder only when the app does not independently need them;
 - remove ticketing/custom telemetry/Insider/Envoy/Bun remnants;

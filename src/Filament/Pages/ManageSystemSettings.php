@@ -18,15 +18,15 @@ use Filament\Schemas\Components\Actions as SchemaActions;
 use Filament\Schemas\Components\EmbeddedSchema;
 use Filament\Schemas\Components\Form;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Components\Text;
 use Filament\Schemas\Components\Utilities\Get;
-use Filament\Schemas\Components\Wizard\Step;
 use Filament\Schemas\Schema;
 use Illuminate\Support\HtmlString;
 use Override;
 use UnitEnum;
 use WireNinja\Accelerator\Enums\GoogleFontEnum;
-use WireNinja\Accelerator\Filament\Schemas\Components\VerticalWizard;
+use WireNinja\Accelerator\Filament\Schemas\Components\VerticalTab;
 use WireNinja\Accelerator\Settings\SystemSettings;
 use WireNinja\Accelerator\Support\Cast;
 
@@ -76,72 +76,69 @@ class ManageSystemSettings extends Page implements HasForms
         return $schema
             ->statePath('data')
             ->components([
-                VerticalWizard::make([
-                    Step::make('Identitas Visual')
-                        ->icon('lucide-palette')
-                        ->schema([
-                            Section::make('Identitas Visual')
-                                ->description('Kelola identitas visual dan tipografi aplikasi.')
-                                ->columns(2)
-                                ->schema([
-                                    TextInput::make('brand_name')
-                                        ->label('Nama Aplikasi')
-                                        ->required()
-                                        ->maxLength(255)
-                                        ->columnSpanFull(),
-                                    Select::make('google_font')
-                                        ->label('Keluarga Font Google')
-                                        ->default(GoogleFontEnum::Poppins->value)
-                                        ->options(GoogleFontEnum::class)
-                                        ->live()
-                                        ->columnSpanFull()
-                                        ->helperText(fn (?GoogleFontEnum $state): string => self::resolveGoogleFontEnum($state)->getDescription()),
-                                    Text::make(fn (Get $get): HtmlString => new HtmlString(sprintf(
-                                        '%s %s',
-                                        filled($get('google_font')) ? sprintf(
-                                            '<link href="https://fonts.googleapis.com/css2?family=%s&display=swap" rel="stylesheet">',
-                                            str_replace(' ', '+', self::resolveGoogleFontValue(Cast::string($get('google_font'), null)))
-                                        ) : '',
-                                        filled($get('google_font')) ? sprintf(
-                                            '<span style="font-family: %s; font-size: 32px !important;">The quick brown fox jumps over the lazy dog.</span>',
-                                            self::resolveGoogleFontValue(Cast::string($get('google_font'), null))
-                                        ) : '',
-                                    )))->columnSpanFull(),
-                                    FileUpload::make('brand_logo')
-                                        ->label('Logo Brand')
-                                        ->image()
-                                        ->disk('public')
-                                        ->directory('app-settings/branding'),
-                                    FileUpload::make('brand_favicon')
-                                        ->label('Favicon')
-                                        ->image()
-                                        ->disk('public')
-                                        ->directory('app-settings/branding'),
-                                ]),
-                        ]),
-                    Step::make('Sistem & Pemberitahuan')
-                        ->icon('lucide-cpu')
-                        ->schema([
-                            Section::make('Sistem')
-                                ->description('Atur pengumuman global dan bantuan pengembang di sidebar.')
-                                ->columns(2)
-                                ->schema([
-                                    TextInput::make('app_notice')
-                                        ->label('Pemberitahuan Global')
-                                        ->placeholder('Contoh: Maintenance terjadwal besok...')
-                                        ->helperText('Pemberitahuan ini akan muncul di sidebar untuk semua pengguna.')
-                                        ->columnSpanFull(),
-                                    Toggle::make('support_enabled')
-                                        ->label('Tampilkan Bantuan (Support)')
-                                        ->helperText('Tampilkan kotak bantuan pengembang (Whatsapp & Telegram) di sidebar.')
-                                        ->columnSpanFull(),
-                                ]),
-                        ]),
-                ])
-                    ->navigationHeading('Pengaturan Sistem')
-                    ->navigationDescription('Kelola identitas brand dan preferensi sistem inti.')
-                    ->sticky(false)
-                    ->skippable()
+                VerticalTab::make('Pengaturan Sistem')
+                    ->tabs([
+                        Tab::make('Identitas Visual')
+                            ->icon('lucide-palette')
+                            ->schema([
+                                Section::make('Identitas Visual')
+                                    ->description('Kelola identitas visual dan tipografi aplikasi.')
+                                    ->columns(2)
+                                    ->schema([
+                                        TextInput::make('brand_name')
+                                            ->label('Nama Aplikasi')
+                                            ->required()
+                                            ->maxLength(255)
+                                            ->columnSpanFull(),
+                                        Select::make('google_font')
+                                            ->label('Keluarga Font Google')
+                                            ->default(GoogleFontEnum::Poppins->value)
+                                            ->options(GoogleFontEnum::class)
+                                            ->live()
+                                            ->columnSpanFull()
+                                            ->helperText(fn (?GoogleFontEnum $state): string => self::resolveGoogleFontEnum($state)->getDescription()),
+                                        Text::make(fn (Get $get): HtmlString => new HtmlString(sprintf(
+                                            '%s %s',
+                                            filled($get('google_font')) ? sprintf(
+                                                '<link href="https://fonts.googleapis.com/css2?family=%s&display=swap" rel="stylesheet">',
+                                                str_replace(' ', '+', self::resolveGoogleFontValue(Cast::string($get('google_font'), null)))
+                                            ) : '',
+                                            filled($get('google_font')) ? sprintf(
+                                                '<span style="font-family: %s; font-size: 32px !important;">The quick brown fox jumps over the lazy dog.</span>',
+                                                self::resolveGoogleFontValue(Cast::string($get('google_font'), null))
+                                            ) : '',
+                                        )))->columnSpanFull(),
+                                        FileUpload::make('brand_logo')
+                                            ->label('Logo Brand')
+                                            ->image()
+                                            ->disk('public')
+                                            ->directory('app-settings/branding'),
+                                        FileUpload::make('brand_favicon')
+                                            ->label('Favicon')
+                                            ->image()
+                                            ->disk('public')
+                                            ->directory('app-settings/branding'),
+                                    ]),
+                            ]),
+                        Tab::make('Sistem & Pemberitahuan')
+                            ->icon('lucide-cpu')
+                            ->schema([
+                                Section::make('Sistem')
+                                    ->description('Atur pengumuman global dan bantuan pengembang di sidebar.')
+                                    ->columns(2)
+                                    ->schema([
+                                        TextInput::make('app_notice')
+                                            ->label('Pemberitahuan Global')
+                                            ->placeholder('Contoh: Maintenance terjadwal besok...')
+                                            ->helperText('Pemberitahuan ini akan muncul di sidebar untuk semua pengguna.')
+                                            ->columnSpanFull(),
+                                        Toggle::make('support_enabled')
+                                            ->label('Tampilkan Bantuan (Support)')
+                                            ->helperText('Tampilkan kotak bantuan pengembang (Whatsapp & Telegram) di sidebar.')
+                                            ->columnSpanFull(),
+                                    ]),
+                            ]),
+                    ])
                     ->columnSpanFull(),
             ]);
     }

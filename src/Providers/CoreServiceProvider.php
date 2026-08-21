@@ -24,7 +24,6 @@ use Spatie\Backup\Tasks\Monitor\HealthChecks\MaximumAgeInDays;
 use Spatie\Backup\Tasks\Monitor\HealthChecks\MaximumStorageInMegabytes;
 use WireNinja\Accelerator\Console\Agent\DoctorCommand;
 use WireNinja\Accelerator\Console\ConfigureCommand;
-use WireNinja\Accelerator\Console\ContextCommand;
 use WireNinja\Accelerator\Console\EnvCommand;
 use WireNinja\Accelerator\Console\FeatureListCommand;
 use WireNinja\Accelerator\Console\InstallCommand;
@@ -80,7 +79,7 @@ final class CoreServiceProvider extends ServiceProvider
         $this->commands([
             DoctorCommand::class,
             ConfigureCommand::class,
-            ContextCommand::class,
+            'WireNinja\\Accelerator\\Console\\ContextCommand',
             BackupCommand::class,
             NotifyCommand::class,
             EnvCommand::class,

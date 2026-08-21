@@ -10,15 +10,15 @@ use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Components\Utilities\Get;
-use Filament\Schemas\Components\Wizard\Step;
 use Filament\Schemas\Schema;
 use Filament\Support\Enums\Width;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Override;
 use WireNinja\Accelerator\Actions\User\SendTelegramTestMessageAction;
-use WireNinja\Accelerator\Filament\Schemas\Components\VerticalWizard;
+use WireNinja\Accelerator\Filament\Schemas\Components\VerticalTab;
 use WireNinja\Accelerator\Support\Cast;
 use WireNinja\Accelerator\Support\UserModel;
 
@@ -56,8 +56,8 @@ class ManageProfile extends EditProfile
 
     public function form(Schema $schema): Schema
     {
-        $steps = [
-            Step::make('Informasi Dasar')
+        $tabs = [
+            Tab::make('Informasi Dasar')
                 ->icon('lucide-user')
                 ->schema([
                     Section::make('Informasi Dasar')
@@ -84,7 +84,7 @@ class ManageProfile extends EditProfile
         ];
 
         if ($this->hasProfileOrganization()) {
-            $steps[] = Step::make('Organisasi')
+            $tabs[] = Tab::make('Organisasi')
                 ->icon('lucide-building-2')
                 ->schema([
                     Section::make('Organisasi')
@@ -100,9 +100,9 @@ class ManageProfile extends EditProfile
                 ]);
         }
 
-        $steps = [
-            ...$steps,
-            Step::make('Foto Profil')
+        $tabs = [
+            ...$tabs,
+            Tab::make('Foto Profil')
                 ->icon('lucide-image')
                 ->schema([
                     Section::make('Foto Profil')
@@ -119,7 +119,7 @@ class ManageProfile extends EditProfile
                         ]),
                 ]),
 
-            Step::make('Keamanan')
+            Tab::make('Keamanan')
                 ->icon('lucide-key-round')
                 ->schema([
                     Section::make('Keamanan Akun')
@@ -131,7 +131,7 @@ class ManageProfile extends EditProfile
                         ]),
                 ]),
 
-            Step::make('Status Akun')
+            Tab::make('Status Akun')
                 ->icon('lucide-info')
                 ->schema([
                     Section::make('Status Akun')
@@ -154,7 +154,7 @@ class ManageProfile extends EditProfile
         ];
 
         if (config('accelerator.features.telegram', false)) {
-            $steps[] = Step::make('Notifikasi & Telegram')
+            $tabs[] = Tab::make('Notifikasi & Telegram')
                 ->icon('lucide-send')
                 ->schema([
                     Section::make('Telegram')
@@ -191,11 +191,8 @@ class ManageProfile extends EditProfile
 
         return $schema
             ->components([
-                VerticalWizard::make($steps)
-                    ->navigationHeading('Kelola Profil')
-                    ->navigationDescription('Atur informasi pribadi, keamanan akun, dan saluran notifikasi.')
-                    ->sticky(false)
-                    ->skippable()
+                VerticalTab::make('Kelola Profil')
+                    ->tabs($tabs)
                     ->columnSpanFull(),
             ]);
     }

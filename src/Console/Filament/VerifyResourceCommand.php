@@ -13,8 +13,8 @@ use Throwable;
 use WireNinja\Accelerator\Support\Context\ResourceRegistry;
 
 /**
- * Legacy compatibility command. Native Filament inspection, static analysis,
- * and authenticated UI verification are authoritative for resources.
+ * @deprecated Retained only for legacy compatibility. Native Filament inspection,
+ *             static analysis, and authenticated UI verification are authoritative.
  */
 #[Signature('accelerator:verify-resource
     {resource : Resource key (e.g. user) or class FQN}

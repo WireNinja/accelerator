@@ -25,7 +25,7 @@ Accelerator is a proprietary, batteries-included foundation for Laravel 13 Filam
 - Root `/` is userland-owned.
 - pnpm is default; npm is fallback. Bun/Yarn and mixed lockfiles are unsupported.
 - Inertia, Vue, Wayfinder, Fortify, ticketing, custom telemetry, Insider, Envoy, and generated GitHub Actions are absent.
-- `Model::unguard()`, searchable/preloaded Selects, overrideable table defaults, image editing, 100 MB uploads, VerticalWizard, and LocationPicker are intentional.
+- `Model::unguard()`, searchable/preloaded Selects, overrideable table defaults, image editing, 100 MB uploads, VerticalTab, and LocationPicker are intentional.
 - Use native Laravel/Filament/package behavior before creating Accelerator abstractions.
 
 ### Solo-developer execution contract
