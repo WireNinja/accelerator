@@ -7,11 +7,22 @@ namespace WireNinja\Accelerator\Providers;
 use Filament\Support\Facades\FilamentView;
 use Filament\View\PanelsRenderHook;
 use Illuminate\Contracts\View\View;
+use Illuminate\Support\Facades\Config;
 use Illuminate\Support\ServiceProvider;
 use WireNinja\Accelerator\Support\Cast;
 
 final class OAuthServiceProvider extends ServiceProvider
 {
+    public function register(): void
+    {
+        $userland = Config::get('services.google', []);
+
+        Config::set('services.google', array_replace(
+            Config::array('accelerator.oauth.google'),
+            is_array($userland) ? $userland : [],
+        ));
+    }
+
     public function boot(): void
     {
         $mode = Cast::mustString(config('accelerator.oauth.mode', 'disabled'));

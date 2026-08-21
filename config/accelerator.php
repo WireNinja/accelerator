@@ -40,6 +40,11 @@ return [
         'mode' => env('ACCELERATOR_OAUTH_MODE', 'disabled'),
         'allowed_domains' => array_values(array_filter(explode(',', (string) env('ACCELERATOR_OAUTH_ALLOWED_DOMAINS', '')))),
         'default_role' => env('ACCELERATOR_OAUTH_DEFAULT_ROLE', 'user'),
+        'google' => [
+            'client_id' => env('GOOGLE_CLIENT_ID'),
+            'client_secret' => env('GOOGLE_CLIENT_SECRET'),
+            'redirect' => env('GOOGLE_REDIRECT_URI', '/auth/google/callback'),
+        ],
     ],
 
     'uploads' => [

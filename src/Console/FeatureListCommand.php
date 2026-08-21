@@ -6,6 +6,7 @@ namespace WireNinja\Accelerator\Console;
 
 use Composer\InstalledVersions;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Route;
 use JsonException;
 use WireNinja\Accelerator\Configuration\FeatureRegistry;
 use WireNinja\Accelerator\Providers\OAuthServiceProvider;
@@ -67,7 +68,10 @@ final class FeatureListCommand extends Command
     {
         $enabled = (bool) config("accelerator.features.{$feature}", false);
         [$runtimeLoaded, $source] = match ($feature) {
-            'oauth' => [$this->providerLoaded(OAuthServiceProvider::class), OAuthServiceProvider::class],
+            'oauth' => [
+                $this->providerLoaded(OAuthServiceProvider::class) && Route::has('auth.google.redirect'),
+                'auth.google.redirect',
+            ],
             'pwa' => [$this->providerLoaded(PwaServiceProvider::class), PwaServiceProvider::class],
             'realtime' => [config('broadcasting.default') === 'reverb', 'broadcasting.default'],
             'scout' => [config('scout.driver') !== 'collection', 'scout.driver'],

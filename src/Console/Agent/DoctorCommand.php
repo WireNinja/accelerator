@@ -214,6 +214,20 @@ final class DoctorCommand extends Command
         }
 
         $this->assert('Configuration', 'Application key', filled(config('app.key')) ? 'set' : 'empty', filled(config('app.key')), 'APP_KEY is empty.');
+
+        if ((bool) config('accelerator.features.oauth', false)) {
+            $googleOAuthConfigured = filled(config('services.google.client_id'))
+                && filled(config('services.google.client_secret'));
+
+            $this->assert(
+                'Configuration',
+                'Google OAuth credentials',
+                $googleOAuthConfigured ? 'configured' : 'missing',
+                $googleOAuthConfigured,
+                'GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET must be configured when OAuth is enabled.',
+            );
+        }
+
         $upload = Cast::mustInt(config('accelerator.uploads.max_megabytes', 100));
         $this->assert('Configuration', 'Upload limit', "{$upload} MB", $upload > 0, 'ACCELERATOR_UPLOAD_MAX_MB must be positive.');
     }
