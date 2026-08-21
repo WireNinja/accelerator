@@ -16,7 +16,7 @@ final class BuiltinMiddleware
 {
     public static function make(Middleware $middleware): void
     {
-        $middleware->encryptCookies(except: ['appearance', 'sidebar_state']);
+        $middleware->encryptCookies(except: ['appearance']);
 
         $middleware->web(append: [
             HandleAppearance::class,
