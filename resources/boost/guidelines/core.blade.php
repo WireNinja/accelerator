@@ -21,7 +21,7 @@ Accelerator is a proprietary, batteries-included foundation for Laravel 13 Filam
 
 - Fresh flow: `laravel new` → Composer require → `php artisan accelerator:install`.
 - Installer is resumable and destructive: it overwrites package-owned recipe files and may run `migrate:fresh --seed`. A finished install receipt requires interactive confirmation or `--force`; use surgical migration only when existing code or data must be preserved.
-- Filament, System settings, Shield RBAC, activity log, custom sidebar/topbar, and Filament auth/MFA are core.
+- Filament's native shell, Admin-hosted System settings and Shield RBAC, activity log, and Filament auth/MFA are core.
 - Root `/` is userland-owned.
 - pnpm is default; npm is fallback. Bun/Yarn and mixed lockfiles are unsupported.
 - Inertia, Vue, Wayfinder, Fortify, ticketing, custom telemetry, Insider, Envoy, and generated GitHub Actions are absent.

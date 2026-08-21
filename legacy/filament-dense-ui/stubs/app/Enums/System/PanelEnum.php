@@ -11,11 +11,13 @@ use Filament\Support\Contracts\HasLabel;
 enum PanelEnum: string implements HasColor, HasIcon, HasLabel
 {
     case Admin = 'admin';
+    case System = 'system';
 
     public function getLabel(): string
     {
         return match ($this) {
             self::Admin => 'Admin Panel',
+            self::System => 'System Panel',
         };
     }
 
@@ -23,6 +25,7 @@ enum PanelEnum: string implements HasColor, HasIcon, HasLabel
     {
         return match ($this) {
             self::Admin => 'lucide-shield-check',
+            self::System => 'lucide-settings-2',
         };
     }
 
@@ -30,6 +33,7 @@ enum PanelEnum: string implements HasColor, HasIcon, HasLabel
     {
         return match ($this) {
             self::Admin => 'danger',
+            self::System => 'gray',
         };
     }
 

@@ -8,7 +8,6 @@ use WireNinja\Accelerator\Configuration\FeatureRegistry;
 use WireNinja\Accelerator\Providers\CoreServiceProvider;
 use WireNinja\Accelerator\Providers\FilamentServiceProvider;
 use WireNinja\Accelerator\Providers\HeadServiceProvider;
-use WireNinja\Accelerator\Providers\PanelServiceProvider;
 use WireNinja\Accelerator\Support\ActivityLog\AuditConfiguration;
 use WireNinja\Accelerator\Support\Filament\ShieldPermissions;
 
@@ -24,7 +23,6 @@ class AcceleratorServiceProvider extends ServiceProvider
         $this->app->register(CoreServiceProvider::class);
         $this->app->register(FilamentServiceProvider::class);
         $this->app->register(HeadServiceProvider::class);
-        $this->app->register(PanelServiceProvider::class);
 
         foreach (FeatureRegistry::providers() as $feature => $provider) {
             if (! config("accelerator.features.{$feature}", false)) {

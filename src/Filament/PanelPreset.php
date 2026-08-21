@@ -2,10 +2,10 @@
 
 namespace WireNinja\Accelerator\Filament;
 
+use BezhanSalleh\FilamentShield\FilamentShieldPlugin;
 use Filament\Actions\Action;
 use Filament\Auth\MultiFactor\App\AppAuthentication;
 use Filament\Auth\MultiFactor\Email\EmailAuthentication;
-use Filament\Enums\ThemeMode;
 use Filament\FontProviders\GoogleFontProvider;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
@@ -13,8 +13,6 @@ use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
 use Filament\Pages\Dashboard;
 use Filament\Panel;
-use Filament\Support\Colors\Color;
-use Filament\Support\Enums\Width;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
@@ -23,11 +21,9 @@ use Illuminate\Session\Middleware\StartSession;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
-use WireNinja\Accelerator\Filament\AvatarProviders\DiceBearAvatarProvider;
 use WireNinja\Accelerator\Filament\Pages\Auth\Login;
 use WireNinja\Accelerator\Filament\Pages\ManageProfile;
-use WireNinja\Accelerator\Livewire\Sidebar;
-use WireNinja\Accelerator\Livewire\Topbar;
+use WireNinja\Accelerator\Filament\Pages\ManageSystemSettings;
 use WireNinja\Accelerator\Settings\SystemSettings;
 use WireNinja\Accelerator\Support\BuiltinExceptions;
 use WireNinja\Accelerator\Support\Cast;
@@ -39,15 +35,11 @@ final class PanelPreset
         $panelSegment = $id === 'admin' ? null : Str::studly($id);
         $panelDirectory = app_path('Filament'.($panelSegment ? "/{$panelSegment}" : ''));
         $panelNamespace = 'App\\Filament'.($panelSegment ? "\\{$panelSegment}" : '');
-        $railWidth = config('accelerator.ui.density') === 'compact'
-            ? config('accelerator.ui.sidebar.compact_rail_width', 52)
-            : config('accelerator.ui.sidebar.rail_width', 56);
         $navigationGroupEnum = Cast::unitEnumClass(config('accelerator.enums.navigation_group'));
 
         return $panel
             ->id($id)
             ->path($id)
-            ->defaultAvatarProvider(DiceBearAvatarProvider::class)
             ->viteTheme(self::viteTheme($id))
             ->login(Login::class)
             ->passwordReset()
@@ -60,32 +52,6 @@ final class PanelPreset
                 EmailAuthentication::make()
                     ->codeExpiryMinutes(5),
             ])
-            ->colors([
-                'primary' => [
-                    50 => '#fafafa',
-                    100 => '#f4f4f5',
-                    200 => '#e4e4e7',
-                    300 => '#d4d4d8', // Dark mode hover
-                    400 => '#ffffff', // Dark mode main
-                    500 => '#000000', // Light mode main
-                    600 => '#18181b', // Light mode hover
-                    700 => '#27272a',
-                    800 => '#3f3f46',
-                    900 => '#52525b',
-                    950 => '#71717a',
-                ],
-                'secondary' => Color::Gray,
-                'success' => Color::Emerald,
-                'danger' => Color::Rose,
-                'warning' => Color::Amber,
-                'info' => Color::Sky,
-                'gray' => Color::Zinc,
-            ])
-            ->maxContentWidth(Width::Full)
-            ->sidebarLivewireComponent(Sidebar::class)
-            ->topbarLivewireComponent(Topbar::class)
-            ->sidebarWidth(sprintf('%dpx', Cast::mustInt(config('accelerator.ui.sidebar.default_width', 336))))
-            ->collapsedSidebarWidth(sprintf('%dpx', Cast::mustInt($railWidth)))
             ->discoverResources(in: "{$panelDirectory}/Resources", for: "{$panelNamespace}\\Resources")
             ->discoverPages(in: "{$panelDirectory}/Pages", for: "{$panelNamespace}\\Pages")
             ->pages([
@@ -111,14 +77,19 @@ final class PanelPreset
             ->broadcasting(static fn (): bool => config('broadcasting.default') === 'reverb')
             ->spa()
             ->globalSearchKeyBindings(['command+k', 'ctrl+k'])
-            ->darkMode(false)
-            ->defaultThemeMode(ThemeMode::Light)
+            ->when(
+                $id === 'admin',
+                static fn (Panel $configuredPanel): Panel => $configuredPanel
+                    ->plugin(
+                        FilamentShieldPlugin::make()
+                            ->navigationGroup('System'),
+                    )
+                    ->pages([ManageSystemSettings::class]),
+            )
             ->when(
                 $navigationGroupEnum !== null,
                 static fn (Panel $configuredPanel): Panel => $configuredPanel->navigationGroups(Cast::mustUnitEnumClass($navigationGroupEnum)),
             )
-            ->collapsibleNavigationGroups()
-            ->sidebarCollapsibleOnDesktop()
             ->databaseTransactions()
             ->unsavedChangesAlerts(static fn (): bool => app()->isProduction())
             ->strictAuthorization(static fn (): bool => app()->isLocal())

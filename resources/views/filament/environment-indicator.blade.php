@@ -1,7 +1,3 @@
-<x-filament::badge
-    :color="$color"
-    icon="lucide-database"
-    class="accelerator-environment-indicator"
->
+<x-filament::badge :color="$color" icon="lucide-database">
     {{ $label }}
 </x-filament::badge>

@@ -11,9 +11,6 @@ class AdminPanelProvider extends PanelProvider
     public function panel(Panel $panel): Panel
     {
         return PanelPreset::configure($panel, 'admin')
-            ->default()
-            ->plugins([
-                //
-            ]);
+            ->default();
     }
 }

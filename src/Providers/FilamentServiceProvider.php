@@ -30,7 +30,6 @@ use Filament\View\PanelsRenderHook;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
-use Livewire\LivewireManager;
 use Spatie\Activitylog\Models\Activity;
 use WireNinja\Accelerator\Console\Filament\MakeResourceCommand;
 use WireNinja\Accelerator\Console\Filament\VerifyResourceCommand;
@@ -46,7 +45,6 @@ final class FilamentServiceProvider extends ServiceProvider
         $this->registerActivityPolicy();
         $this->registerAssets();
         $this->registerRenderHooks();
-        $this->registerLivewireNamespace();
         $this->protectShieldCommands();
         $this->configureFilament();
 
@@ -80,19 +78,11 @@ final class FilamentServiceProvider extends ServiceProvider
         FilamentAsset::register($assets, package: 'wireninja/accelerator');
     }
 
-    private function registerLivewireNamespace(): void
-    {
-        $this->app->make(LivewireManager::class)->addNamespace(
-            namespace: 'accelerator',
-            viewPath: __DIR__.'/../../resources/views/livewire',
-        );
-    }
-
     private function registerRenderHooks(): void
     {
         FilamentView::registerRenderHook(
-            PanelsRenderHook::HEAD_END,
-            static fn (): View => view()->file(__DIR__.'/../../resources/views/filament/density.blade.php'),
+            PanelsRenderHook::TOPBAR_LOGO_AFTER,
+            static fn (): View => view()->file(__DIR__.'/../../resources/views/filament/panel-switcher.blade.php'),
         );
 
         FilamentView::registerRenderHook(
@@ -101,11 +91,6 @@ final class FilamentServiceProvider extends ServiceProvider
                 __DIR__.'/../../resources/views/filament/business-exception-handler.blade.php',
                 BuiltinExceptions::getFilamentBusinessExceptionViewData(),
             ),
-        );
-
-        FilamentView::registerRenderHook(
-            PanelsRenderHook::SIDEBAR_NAV_START,
-            static fn (): View => view()->file(__DIR__.'/../../resources/views/filament/sidebar/notice.blade.php'),
         );
 
         if (config('accelerator.ui.environment_indicator.enabled', false)

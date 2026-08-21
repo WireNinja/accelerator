@@ -4,7 +4,7 @@ Opinionated Laravel 13.26.1+ and Filament foundation for one solo developer ship
 
 ## Fixed product contract
 
-- Filament, System settings, Shield RBAC, activity logging, auth/MFA, custom sidebar/topbar, and Indonesian defaults are core.
+- Filament's native shell, Admin-hosted System settings and Shield RBAC, activity logging, auth/MFA, and Indonesian defaults are core.
 - Root `/` belongs to userland.
 - pnpm is default; npm is fallback.
 - OAuth, PWA, Telegram, centralized realtime, Scout, and OpenTelemetry observability are optional integrations.

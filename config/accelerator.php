@@ -28,7 +28,6 @@ return [
     'enums' => [
         'role' => 'App\\Enums\\System\\RoleEnum',
         'panel' => 'App\\Enums\\System\\PanelEnum',
-        'launcher' => 'App\\Enums\\System\\LauncherEnum',
         'navigation_group' => 'App\\Enums\\System\\NavigationGroup',
     ],
 
@@ -105,18 +104,10 @@ return [
     ],
 
     'ui' => [
-        'density' => env('ACCELERATOR_UI_DENSITY', 'compact'),
         'environment_indicator' => [
             'enabled' => env('ACCELERATOR_ENVIRONMENT_INDICATOR_ENABLED', false),
             'label' => env('ACCELERATOR_ENVIRONMENT_INDICATOR_LABEL', ''),
             'color' => env('ACCELERATOR_ENVIRONMENT_INDICATOR_COLOR', 'warning'),
-        ],
-        'sidebar' => [
-            'default_width' => 336,
-            'min_width' => 288,
-            'max_width' => 480,
-            'rail_width' => 56,
-            'compact_rail_width' => 52,
         ],
     ],
 
