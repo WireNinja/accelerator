@@ -69,7 +69,7 @@ final class SafeRegenerateCommand extends Command
             return 0;
         }
 
-        $permissions = Permission::query()->get()->keyBy('name');
+        $permissions = Permission::query()->get();
         $superAdminRole = Cast::mustString(config('filament-shield.super_admin.name', 'super_admin'));
         $count = 0;
 
@@ -90,7 +90,7 @@ final class SafeRegenerateCommand extends Command
             $defaults = $case->defaultPermissions();
             $role->syncPermissions($defaults === null
                 ? $permissions->values()
-                : $permissions->only(Cast::list($defaults))->values());
+                : $permissions->whereIn('name', Cast::list($defaults))->values());
             $count++;
         }
 
