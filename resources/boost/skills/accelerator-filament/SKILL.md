@@ -23,6 +23,8 @@ Run migrations before using `make:filament-resource --generate`. Schema-driven g
 
 Custom Shield abilities belong in a permission-specific declaration, not navigation metadata. Super Admin bypass/access must remain valid after Shield regeneration.
 
+`RoleEnum::defaultPermissions()` uses `null` for every generated permission, `[]` for none, and a list of exact generated permission names for an explicit default set. `shield:safe-regenerate` synchronizes that contract, so stale assignments not present in an explicit list are detached. Super Admin remains Gate-based and should have no direct permission assignment. After changing role defaults, verify the resulting role permission names or counts rather than relying only on the command's synchronized-role count.
+
 ## Authorization
 
 - Use policies for resources and string abilities for actions.
