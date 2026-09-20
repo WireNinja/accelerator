@@ -16,8 +16,8 @@ final class OperatorTelegramNotifier
     /** @param array<string, scalar|null> $context */
     public function send(string $operation, string $result, array $context = [], bool $force = false): bool
     {
-        $token = trim(Cast::mustString(config('accelerator.operations.telegram.bot_token', '')));
-        $chatId = trim(Cast::mustString(config('accelerator.operations.telegram.chat_id', '')));
+        $token = trim(Cast::string(config('accelerator.operations.telegram.bot_token')));
+        $chatId = trim(Cast::string(config('accelerator.operations.telegram.chat_id')));
 
         return $this->sendWith(
             token: $token,
