@@ -122,6 +122,8 @@ The scheduled database worker raises `retry_after` above its configured timeout 
 
 Backups remain stage-owned, support local plus optional S3-compatible storage, verify checksums, notify through operator Telegram, and require an exact backup ID for restore.
 
+Production may use external dead-man monitoring without another package. Configure a private `ACCELERATOR_HEALTHCHECKS_SCHEDULER_PING_URL` for the five-minute scheduler heartbeat and `ACCELERATOR_HEALTHCHECKS_BACKUP_PING_URL` for backup start, success, and failure signals. Leave either value empty to disable that check. Accelerator requires HTTPS ping URLs and never prints them in feature diagnostics.
+
 ```bash
 easyploy backup create --stage=production --only=all --yes
 easyploy backup status --stage=production --json

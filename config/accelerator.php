@@ -88,6 +88,10 @@ return [
         'stage' => env('ACCELERATOR_DEPLOYMENT_STAGE', env('APP_ENV', 'local')),
         'domain' => env('APP_URL', ''),
         'deploy_root' => env('ACCELERATOR_DEPLOY_ROOT', ''),
+        'healthchecks' => [
+            'scheduler_ping_url' => env('ACCELERATOR_HEALTHCHECKS_SCHEDULER_PING_URL'),
+            'backup_ping_url' => env('ACCELERATOR_HEALTHCHECKS_BACKUP_PING_URL'),
+        ],
         'telegram' => [
             'bot_token' => env('ACCELERATOR_TELEGRAM_BOT_TOKEN'),
             'chat_id' => env('ACCELERATOR_TELEGRAM_CHAT_ID'),

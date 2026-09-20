@@ -31,6 +31,7 @@ final class FeatureListCommand extends Command
             static fn (array $feature): bool => $feature['enabled'] !== $feature['runtime_loaded'],
         ));
         $backup = $this->backupCapability();
+        $monitoring = $this->monitoringCapability();
 
         if ($this->option('json')) {
             $this->output->writeln(json_encode([
@@ -38,6 +39,7 @@ final class FeatureListCommand extends Command
                 'status' => $mismatches === [] ? 'OK' : 'MISMATCH',
                 'features' => $features,
                 'backup' => $backup,
+                'monitoring' => $monitoring,
             ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
 
             return $mismatches === [] ? self::SUCCESS : self::FAILURE;
@@ -58,6 +60,10 @@ final class FeatureListCommand extends Command
             ['Offsite destination', $backup['offsite_destination'] ? 'yes' : 'no'],
             ['Operator Telegram', $backup['operator_telegram'] ? 'configured' : 'not configured'],
             ['Last backup health', $backup['last_backup_health']],
+        ]);
+        $this->table(['Operations monitoring', 'State'], [
+            ['Scheduler heartbeat', $monitoring['scheduler_heartbeat'] ? 'configured' : 'not configured'],
+            ['Backup heartbeat', $monitoring['backup_heartbeat'] ? 'configured' : 'not configured'],
         ]);
 
         return $mismatches === [] ? self::SUCCESS : self::FAILURE;
@@ -114,6 +120,15 @@ final class FeatureListCommand extends Command
             'operator_telegram' => filled(config('accelerator.operations.telegram.bot_token'))
                 && filled(config('accelerator.operations.telegram.chat_id')),
             'last_backup_health' => $lastResult,
+        ];
+    }
+
+    /** @return array{scheduler_heartbeat: bool, backup_heartbeat: bool} */
+    private function monitoringCapability(): array
+    {
+        return [
+            'scheduler_heartbeat' => filled(config('accelerator.operations.healthchecks.scheduler_ping_url')),
+            'backup_heartbeat' => filled(config('accelerator.operations.healthchecks.backup_ping_url')),
         ];
     }
 }

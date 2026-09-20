@@ -19,6 +19,7 @@ use Illuminate\Support\Facades\Schedule;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
 use Livewire\LivewireManager;
+use LogicException;
 use NotificationChannels\Telegram\Telegram;
 use Spatie\Backup\Tasks\Monitor\HealthChecks\MaximumAgeInDays;
 use Spatie\Backup\Tasks\Monitor\HealthChecks\MaximumStorageInMegabytes;
@@ -73,6 +74,7 @@ final class CoreServiceProvider extends ServiceProvider
         }
 
         $this->configureBackupSchedule();
+        $this->configureSchedulerHeartbeat();
         $this->configureQueueSchedule();
         $this->configureDevelopmentCommands();
 
@@ -213,12 +215,54 @@ final class CoreServiceProvider extends ServiceProvider
         Schedule::command('accelerator:backup:runtime cleanup --json --no-interaction')
             ->dailyAt($parsed->subHour()->format('H:i'))
             ->withoutOverlapping(360);
-        Schedule::command('accelerator:backup:runtime create --only=all --json --no-interaction')
+        $createBackup = Schedule::command('accelerator:backup:runtime create --only=all --json --no-interaction')
             ->dailyAt($backupTime)
             ->withoutOverlapping(360);
+
+        if (($pingUrl = $this->healthchecksPingUrl('backup')) !== null) {
+            $createBackup
+                ->pingBefore("{$pingUrl}/start")
+                ->pingOnSuccess($pingUrl)
+                ->pingOnFailure("{$pingUrl}/fail");
+        }
+
         Schedule::command('accelerator:backup:runtime status --json --no-interaction')
             ->dailyAt($parsed->addHour()->format('H:i'))
             ->withoutOverlapping(360);
+    }
+
+    private function configureSchedulerHeartbeat(): void
+    {
+        if (! $this->app->isProduction() || ($pingUrl = $this->healthchecksPingUrl('scheduler')) === null) {
+            return;
+        }
+
+        Schedule::call(static function (): void {})
+            ->name('accelerator-scheduler-heartbeat')
+            ->everyFiveMinutes()
+            ->thenPing($pingUrl);
+    }
+
+    private function healthchecksPingUrl(string $check): ?string
+    {
+        $pingUrl = trim(Cast::string(config("accelerator.operations.healthchecks.{$check}_ping_url")));
+
+        if ($pingUrl === '') {
+            return null;
+        }
+
+        $parts = parse_url($pingUrl);
+        $isValid = filter_var($pingUrl, FILTER_VALIDATE_URL) !== false
+            && is_array($parts)
+            && strtolower((string) ($parts['scheme'] ?? '')) === 'https'
+            && is_string($parts['host'] ?? null)
+            && ! isset($parts['user'], $parts['pass'], $parts['query'], $parts['fragment']);
+
+        if (! $isValid) {
+            throw new LogicException("The {$check} Healthchecks ping URL must be an HTTPS URL without credentials, query parameters, or fragments.");
+        }
+
+        return rtrim($pingUrl, '/');
     }
 
     private function configureQueueSchedule(): void
