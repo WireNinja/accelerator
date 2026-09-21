@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace WireNinja\Accelerator\Console\Runtime;
 
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Storage;
 use JsonException;
 use RuntimeException;
 use Throwable;
@@ -97,6 +98,7 @@ final class BackupCommand extends Command
     private function restoreContext(): array
     {
         $connection = Cast::mustString(config('database.default'));
+        $backupName = Cast::mustString(config('accelerator.backup.name'));
         $revisionPath = base_path('REVISION');
         $revisionContents = is_file($revisionPath) ? file_get_contents($revisionPath) : false;
 
@@ -105,7 +107,8 @@ final class BackupCommand extends Command
             'deployment_key' => Cast::mustString(config('accelerator.operations.deployment_key')),
             'stage' => Cast::mustString(config('accelerator.operations.stage')),
             'revision' => is_string($revisionContents) ? trim($revisionContents) : '',
-            'backup_name' => Cast::mustString(config('accelerator.backup.name')),
+            'backup_name' => $backupName,
+            'local_backup_path' => Storage::disk('local')->path($backupName),
             'database' => [
                 'driver' => Cast::mustString(config("database.connections.{$connection}.driver", $connection)),
                 'database' => Cast::mustString(config("database.connections.{$connection}.database", '')),
