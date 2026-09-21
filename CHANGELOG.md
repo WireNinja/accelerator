@@ -5,6 +5,8 @@ behavior, not abandoned local experiments.
 
 ## Unreleased
 
+## 2.2.3 - 2026-09-22
+
 ### Added
 
 - Expose Accelerator's resolved local backup directory in the private restore context so deployment
