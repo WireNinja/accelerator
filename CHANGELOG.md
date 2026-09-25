@@ -5,6 +5,11 @@ behavior, not abandoned local experiments.
 
 ## Unreleased
 
+### Fixed
+
+- Allow a provisioned account with no existing Google identity link to complete its first Google
+  OAuth login in `existing_only` mode.
+
 ## 2.2.3 - 2026-09-22
 
 ### Added

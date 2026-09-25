@@ -75,7 +75,7 @@ final class GoogleOAuthService
             throw new AuthenticationException('This user account is suspended.');
         }
 
-        $storedGoogleId = trim(Cast::mustString($user->getAttribute('google_id')));
+        $storedGoogleId = trim(Cast::string($user->getAttribute('google_id')));
 
         if (($storedGoogleId !== '') && (! hash_equals($storedGoogleId, $googleId))) {
             throw new AuthenticationException('This email is already linked to another Google identity.');
