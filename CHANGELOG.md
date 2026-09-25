@@ -5,6 +5,8 @@ behavior, not abandoned local experiments.
 
 ## Unreleased
 
+## 2.2.4 - 2026-09-26
+
 ### Fixed
 
 - Allow a provisioned account with no existing Google identity link to complete its first Google
