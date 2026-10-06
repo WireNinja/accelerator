@@ -7,6 +7,7 @@
 #   Then re-run: vendor/bin/envoy run bootstrap-ssl --stage={stage}
 
 server {
+    include server-policies/{{ domain }}/*.conf;
     listen 80;
     listen [::]:80;
     server_name {{ domain }};
