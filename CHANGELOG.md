@@ -5,10 +5,12 @@ behavior, not abandoned local experiments.
 
 ## Unreleased
 
+## 2.2.5 - 2026-10-14
+
 ### Fixed
 
 - Default DiceBear avatars and fresh installation environments to API v10, matching the hosted
-  service. Requests to the retired v9 route returned JSON errors instead of SVG images and triggered
+  service. Requests to the unsupported v9 route on that service returned JSON errors instead of SVG images and triggered
   browser opaque response blocking.
 
 ## 2.2.4 - 2026-09-26
