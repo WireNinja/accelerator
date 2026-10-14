@@ -123,7 +123,7 @@ return [
 
     'dicebear' => [
         'url' => env('ACCELERATOR_DICEBEAR_URL', 'https://dicebear.ohmyserver.com'),
-        'version' => env('ACCELERATOR_DICEBEAR_VERSION', '9.x'),
+        'version' => env('ACCELERATOR_DICEBEAR_VERSION', '10.x'),
         'style' => env('ACCELERATOR_DICEBEAR_STYLE', 'notionists'),
     ],
 
